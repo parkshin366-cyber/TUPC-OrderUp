@@ -1,9 +1,14 @@
 import dotenv from "dotenv";
 dotenv.config();
-import captchaRoutes from "./routes/captcha";
+
 import cors from "cors";
-import express, { NextFunction, Request, Response } from "express";
+import express, {
+  NextFunction,
+  Request,
+  Response,
+} from "express";
 import multer from "multer";
+import captchaRoutes from "./routes/captcha";
 
 import { connectDB } from "./config/db";
 import authRoutes from "./routes/auth";
@@ -17,15 +22,29 @@ const PORT = Number(process.env.PORT) || 5000;
    CORS
 ========================================================= */
 
-app.use("/captcha", captchaRoutes);
-
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
   })
 );
+
+/* =========================================================
+   CAPTCHA ROUTES
+========================================================= */
+
+app.use("/captcha", captchaRoutes);
 
 /* =========================================================
    BODY PARSERS
@@ -48,25 +67,59 @@ app.use(
    API ROUTES
 ========================================================= */
 
+/*
+   Main API route
+
+   Example:
+   /api/auth/login
+   /api/auth/register
+   /api/auth/check-username
+*/
 app.use("/api/auth", authRoutes);
 
 app.use("/api/users", userRoutes);
 
 /* =========================================================
+   AUTH COMPATIBILITY ROUTE
+========================================================= */
+
+/*
+   Your mobile app is currently calling:
+
+   /auth/check-username
+
+   while the backend normally uses:
+
+   /api/auth/check-username
+
+   This alias allows BOTH URLs to work.
+
+   Existing:
+   /api/auth/...
+
+   Also supported:
+   /auth/...
+*/
+app.use("/auth", authRoutes);
+
+/* =========================================================
    HEALTH CHECK
 ========================================================= */
 
-app.get("/api/health", (_req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    message: "TUPC-OrderUp API is running",
-    database: "MongoDB",
-    emailConfigured: Boolean(
-      process.env.EMAIL_USER &&
-        process.env.EMAIL_APP_PASSWORD
-    ),
-  });
-});
+app.get(
+  "/api/health",
+  (_req: Request, res: Response) => {
+    res.status(200).json({
+      success: true,
+      message: "TUPC-OrderUp API is running",
+      database: "MongoDB",
+      emailConfigured: Boolean(
+        process.env.EMAIL_USER &&
+          process.env.EMAIL_APP_PASSWORD
+      ),
+    });
+  }
+);
 
 /* =========================================================
    404 HANDLER
@@ -92,6 +145,10 @@ app.use(
     res: Response,
     next: NextFunction
   ) => {
+    /* =====================================================
+       MULTER ERRORS
+    ===================================================== */
+
     if (error instanceof multer.MulterError) {
       switch (error.code) {
         case "LIMIT_FILE_SIZE":
@@ -112,7 +169,9 @@ app.use(
           return res.status(400).json({
             success: false,
             message:
-              `Unexpected image field: ${error.field || "unknown"}.`,
+              `Unexpected image field: ${
+                error.field || "unknown"
+              }.`,
           });
 
         case "LIMIT_PART_COUNT":
@@ -234,6 +293,14 @@ async function startServer() {
 
         console.log(
           `Health: http://localhost:${PORT}/api/health`
+        );
+
+        console.log(
+          `Auth API: http://localhost:${PORT}/api/auth`
+        );
+
+        console.log(
+          `Auth Alias: http://localhost:${PORT}/auth`
         );
 
         console.log(

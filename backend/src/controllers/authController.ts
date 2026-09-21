@@ -39,7 +39,8 @@ const UPLOAD_DIRECTORY = path.join(
 ========================================================= */
 
 const GOVERNMENT_ID_PATTERNS: Record<string, RegExp> = {
-  "National ID": /^\d{4}-\d{4}-\d{4}-\d{4}$/,
+  "National ID":
+    /^\d{4}-\d{4}-\d{4}-\d{4}$/,
 
   "Driver's License":
     /^[A-Z0-9]{1,3}-\d{2}-\d{6}$/,
@@ -86,29 +87,44 @@ function hashOtp(otp: string): string {
     .digest("hex");
 }
 
-function normalizeText(value: unknown): string {
+function normalizeText(
+  value: unknown
+): string {
   return String(value ?? "")
     .trim()
     .replace(/\s+/g, " ");
 }
 
-function normalizeEmail(value: unknown): string {
+function normalizeEmail(
+  value: unknown
+): string {
   return normalizeText(value).toLowerCase();
 }
 
-function normalizeUsername(value: unknown): string {
+function normalizeUsername(
+  value: unknown
+): string {
   return normalizeText(value).toLowerCase();
 }
 
-function normalizeName(value: unknown): string {
+function normalizeName(
+  value: unknown
+): string {
   return normalizeText(value).toLowerCase();
 }
 
-function normalizeContact(value: unknown): string {
-  return String(value ?? "").replace(/\D/g, "");
+function normalizeContact(
+  value: unknown
+): string {
+  return String(value ?? "").replace(
+    /\D/g,
+    ""
+  );
 }
 
-function normalizeTupcId(value: unknown): string {
+function normalizeTupcId(
+  value: unknown
+): string {
   return normalizeText(value).toUpperCase();
 }
 
@@ -122,7 +138,9 @@ function normalizeGovernmentIdNumber(
    EMAIL VALIDATION
 ========================================================= */
 
-function isValidEmail(email: string): boolean {
+function isValidEmail(
+  email: string
+): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
     email
   );
@@ -1355,12 +1373,14 @@ export async function login(
     } = req.body;
 
     const cleanUsername =
-      normalizeUsername(
-        username
-      );
+      normalizeUsername(username);
 
     const cleanPassword =
       String(password ?? "");
+
+    /* =====================================================
+       REQUIRED FIELDS
+    ===================================================== */
 
     if (
       !cleanUsername ||
@@ -1373,11 +1393,29 @@ export async function login(
       });
     }
 
+    /* =====================================================
+       FIND USER
+    =====================================================
+    
+    password is NOT select:false
+    in the current User.ts.
+
+    +password is harmless here and also
+    keeps this login compatible if the
+    schema is later changed to select:false.
+    ===================================================== */
+
     const user =
       await User.findOne({
         username:
           cleanUsername,
-      });
+      }).select(
+        "+password"
+      );
+
+    /* =====================================================
+       USER NOT FOUND
+    ===================================================== */
 
     if (!user) {
       return res.status(401).json({
@@ -1387,11 +1425,52 @@ export async function login(
       });
     }
 
-    const passwordMatches =
-      await bcrypt.compare(
-        cleanPassword,
-        user.password
+    /* =====================================================
+       PASSWORD HASH CHECK
+    ===================================================== */
+
+    if (
+      !user.password ||
+      typeof user.password !==
+        "string"
+    ) {
+      console.error(
+        "LOGIN ERROR: Password hash is missing for user:",
+        user.username
       );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Unable to verify account credentials.",
+      });
+    }
+
+    /* =====================================================
+       COMPARE PASSWORD
+    ===================================================== */
+
+    let passwordMatches =
+      false;
+
+    try {
+      passwordMatches =
+        await bcrypt.compare(
+          cleanPassword,
+          user.password
+        );
+    } catch (passwordError) {
+      console.error(
+        "LOGIN PASSWORD COMPARE ERROR:",
+        passwordError
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Unable to verify account credentials.",
+      });
+    }
 
     if (!passwordMatches) {
       return res.status(401).json({
@@ -1401,6 +1480,10 @@ export async function login(
       });
     }
 
+    /* =====================================================
+       ACCOUNT STATUS
+    ===================================================== */
+
     if (
       user.status ===
       "rejected"
@@ -1409,6 +1492,8 @@ export async function login(
         success: false,
         message:
           "Your account has been rejected.",
+        status:
+          user.status,
       });
     }
 
@@ -1425,10 +1510,18 @@ export async function login(
       });
     }
 
+    /* =====================================================
+       GENERATE JWT
+    ===================================================== */
+
     const token =
       generateToken(
         user._id.toString()
       );
+
+    /* =====================================================
+       SUCCESS
+    ===================================================== */
 
     return res.status(200).json({
       success: true,
@@ -1627,8 +1720,6 @@ export async function sendOtp(
         emailError
       );
 
-      // Clear newly generated OTP
-      // because email delivery failed.
       user.otpHash =
         undefined;
 
@@ -1713,13 +1804,10 @@ export async function verifyOtp(
       });
     }
 
-    /*
-     * This endpoint is only for
-     * registration verification.
-     *
-     * Password reset has its own
-     * verification endpoint.
-     */
+    /* =====================================================
+       REGISTRATION ONLY
+    ===================================================== */
+
     if (
       purpose ===
       "reset-password"
@@ -1926,9 +2014,10 @@ export async function forgotPassword(
         );
     }
 
-    /*
-     * Do not reveal whether an account exists.
-     */
+    /* =====================================================
+       DO NOT REVEAL ACCOUNT EXISTENCE
+    ===================================================== */
+
     if (!user) {
       return res.status(200).json({
         success: true,
@@ -1937,12 +2026,10 @@ export async function forgotPassword(
       });
     }
 
-    /*
-     * Rejected accounts cannot reset password.
-     *
-     * We still return the same generic response
-     * to avoid account enumeration.
-     */
+    /* =====================================================
+       REJECTED ACCOUNTS
+    ===================================================== */
+
     if (
       user.status ===
       "rejected"
@@ -1954,9 +2041,10 @@ export async function forgotPassword(
       });
     }
 
-    /*
-     * Generate OTP.
-     */
+    /* =====================================================
+       GENERATE OTP
+    ===================================================== */
+
     const otp =
       generateOtp();
 
@@ -1971,9 +2059,10 @@ export async function forgotPassword(
             1000
       );
 
-    /*
-     * Save OTP.
-     */
+    /* =====================================================
+       SAVE OTP
+    ===================================================== */
+
     user.otpHash =
       otpHash;
 
@@ -1982,9 +2071,10 @@ export async function forgotPassword(
 
     await user.save();
 
-    /*
-     * Send OTP email.
-     */
+    /* =====================================================
+       SEND OTP EMAIL
+    ===================================================== */
+
     try {
       await sendOtpEmail(
         user.email,
@@ -1996,10 +2086,6 @@ export async function forgotPassword(
         emailError
       );
 
-      /*
-       * Do not leave an active OTP
-       * if email delivery failed.
-       */
       user.otpHash =
         undefined;
 
@@ -2104,10 +2190,10 @@ export async function verifyResetOtp(
       });
     }
 
-    /*
-     * Password reset is not allowed
-     * for rejected accounts.
-     */
+    /* =====================================================
+       REJECTED ACCOUNTS
+    ===================================================== */
+
     if (
       user.status ===
       "rejected"
@@ -2135,9 +2221,10 @@ export async function verifyResetOtp(
       });
     }
 
-    /*
-     * Check expiration.
-     */
+    /* =====================================================
+       CHECK EXPIRATION
+    ===================================================== */
+
     if (
       user.otpExpiresAt.getTime() <
       Date.now()
@@ -2157,9 +2244,10 @@ export async function verifyResetOtp(
       });
     }
 
-    /*
-     * Compare OTP hash.
-     */
+    /* =====================================================
+       COMPARE OTP
+    ===================================================== */
+
     const submittedOtpHash =
       hashOtp(cleanOtp);
 
@@ -2175,15 +2263,10 @@ export async function verifyResetOtp(
       });
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * Do not clear the OTP here.
-     *
-     * resetPassword() will verify it again
-     * and clear it only after the password
-     * has been successfully changed.
-     */
+    /* =====================================================
+       OTP REMAINS ACTIVE UNTIL PASSWORD RESET
+    ===================================================== */
+
     return res.status(200).json({
       success: true,
 
@@ -2330,9 +2413,10 @@ export async function resetPassword(
       });
     }
 
-    /*
-     * Rejected accounts cannot reset.
-     */
+    /* =====================================================
+       REJECTED ACCOUNTS
+    ===================================================== */
+
     if (
       user.status ===
       "rejected"
@@ -2406,6 +2490,14 @@ export async function resetPassword(
        PREVENT SAME PASSWORD
     ===================================================== */
 
+    if (!user.password) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "Unable to verify the current password.",
+      });
+    }
+
     const samePassword =
       await bcrypt.compare(
         cleanNewPassword,
@@ -2437,10 +2529,10 @@ export async function resetPassword(
     user.password =
       newPasswordHash;
 
-    /*
-     * OTP becomes invalid immediately
-     * after successful password reset.
-     */
+    /* =====================================================
+       INVALIDATE OTP
+    ===================================================== */
+
     user.otpHash =
       undefined;
 
@@ -2455,7 +2547,6 @@ export async function resetPassword(
 
     return res.status(200).json({
       success: true,
-
       message:
         "Password reset successful. You can now log in using your new password.",
     });
@@ -2472,3 +2563,4 @@ export async function resetPassword(
     });
   }
 }
+
