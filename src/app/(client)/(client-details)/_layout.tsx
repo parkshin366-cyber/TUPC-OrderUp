@@ -1,5 +1,7 @@
 import { Stack } from "expo-router";
 
+const BG = "#F7F7F8";
+
 export default function ClientDetailsLayout() {
   return (
     <Stack
@@ -7,9 +9,11 @@ export default function ClientDetailsLayout() {
         headerShown: false,
         animation: "slide_from_right",
         contentStyle: {
-          backgroundColor: "#F7F7F8",
+          backgroundColor: BG,
         },
+        gestureEnabled: true,
       }}
     />
   );
 }
+

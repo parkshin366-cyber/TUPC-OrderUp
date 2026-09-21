@@ -1,15 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useMemo } from "react";
 import {
-    Alert,
-    Image,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../../context/CartContext";
 
 const CARDINAL = "#A6192E";
@@ -19,6 +20,7 @@ const BG = "#F7F7F8";
 const TEXT = "#171717";
 const MUTED = "#737373";
 const BORDER = "#E7E7E8";
+const SUCCESS = "#238636";
 
 export default function CartScreen() {
   const {
@@ -32,10 +34,18 @@ export default function CartScreen() {
   const deliveryFee = 0;
   const total = subtotal + deliveryFee;
 
+  /*
+   * Group cart items by store.
+   * This makes the cart ready for future multi-store support.
+   */
+  const storeNames = useMemo(() => {
+    return [...new Set(items.map((item) => item.store))];
+  }, [items]);
+
   const handleRemove = (id: string, name: string) => {
     Alert.alert(
       "Remove Item",
-      `Remove ${name} from your cart?`,
+      `Remove "${name}" from your cart?`,
       [
         {
           text: "Cancel",
@@ -50,6 +60,19 @@ export default function CartScreen() {
     );
   };
 
+  const handleDecrease = (
+    id: string,
+    quantity: number,
+    name: string
+  ) => {
+    if (quantity <= 1) {
+      handleRemove(id, name);
+      return;
+    }
+
+    updateQuantity(id, quantity - 1);
+  };
+
   const handleCheckout = () => {
     if (items.length === 0) {
       Alert.alert(
@@ -59,22 +82,36 @@ export default function CartScreen() {
       return;
     }
 
-    router.push("/(client)/checkout");
+    router.push("/checkout");
+  };
+
+  const handleContinueShopping = () => {
+    router.push("/explore");
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["top", "left", "right", "bottom"]}
+    >
       <View style={styles.container}>
-
+        {/* ===================================================== */}
         {/* HEADER */}
+        {/* ===================================================== */}
+
         <View style={styles.header}>
           <Pressable
-            style={styles.headerButton}
+            style={({ pressed }) => [
+              styles.headerButton,
+              pressed && styles.pressed,
+            ]}
             onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
             <Ionicons
               name="chevron-back"
-              size={25}
+              size={24}
               color={TEXT}
             />
           </Pressable>
@@ -84,7 +121,8 @@ export default function CartScreen() {
 
             {itemCount > 0 && (
               <Text style={styles.headerCount}>
-                {itemCount} {itemCount === 1 ? "item" : "items"}
+                {itemCount}{" "}
+                {itemCount === 1 ? "item" : "items"}
               </Text>
             )}
           </View>
@@ -92,14 +130,17 @@ export default function CartScreen() {
           <View style={styles.headerButton}>
             <Ionicons
               name="bag-handle-outline"
-              size={23}
+              size={22}
               color={CARDINAL}
             />
           </View>
         </View>
 
+        {/* ===================================================== */}
+        {/* EMPTY CART */}
+        {/* ===================================================== */}
+
         {items.length === 0 ? (
-          /* EMPTY CART */
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIcon}>
               <Ionicons
@@ -114,8 +155,10 @@ export default function CartScreen() {
             </Text>
 
             <Text style={styles.emptyText}>
-              Looks like you haven't added anything to your
-              cart yet.
+              You haven't added anything yet.
+              {"\n"}
+              Browse campus stores and find something
+              you like.
             </Text>
 
             <Pressable
@@ -123,11 +166,11 @@ export default function CartScreen() {
                 styles.shopButton,
                 pressed && styles.buttonPressed,
               ]}
-              onPress={() => router.push("/(client)/explore")}
+              onPress={handleContinueShopping}
             >
               <Ionicons
                 name="search-outline"
-                size={20}
+                size={19}
                 color="#FFFFFF"
               />
 
@@ -138,16 +181,55 @@ export default function CartScreen() {
           </View>
         ) : (
           <>
+            {/* ================================================= */}
+            {/* CONTENT */}
+            {/* ================================================= */}
+
             <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.scrollContent}
             >
-              {/* STORE INFO */}
+              {/* CART STATUS */}
+
+              <View style={styles.statusCard}>
+                <View style={styles.statusIcon}>
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={23}
+                    color={SUCCESS}
+                  />
+                </View>
+
+                <View style={styles.statusContent}>
+                  <Text style={styles.statusTitle}>
+                    Ready for Checkout
+                  </Text>
+
+                  <Text style={styles.statusText}>
+                    {itemCount}{" "}
+                    {itemCount === 1
+                      ? "item"
+                      : "items"}{" "}
+                    in your cart
+                  </Text>
+                </View>
+
+                <View style={styles.freeBadge}>
+                  <Text style={styles.freeBadgeText}>
+                    PICKUP
+                  </Text>
+                </View>
+              </View>
+
+              {/* ================================================= */}
+              {/* STORE */}
+              {/* ================================================= */}
+
               <View style={styles.storeCard}>
                 <View style={styles.storeIcon}>
                   <Ionicons
                     name="storefront-outline"
-                    size={21}
+                    size={22}
                     color={CARDINAL}
                   />
                 </View>
@@ -158,14 +240,16 @@ export default function CartScreen() {
                   </Text>
 
                   <Text style={styles.storeName}>
-                    {items[0].store}
+                    {storeNames.length === 1
+                      ? storeNames[0]
+                      : `${storeNames.length} Campus Stores`}
                   </Text>
                 </View>
 
                 <View style={styles.verifiedBadge}>
                   <Ionicons
                     name="checkmark-circle"
-                    size={16}
+                    size={15}
                     color={CARDINAL}
                   />
 
@@ -175,20 +259,33 @@ export default function CartScreen() {
                 </View>
               </View>
 
-              {/* CART ITEMS */}
-              <Text style={styles.sectionTitle}>
-                Your Items
-              </Text>
+              {/* ================================================= */}
+              {/* ITEMS */}
+              {/* ================================================= */}
+
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  Your Items
+                </Text>
+
+                <Text style={styles.sectionCount}>
+                  {itemCount}
+                </Text>
+              </View>
 
               {items.map((item) => (
                 <View
                   key={item.id}
                   style={styles.itemCard}
                 >
+                  {/* IMAGE */}
+
                   <Image
                     source={{ uri: item.image }}
                     style={styles.itemImage}
                   />
+
+                  {/* DETAILS */}
 
                   <View style={styles.itemContent}>
                     <View style={styles.itemTopRow}>
@@ -200,23 +297,35 @@ export default function CartScreen() {
                           {item.name}
                         </Text>
 
-                        <Text style={styles.itemStore}>
+                        <Text
+                          style={styles.itemStore}
+                          numberOfLines={1}
+                        >
                           {item.store}
+                        </Text>
+
+                        <Text style={styles.itemUnitPrice}>
+                          ₱{item.price.toFixed(2)} each
                         </Text>
                       </View>
 
                       <Pressable
-                        style={styles.removeButton}
+                        style={({ pressed }) => [
+                          styles.removeButton,
+                          pressed && styles.pressed,
+                        ]}
                         onPress={() =>
                           handleRemove(
                             item.id,
                             item.name
                           )
                         }
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${item.name}`}
                       >
                         <Ionicons
                           name="trash-outline"
-                          size={19}
+                          size={18}
                           color={CARDINAL}
                         />
                       </Pressable>
@@ -224,42 +333,64 @@ export default function CartScreen() {
 
                     <View style={styles.itemBottomRow}>
                       <Text style={styles.itemPrice}>
-                        ₱{item.price}
+                        ₱
+                        {(
+                          item.price * item.quantity
+                        ).toFixed(2)}
                       </Text>
+
+                      {/* QUANTITY */}
 
                       <View style={styles.quantityControl}>
                         <Pressable
-                          style={styles.quantityButton}
+                          style={({ pressed }) => [
+                            styles.quantityButton,
+                            pressed &&
+                              styles.quantityPressed,
+                          ]}
                           onPress={() =>
-                            updateQuantity(
+                            handleDecrease(
                               item.id,
-                              item.quantity - 1
+                              item.quantity,
+                              item.name
                             )
                           }
+                          accessibilityRole="button"
+                          accessibilityLabel={`Decrease ${item.name} quantity`}
                         >
                           <Ionicons
                             name="remove"
-                            size={17}
+                            size={16}
                             color={TEXT}
                           />
                         </Pressable>
 
-                        <Text style={styles.quantityText}>
-                          {item.quantity}
-                        </Text>
+                        <View style={styles.quantityValue}>
+                          <Text
+                            style={styles.quantityText}
+                          >
+                            {item.quantity}
+                          </Text>
+                        </View>
 
                         <Pressable
-                          style={styles.quantityButton}
+                          style={({ pressed }) => [
+                            styles.quantityButton,
+                            pressed &&
+                              styles.quantityPressed,
+                          ]}
                           onPress={() =>
                             updateQuantity(
                               item.id,
                               item.quantity + 1
                             )
                           }
+                          accessibilityRole="button"
+                          accessibilityLabel={`Increase ${item.name} quantity`}
                         >
                           <Ionicons
                             name="add"
-                            size={17}
+                            size={16}
                             color={TEXT}
                           />
                         </Pressable>
@@ -269,12 +400,20 @@ export default function CartScreen() {
                 </View>
               ))}
 
+              {/* ================================================= */}
               {/* ORDER TYPE */}
+              {/* ================================================= */}
+
               <Text style={styles.sectionTitle}>
                 Order Type
               </Text>
 
-              <View style={styles.orderTypeCard}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.orderTypeCard,
+                  pressed && styles.cardPressed,
+                ]}
+              >
                 <View style={styles.orderTypeIcon}>
                   <Ionicons
                     name="walk-outline"
@@ -284,31 +423,48 @@ export default function CartScreen() {
                 </View>
 
                 <View style={styles.orderTypeText}>
-                  <Text style={styles.orderTypeTitle}>
-                    Campus Pickup
-                  </Text>
+                  <View style={styles.orderTypeTitleRow}>
+                    <Text style={styles.orderTypeTitle}>
+                      Campus Pickup
+                    </Text>
 
-                  <Text style={styles.orderTypeDescription}>
-                    Pick up your order at the selected campus
-                    store.
+                    <View style={styles.selectedCircle}>
+                      <Ionicons
+                        name="checkmark"
+                        size={14}
+                        color="#FFFFFF"
+                      />
+                    </View>
+                  </View>
+
+                  <Text
+                    style={styles.orderTypeDescription}
+                  >
+                    Pick up your order directly at the
+                    selected campus store.
                   </Text>
                 </View>
+              </Pressable>
 
-                <View style={styles.selectedCircle}>
-                  <Ionicons
-                    name="checkmark"
-                    size={15}
-                    color="#FFFFFF"
-                  />
-                </View>
-              </View>
-
+              {/* ================================================= */}
               {/* SUMMARY */}
+              {/* ================================================= */}
+
               <Text style={styles.sectionTitle}>
                 Order Summary
               </Text>
 
               <View style={styles.summaryCard}>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>
+                    Items
+                  </Text>
+
+                  <Text style={styles.summaryValue}>
+                    {itemCount}
+                  </Text>
+                </View>
+
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
                     Subtotal
@@ -331,7 +487,7 @@ export default function CartScreen() {
 
                 <View style={styles.summaryDivider} />
 
-                <View style={styles.summaryRow}>
+                <View style={styles.summaryRowTotal}>
                   <Text style={styles.totalLabel}>
                     Total
                   </Text>
@@ -342,24 +498,53 @@ export default function CartScreen() {
                 </View>
               </View>
 
-              {/* NOTE */}
+              {/* ================================================= */}
+              {/* INFORMATION */}
+              {/* ================================================= */}
+
               <View style={styles.noteCard}>
+                <View style={styles.noteIcon}>
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={18}
+                    color={CARDINAL}
+                  />
+                </View>
+
+                <Text style={styles.noteText}>
+                  Review your items, pickup method, and
+                  payment details before placing your
+                  order.
+                </Text>
+              </View>
+
+              {/* CONTINUE SHOPPING */}
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.continueButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={handleContinueShopping}
+              >
                 <Ionicons
-                  name="information-circle-outline"
+                  name="add-circle-outline"
                   size={19}
                   color={CARDINAL}
                 />
 
-                <Text style={styles.noteText}>
-                  You can review your order details and payment
-                  method before placing the order.
+                <Text style={styles.continueButtonText}>
+                  Continue Shopping
                 </Text>
-              </View>
+              </Pressable>
 
               <View style={styles.bottomSpace} />
             </ScrollView>
 
+            {/* ================================================= */}
             {/* CHECKOUT BAR */}
+            {/* ================================================= */}
+
             <View style={styles.checkoutBar}>
               <View style={styles.checkoutTotal}>
                 <Text style={styles.checkoutLabel}>
@@ -377,9 +562,11 @@ export default function CartScreen() {
                   pressed && styles.buttonPressed,
                 ]}
                 onPress={handleCheckout}
+                accessibilityRole="button"
+                accessibilityLabel="Proceed to checkout"
               >
                 <Text style={styles.checkoutButtonText}>
-                  Proceed to Checkout
+                  Checkout
                 </Text>
 
                 <Ionicons
@@ -406,6 +593,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
+
+  /* ========================================================= */
+  /* HEADER */
+  /* ========================================================= */
 
   header: {
     height: 66,
@@ -440,14 +631,81 @@ const styles = StyleSheet.create({
   headerCount: {
     marginTop: 2,
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "700",
     color: MUTED,
   },
 
+  /* ========================================================= */
+  /* CONTENT */
+  /* ========================================================= */
+
   scrollContent: {
-    padding: 18,
+    paddingHorizontal: 18,
+    paddingTop: 16,
     paddingBottom: 30,
   },
+
+  /* ========================================================= */
+  /* STATUS */
+  /* ========================================================= */
+
+  statusCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 13,
+    marginBottom: 12,
+    borderRadius: 16,
+    backgroundColor: "#F2FAF4",
+    borderWidth: 1,
+    borderColor: "#D8EEDC",
+  },
+
+  statusIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E3F4E7",
+  },
+
+  statusContent: {
+    flex: 1,
+    marginLeft: 11,
+  },
+
+  statusTitle: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  statusText: {
+    marginTop: 3,
+    fontSize: 11,
+    color: MUTED,
+    fontWeight: "600",
+  },
+
+  freeBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 9,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8EEDC",
+  },
+
+  freeBadgeText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: SUCCESS,
+    letterSpacing: 0.5,
+  },
+
+  /* ========================================================= */
+  /* STORE */
+  /* ========================================================= */
 
   storeCard: {
     flexDirection: "row",
@@ -457,7 +715,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: BORDER,
-    marginBottom: 22,
+    marginBottom: 23,
   },
 
   storeIcon: {
@@ -476,7 +734,7 @@ const styles = StyleSheet.create({
 
   storeLabel: {
     fontSize: 9,
-    fontWeight: "800",
+    fontWeight: "900",
     color: MUTED,
     letterSpacing: 0.8,
   },
@@ -496,8 +754,19 @@ const styles = StyleSheet.create({
 
   verifiedText: {
     fontSize: 10,
-    fontWeight: "800",
+    fontWeight: "900",
     color: CARDINAL,
+  },
+
+  /* ========================================================= */
+  /* SECTION */
+  /* ========================================================= */
+
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 11,
   },
 
   sectionTitle: {
@@ -507,12 +776,31 @@ const styles = StyleSheet.create({
     color: TEXT,
   },
 
+  sectionCount: {
+    minWidth: 25,
+    height: 25,
+    paddingHorizontal: 7,
+    borderRadius: 13,
+    alignItems: "center",
+    textAlign: "center",
+    textAlignVertical: "center",
+    backgroundColor: "#FBECEF",
+    color: CARDINAL,
+    fontSize: 11,
+    fontWeight: "900",
+    marginBottom: 11,
+  },
+
+  /* ========================================================= */
+  /* ITEM */
+  /* ========================================================= */
+
   itemCard: {
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 11,
     borderWidth: 1,
     borderColor: BORDER,
   },
@@ -536,7 +824,7 @@ const styles = StyleSheet.create({
 
   itemNameArea: {
     flex: 1,
-    paddingRight: 8,
+    paddingRight: 7,
   },
 
   itemName: {
@@ -547,8 +835,15 @@ const styles = StyleSheet.create({
   },
 
   itemStore: {
-    marginTop: 4,
-    fontSize: 11,
+    marginTop: 3,
+    fontSize: 10,
+    color: MUTED,
+    fontWeight: "700",
+  },
+
+  itemUnitPrice: {
+    marginTop: 5,
+    fontSize: 10,
     color: MUTED,
     fontWeight: "600",
   },
@@ -563,7 +858,7 @@ const styles = StyleSheet.create({
   },
 
   itemBottomRow: {
-    marginTop: 14,
+    marginTop: 11,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -575,13 +870,19 @@ const styles = StyleSheet.create({
     color: CARDINAL,
   },
 
+  /* ========================================================= */
+  /* QUANTITY */
+  /* ========================================================= */
+
   quantityControl: {
+    height: 34,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderColor: BORDER,
     borderRadius: 10,
     overflow: "hidden",
+    backgroundColor: "#FFFFFF",
   },
 
   quantityButton: {
@@ -592,13 +893,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFAFA",
   },
 
+  quantityValue: {
+    minWidth: 31,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: BORDER,
+  },
+
   quantityText: {
-    minWidth: 30,
-    textAlign: "center",
     fontSize: 13,
     fontWeight: "900",
     color: TEXT,
   },
+
+  quantityPressed: {
+    backgroundColor: "#F1F1F1",
+  },
+
+  /* ========================================================= */
+  /* ORDER TYPE */
+  /* ========================================================= */
 
   orderTypeCard: {
     flexDirection: "row",
@@ -608,7 +925,7 @@ const styles = StyleSheet.create({
     borderColor: CARDINAL,
     borderRadius: 16,
     padding: 14,
-    marginBottom: 22,
+    marginBottom: 23,
   },
 
   orderTypeIcon: {
@@ -623,7 +940,12 @@ const styles = StyleSheet.create({
   orderTypeText: {
     flex: 1,
     marginLeft: 12,
-    marginRight: 10,
+  },
+
+  orderTypeTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 
   orderTypeTitle: {
@@ -633,20 +955,25 @@ const styles = StyleSheet.create({
   },
 
   orderTypeDescription: {
-    marginTop: 4,
+    marginTop: 5,
+    paddingRight: 15,
     fontSize: 11,
     lineHeight: 16,
     color: MUTED,
   },
 
   selectedCircle: {
-    width: 24,
-    height: 24,
+    width: 23,
+    height: 23,
     borderRadius: 12,
     backgroundColor: CARDINAL,
     alignItems: "center",
     justifyContent: "center",
   },
+
+  /* ========================================================= */
+  /* SUMMARY */
+  /* ========================================================= */
 
   summaryCard: {
     backgroundColor: "#FFFFFF",
@@ -660,7 +987,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 11,
+    marginBottom: 12,
   },
 
   summaryLabel: {
@@ -677,15 +1004,21 @@ const styles = StyleSheet.create({
 
   freeText: {
     fontSize: 12,
-    color: "#238636",
+    color: SUCCESS,
     fontWeight: "900",
   },
 
   summaryDivider: {
     height: 1,
     backgroundColor: BORDER,
-    marginVertical: 5,
+    marginTop: 2,
     marginBottom: 15,
+  },
+
+  summaryRowTotal: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
 
   totalLabel: {
@@ -695,10 +1028,14 @@ const styles = StyleSheet.create({
   },
 
   totalValue: {
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: "900",
     color: CARDINAL,
   },
+
+  /* ========================================================= */
+  /* NOTE */
+  /* ========================================================= */
 
   noteCard: {
     marginTop: 14,
@@ -707,7 +1044,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF8E8",
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 9,
+  },
+
+  noteIcon: {
+    marginRight: 9,
   },
 
   noteText: {
@@ -718,20 +1058,43 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  bottomSpace: {
-    height: 20,
+  /* ========================================================= */
+  /* CONTINUE SHOPPING */
+  /* ========================================================= */
+
+  continueButton: {
+    height: 48,
+    marginTop: 14,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: CARDINAL,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
+
+  continueButtonText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: CARDINAL,
+  },
+
+  /* ========================================================= */
+  /* CHECKOUT BAR */
+  /* ========================================================= */
 
   checkoutBar: {
     paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 14,
+    paddingTop: 11,
+    paddingBottom: 13,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: BORDER,
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 13,
   },
 
   checkoutTotal: {
@@ -739,9 +1102,9 @@ const styles = StyleSheet.create({
   },
 
   checkoutLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: MUTED,
-    fontWeight: "700",
+    fontWeight: "800",
   },
 
   checkoutPrice: {
@@ -752,9 +1115,9 @@ const styles = StyleSheet.create({
   },
 
   checkoutButton: {
-    minWidth: 190,
+    minWidth: 145,
     height: 50,
-    paddingHorizontal: 16,
+    paddingHorizontal: 17,
     borderRadius: 14,
     backgroundColor: CARDINAL,
     flexDirection: "row",
@@ -768,6 +1131,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
+
+  /* ========================================================= */
+  /* EMPTY */
+  /* ========================================================= */
 
   emptyContainer: {
     flex: 1,
@@ -819,7 +1186,24 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  /* ========================================================= */
+  /* GENERAL */
+  /* ========================================================= */
+
+  bottomSpace: {
+    height: 25,
+  },
+
+  pressed: {
+    opacity: 0.78,
+  },
+
   buttonPressed: {
-    opacity: 0.82,
+    opacity: 0.84,
+  },
+
+  cardPressed: {
+    opacity: 0.86,
   },
 });
+

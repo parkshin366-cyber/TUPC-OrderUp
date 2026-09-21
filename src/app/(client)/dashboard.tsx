@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import {
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -16,46 +17,122 @@ const TEXT = "#171717";
 const MUTED = "#737373";
 const BORDER = "#E7E7E8";
 
-const categories = [
-  { icon: "restaurant-outline", label: "Food" },
-  { icon: "cafe-outline", label: "Drinks" },
-  { icon: "bag-handle-outline", label: "Essentials" },
-  { icon: "school-outline", label: "School" },
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
+
+const categories: {
+  icon: IconName;
+  label: string;
+}[] = [
+  {
+    icon: "restaurant-outline",
+    label: "Food",
+  },
+  {
+    icon: "cafe-outline",
+    label: "Drinks",
+  },
+  {
+    icon: "bag-handle-outline",
+    label: "Essentials",
+  },
+  {
+    icon: "school-outline",
+    label: "School",
+  },
 ];
 
-const stores = [
+const stores: {
+  id: string;
+  name: string;
+  type: string;
+  time: string;
+  rating: string;
+  icon: IconName;
+}[] = [
   {
+    id: "tupc-food-hub",
     name: "TUPC Food Hub",
     type: "Food & Meals",
     time: "10–15 min",
+    rating: "4.8",
     icon: "restaurant",
   },
   {
+    id: "cardinal-cafe",
     name: "Cardinal Café",
     type: "Coffee & Drinks",
     time: "5–10 min",
+    rating: "4.8",
     icon: "cafe",
   },
   {
+    id: "campus-essentials",
     name: "Campus Essentials",
     type: "School Supplies",
     time: "10–20 min",
+    rating: "4.8",
     icon: "bag-handle",
   },
 ];
 
 export default function ClientDashboard() {
+  // ============================================================
+  // NAVIGATION
+  // ============================================================
+
+  const goToExplore = () => {
+    router.push("/explore");
+  };
+
+  const goToOrders = () => {
+    router.push("/orders");
+  };
+
+  const goToCart = () => {
+    router.push("/cart");
+  };
+
+  const goToProfile = () => {
+    router.push("/profile");
+  };
+
+  const goToStore = (storeId: string) => {
+    router.push({
+      pathname: "/store/[id]",
+      params: {
+        id: storeId,
+      },
+    });
+  };
+
+  const goToCategory = (category: string) => {
+    router.push({
+      pathname: "/explore",
+      params: {
+        category,
+      },
+    });
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["top", "left", "right"]}
+    >
       <View style={styles.container}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
+          {/* ================================================== */}
           {/* HEADER */}
+          {/* ================================================== */}
+
           <View style={styles.header}>
-            <View>
-              <Text style={styles.eyebrow}>TUPC-ORDERUP</Text>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.eyebrow}>
+                TUPC-ORDERUP
+              </Text>
 
               <Text style={styles.greeting}>
                 Good morning 👋
@@ -71,24 +148,30 @@ export default function ClientDashboard() {
                 styles.notificationButton,
                 pressed && styles.pressed,
               ]}
-              onPress={() => {}}
+              onPress={goToProfile}
+              accessibilityRole="button"
+              accessibilityLabel="Open profile"
             >
               <Ionicons
-                name="notifications-outline"
-                size={22}
+                name="person-outline"
+                size={21}
                 color={TEXT}
               />
-
-              <View style={styles.notificationDot} />
             </Pressable>
           </View>
 
+          {/* ================================================== */}
           {/* SEARCH */}
+          {/* ================================================== */}
+
           <Pressable
             style={({ pressed }) => [
               styles.searchBox,
               pressed && styles.pressed,
             ]}
+            onPress={goToExplore}
+            accessibilityRole="button"
+            accessibilityLabel="Search food, drinks, and stores"
           >
             <Ionicons
               name="search-outline"
@@ -109,7 +192,10 @@ export default function ClientDashboard() {
             </View>
           </Pressable>
 
+          {/* ================================================== */}
           {/* PROMO */}
+          {/* ================================================== */}
+
           <View style={styles.promoCard}>
             <View style={styles.promoContent}>
               <Text style={styles.promoSmall}>
@@ -117,7 +203,9 @@ export default function ClientDashboard() {
               </Text>
 
               <Text style={styles.promoTitle}>
-                Order smarter.{`\n`}Study better.
+                Order smarter.
+                {"\n"}
+                Study better.
               </Text>
 
               <Text style={styles.promoDescription}>
@@ -129,6 +217,9 @@ export default function ClientDashboard() {
                   styles.promoButton,
                   pressed && styles.pressed,
                 ]}
+                onPress={goToExplore}
+                accessibilityRole="button"
+                accessibilityLabel="Explore stores"
               >
                 <Text style={styles.promoButtonText}>
                   Explore Stores
@@ -151,7 +242,10 @@ export default function ClientDashboard() {
             </View>
           </View>
 
+          {/* ================================================== */}
           {/* CATEGORIES */}
+          {/* ================================================== */}
+
           <SectionHeader title="Categories" />
 
           <View style={styles.categoryRow}>
@@ -162,10 +256,15 @@ export default function ClientDashboard() {
                   styles.categoryItem,
                   pressed && styles.pressed,
                 ]}
+                onPress={() =>
+                  goToCategory(category.label)
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${category.label}`}
               >
                 <View style={styles.categoryIcon}>
                   <Ionicons
-                    name={category.icon as any}
+                    name={category.icon}
                     size={24}
                     color={CARDINAL}
                   />
@@ -178,24 +277,30 @@ export default function ClientDashboard() {
             ))}
           </View>
 
-          {/* STORES */}
+          {/* ================================================== */}
+          {/* POPULAR STORES */}
+          {/* ================================================== */}
+
           <SectionHeader
             title="Popular Stores"
             action="See all"
-            onAction={() => {}}
+            onAction={goToExplore}
           />
 
           {stores.map((store) => (
             <Pressable
-              key={store.name}
+              key={store.id}
               style={({ pressed }) => [
                 styles.storeCard,
                 pressed && styles.pressed,
               ]}
+              onPress={() => goToStore(store.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${store.name}`}
             >
               <View style={styles.storeIcon}>
                 <Ionicons
-                  name={store.icon as any}
+                  name={store.icon}
                   size={26}
                   color={CARDINAL}
                 />
@@ -230,49 +335,57 @@ export default function ClientDashboard() {
                   />
 
                   <Text style={styles.storeMetaText}>
-                    4.8
+                    {store.rating}
                   </Text>
                 </View>
               </View>
 
-              <Ionicons
-                name="chevron-forward"
-                size={19}
-                color="#AAAAAA"
-              />
+              <View style={styles.storeArrow}>
+                <Ionicons
+                  name="chevron-forward"
+                  size={19}
+                  color="#AAAAAA"
+                />
+              </View>
             </Pressable>
           ))}
 
+          {/* ================================================== */}
           {/* QUICK ACTIONS */}
+          {/* ================================================== */}
+
           <SectionHeader title="Quick Actions" />
 
           <View style={styles.quickRow}>
             <QuickAction
               icon="receipt-outline"
               label="My Orders"
-              onPress={() => {}}
+              onPress={goToOrders}
             />
 
             <QuickAction
-              icon="heart-outline"
-              label="Favorites"
-              onPress={() => {}}
+              icon="compass-outline"
+              label="Explore"
+              onPress={goToExplore}
             />
 
             <QuickAction
               icon="cart-outline"
               label="My Cart"
-              onPress={() => {}}
+              onPress={goToCart}
             />
           </View>
 
-          {/* SPACE FOR TAB BAR */}
           <View style={styles.bottomSpace} />
         </ScrollView>
       </View>
     </SafeAreaView>
   );
 }
+
+// ============================================================
+// SECTION HEADER
+// ============================================================
 
 function SectionHeader({
   title,
@@ -285,10 +398,16 @@ function SectionHeader({
 }) {
   return (
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={styles.sectionTitle}>
+        {title}
+      </Text>
 
-      {action && (
-        <Pressable onPress={onAction}>
+      {action && onAction && (
+        <Pressable
+          onPress={onAction}
+          hitSlop={10}
+          accessibilityRole="button"
+        >
           <Text style={styles.sectionAction}>
             {action}
           </Text>
@@ -298,12 +417,16 @@ function SectionHeader({
   );
 }
 
+// ============================================================
+// QUICK ACTION
+// ============================================================
+
 function QuickAction({
   icon,
   label,
   onPress,
 }: {
-  icon: string;
+  icon: IconName;
   label: string;
   onPress: () => void;
 }) {
@@ -314,12 +437,16 @@ function QuickAction({
         styles.quickAction,
         pressed && styles.pressed,
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
     >
-      <Ionicons
-        name={icon as any}
-        size={23}
-        color={CARDINAL}
-      />
+      <View style={styles.quickIconContainer}>
+        <Ionicons
+          name={icon}
+          size={23}
+          color={CARDINAL}
+        />
+      </View>
 
       <Text style={styles.quickLabel}>
         {label}
@@ -327,6 +454,10 @@ function QuickAction({
     </Pressable>
   );
 }
+
+// ============================================================
+// STYLES
+// ============================================================
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -342,12 +473,20 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 12,
+    paddingBottom: 30,
   },
+
+  // HEADER
 
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+
+  headerTextContainer: {
+    flex: 1,
+    paddingRight: 12,
   },
 
   eyebrow: {
@@ -379,20 +518,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: BORDER,
-    position: "relative",
   },
 
-  notificationDot: {
-    position: "absolute",
-    top: 9,
-    right: 10,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: CARDINAL,
-    borderWidth: 1,
-    borderColor: "#FFFFFF",
-  },
+  // SEARCH
 
   searchBox: {
     height: 54,
@@ -422,6 +550,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
+  // PROMO
 
   promoCard: {
     minHeight: 190,
@@ -491,6 +621,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  // SECTIONS
+
   sectionHeader: {
     marginTop: 25,
     marginBottom: 13,
@@ -510,6 +642,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: CARDINAL,
   },
+
+  // CATEGORIES
 
   categoryRow: {
     flexDirection: "row",
@@ -539,6 +673,8 @@ const styles = StyleSheet.create({
     color: TEXT,
     textAlign: "center",
   },
+
+  // STORES
 
   storeCard: {
     minHeight: 84,
@@ -599,6 +735,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 7,
   },
 
+  storeArrow: {
+    width: 25,
+    alignItems: "flex-end",
+  },
+
+  // QUICK ACTIONS
+
   quickRow: {
     flexDirection: "row",
     gap: 10,
@@ -611,6 +754,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  quickIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#FCECEF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -630,3 +782,4 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 });
+
