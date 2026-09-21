@@ -1,7 +1,6 @@
 import dotenv from "dotenv";
-
 dotenv.config();
-
+import captchaRoutes from "./routes/captcha";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
 import multer from "multer";
@@ -17,6 +16,8 @@ const PORT = Number(process.env.PORT) || 5000;
 /* =========================================================
    CORS
 ========================================================= */
+
+app.use("/captcha", captchaRoutes);
 
 app.use(
   cors({

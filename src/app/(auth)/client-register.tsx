@@ -27,6 +27,8 @@ import {
   registerUser,
 } from "../../services/api";
 
+import { API_URL, NGROK_HEADERS } from "../../constants/api";
+
 const COLORS = {
   cardinal: "#A6192E",
   cardinalDark: "#7D1021",
@@ -479,8 +481,7 @@ export default function ClientRegisterScreen() {
     null
   );
 
-  const CAPTCHA_URL =
-    "http://192.168.18.24:5001/captcha";
+  const CAPTCHA_URL = `${API_URL}/captcha`;
 
   const handleCaptchaMessage = (event: any) => {
     try {
@@ -843,7 +844,9 @@ export default function ClientRegisterScreen() {
   // =====================================================
 
   const pickIdImage = async (type: IdImageType) => {
-    let orientationLocked = false;
+    let previousOrientationLock:
+      | ScreenOrientation.OrientationLock
+      | null = null;
 
     try {
       const permission =
@@ -865,12 +868,20 @@ export default function ClientRegisterScreen() {
        * IMPORTANT:
        * Keep the PHONE / CAMERA UI in PORTRAIT for BOTH ID types.
        *
-       * For Government ID, we still use a LANDSCAPE capture frame
-       * (16:10) through ImagePicker's editing/crop step.
+       * TUPC-ID:
+       *   Portrait capture frame.
        *
-       * Do NOT lock the device to LANDSCAPE here. Doing that makes
-       * the whole phone rotate when the Government ID button is tapped.
+       * Government ID:
+       *   Portrait phone/camera UI, but LANDSCAPE ID
+       *   capture/crop frame (16:10).
+       *
+       * Do NOT lock the device to LANDSCAPE here.
+       * That would rotate the entire phone when the
+       * Government ID button is tapped.
        */
+      previousOrientationLock =
+        await ScreenOrientation.getOrientationLockAsync();
+
       const targetOrientation =
         ScreenOrientation.OrientationLock.PORTRAIT_UP;
 
@@ -880,7 +891,6 @@ export default function ClientRegisterScreen() {
 
       // Keep the camera screen/device physically in portrait.
       await ScreenOrientation.lockAsync(targetOrientation);
-      orientationLocked = true;
 
       const result =
         await ImagePicker.launchCameraAsync({
@@ -929,21 +939,43 @@ export default function ClientRegisterScreen() {
         "Unable to open the camera or capture the ID image. Please try again."
       );
     } finally {
-      // Always return the registration screen to normal
-      // device orientation after the camera closes.
-      if (orientationLocked) {
+      /*
+       * IMPORTANT:
+       * Do NOT call unlockAsync() here.
+       *
+       * unlockAsync() can allow the device to rotate again,
+       * which may cause the registration screen to rotate
+       * after taking an ID photo.
+       *
+       * Restore the exact orientation lock that existed
+       * before opening the camera instead.
+       */
+      if (previousOrientationLock !== null) {
         try {
-          await ScreenOrientation.unlockAsync();
+          await ScreenOrientation.lockAsync(
+            previousOrientationLock
+          );
         } catch (orientationError) {
           console.error(
             "SCREEN ORIENTATION RESTORE ERROR:",
             orientationError
           );
+
+          // Safe fallback for this registration screen.
+          try {
+            await ScreenOrientation.lockAsync(
+              ScreenOrientation.OrientationLock.PORTRAIT_UP
+            );
+          } catch (fallbackError) {
+            console.error(
+              "SCREEN ORIENTATION FALLBACK ERROR:",
+              fallbackError
+            );
+          }
         }
       }
     }
   };
-
 
   // =====================================================
   // ID IMAGE SOURCE MENU
@@ -3161,23 +3193,60 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
 
             <View style={styles.captchaWebViewContainer}>
               <WebView
-                source={{ uri: CAPTCHA_URL }}
+                source={{
+                  uri: CAPTCHA_URL,
+                  headers: NGROK_HEADERS,
+                }}
                 onMessage={handleCaptchaMessage}
-                javaScriptEnabled
-                domStorageEnabled
+
+                // Cloudflare Turnstile requirements
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+
+                // Allow the WebView page and Turnstile iframe to communicate
                 originWhitelist={["*"]}
-                startInLoadingState
+
+                // Android WebView
+                mixedContentMode="always"
+                thirdPartyCookiesEnabled={true}
+
+                // Browser-like WebView behavior
+                allowsInlineMediaPlayback={true}
+                mediaPlaybackRequiresUserAction={false}
+                setSupportMultipleWindows={false}
+
+                // Keep storage/cache available for Turnstile
+                cacheEnabled={true}
+
+                startInLoadingState={true}
+
                 renderLoading={() => (
                   <View style={styles.captchaLoading}>
                     <ActivityIndicator
                       size="small"
                       color={COLORS.cardinal}
                     />
+
                     <Text style={styles.captchaLoadingText}>
                       Loading security verification...
                     </Text>
                   </View>
                 )}
+
+                onError={(event) => {
+                  console.error(
+                    "CAPTCHA WEBVIEW ERROR:",
+                    event.nativeEvent
+                  );
+                }}
+
+                onHttpError={(event) => {
+                  console.error(
+                    "CAPTCHA HTTP ERROR:",
+                    event.nativeEvent
+                  );
+                }}
+
                 style={styles.captchaWebView}
               />
             </View>

@@ -28,7 +28,9 @@ import {
   registerUser,
 } from "../../services/api";
 
-const API_CAPTCHA_URL = "http://192.168.18.24:5001/captcha";
+import { API_URL, NGROK_HEADERS } from "../../constants/api";
+
+const API_CAPTCHA_URL = `${API_URL}/captcha`;
 
 const COLORS = {
   cardinal: "#A6192E",
@@ -896,7 +898,9 @@ export default function SellerRegisterScreen() {
   };
 
   const pickIdImage = async (type: IdImageType) => {
-    let orientationLocked = false;
+    let previousOrientationLock:
+      | ScreenOrientation.OrientationLock
+      | null = null;
 
     try {
       if (isLoading) return;
@@ -916,16 +920,10 @@ export default function SellerRegisterScreen() {
         type === "tupcFront" ||
         type === "tupcBack";
 
-      /*
-       * IMPORTANT:
-       * Keep the PHONE / CAMERA UI in PORTRAIT
-       * for BOTH ID TYPES.
-       *
-       * Government ID uses a LANDSCAPE capture frame
-       * through the editing/crop step.
-       *
-       * DO NOT lock the device to LANDSCAPE.
-       */
+      // IMPORTANT:
+      // The PHONE/CAMERA screen must stay PORTRAIT for both IDs.
+      // Government ID gets a LANDSCAPE 16:10 crop frame after capture.
+      // We never lock the device to LANDSCAPE.
       const targetOrientation =
         ScreenOrientation.OrientationLock.PORTRAIT_UP;
 
@@ -933,9 +931,14 @@ export default function SellerRegisterScreen() {
         ? [3, 4]
         : [16, 10];
 
-      // Keep the camera screen/device physically in portrait.
+      // Save the current orientation lock first.
+      // Do NOT use unlockAsync() afterwards because that can allow
+      // the phone to rotate when returning from the camera.
+      previousOrientationLock =
+        await ScreenOrientation.getOrientationLockAsync();
+
+      // Force camera to start in portrait.
       await ScreenOrientation.lockAsync(targetOrientation);
-      orientationLocked = true;
 
       const result =
         await ImagePicker.launchCameraAsync({
@@ -954,29 +957,38 @@ export default function SellerRegisterScreen() {
       }
 
       const imageUri = result.assets[0].uri;
-
       setIdImage(type, imageUri);
     } catch (error) {
-      console.error(
-        "ID CAMERA ERROR:",
-        error
-      );
+      console.error("ID CAMERA ERROR:", error);
 
       Alert.alert(
         "Camera Failed",
         "Unable to open the camera or capture the ID image. Please try again."
       );
     } finally {
-      // Always return the registration screen to normal
-      // device orientation after the camera closes.
-      if (orientationLocked) {
+      // Restore the exact orientation lock from before the camera opened.
+      if (previousOrientationLock !== null) {
         try {
-          await ScreenOrientation.unlockAsync();
+          await ScreenOrientation.lockAsync(
+            previousOrientationLock
+          );
         } catch (orientationError) {
           console.error(
             "SCREEN ORIENTATION RESTORE ERROR:",
             orientationError
           );
+
+          // Safe fallback: keep registration screen portrait.
+          try {
+            await ScreenOrientation.lockAsync(
+              ScreenOrientation.OrientationLock.PORTRAIT_UP
+            );
+          } catch (fallbackError) {
+            console.error(
+              "SCREEN ORIENTATION FALLBACK ERROR:",
+              fallbackError
+            );
+          }
         }
       }
     }
@@ -3409,6 +3421,7 @@ export default function SellerRegisterScreen() {
                 key={captchaKey}
                 source={{
                   uri: API_CAPTCHA_URL,
+                  headers: NGROK_HEADERS,
                 }}
                 onMessage={
                   handleCaptchaMessage

@@ -1,16 +1,15 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
-
-const CAPTCHA_SERVER = "http://192.168.18.24:5001";
+import { API_URL, NGROK_HEADERS } from "../../constants/api";
 
 export default function CaptchaScreen() {
   const webViewRef = useRef<WebView>(null);
@@ -38,10 +37,11 @@ export default function CaptchaScreen() {
           throw new Error("CAPTCHA token was not received.");
         }
 
-        const response = await fetch(`${CAPTCHA_SERVER}/verify`, {
+        const response = await fetch(`${API_URL}/captcha/verify`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...NGROK_HEADERS,
           },
           body: JSON.stringify({
             token,
@@ -159,7 +159,8 @@ export default function CaptchaScreen() {
             <WebView
               ref={webViewRef}
               source={{
-                uri: `${CAPTCHA_SERVER}/captcha`,
+                uri: `${API_URL}/captcha`,
+                headers: NGROK_HEADERS,
               }}
               style={styles.webView}
               javaScriptEnabled
@@ -178,7 +179,7 @@ export default function CaptchaScreen() {
 
                 Alert.alert(
                   "Connection Error",
-                  "Unable to connect to the CAPTCHA server. Make sure the backend CAPTCHA server is running."
+                  "Unable to connect to the CAPTCHA server. Make sure the backend server and the ngrok tunnel are running."
                 );
               }}
             />

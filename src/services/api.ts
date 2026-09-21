@@ -4,7 +4,9 @@ import { File } from "expo-file-system";
 // API CONFIGURATION
 // =====================================================
 
-const API_URL = "http://192.168.18.24:5000/api";
+export const API_URL = (
+  process.env.EXPO_PUBLIC_API_URL ?? ""
+).replace(/\/$/, "");
 
 // =====================================================
 // TYPES
@@ -298,19 +300,31 @@ export async function checkUsernameAvailability(
   }
 
   try {
-    const response = await fetch(
-      `${API_URL}/auth/check-username?username=${encodeURIComponent(
-        cleanUsername
-      )}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    const url =
+      `${API_URL}/auth/check-username` +
+      `?username=${encodeURIComponent(cleanUsername)}`;
+
+    console.log(
+      "CHECK USERNAME URL:",
+      url
     );
 
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
     const data = await parseResponse(response);
+
+    console.log(
+      "CHECK USERNAME RESPONSE:",
+      {
+        status: response.status,
+        data,
+      }
+    );
 
     if (!response.ok) {
       throw new Error(
@@ -731,9 +745,8 @@ export async function registerUser(
       {
         method: "POST",
 
-        // IMPORTANT:
         // DO NOT manually set Content-Type.
-        // fetch will automatically create the
+        // fetch automatically creates the
         // multipart/form-data boundary.
 
         body: formData,
@@ -1199,11 +1212,3 @@ export async function getCurrentUser(
     );
   }
 }
-
-// =====================================================
-// EXPORT API URL
-// =====================================================
-
-export {
-  API_URL
-};

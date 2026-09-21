@@ -252,8 +252,8 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log("----------------------------------------");
   console.log("TUPC-OrderUp CAPTCHA Server");
   console.log(`Local: http://localhost:${PORT}`);
-  console.log(`Network: http://192.168.18.24:${PORT}`);
-  console.log(`CAPTCHA: http://192.168.18.24:${PORT}/captcha`);
-  console.log(`Health: http://192.168.18.24:${PORT}/health`);
+  console.log(`Network: http://API_URL.18.24:${PORT}`);
+  console.log(`CAPTCHA: http://API_URL.18.24:${PORT}/captcha`);
+  console.log(`Health: http://API_URL.18.24:${PORT}/health`);
   console.log("----------------------------------------");
 });
