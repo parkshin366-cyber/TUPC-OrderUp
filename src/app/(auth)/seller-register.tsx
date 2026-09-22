@@ -58,9 +58,7 @@ type Affiliation = "student" | "others";
 type BiometricType = "none" | "fingerprint";
 type IdImageType =
   | "tupcFront"
-  | "tupcBack"
-  | "governmentFront"
-  | "governmentBack";
+  | "governmentFront";
 
 type GovernmentIdConfig = {
   label: string;
@@ -377,16 +375,9 @@ export default function SellerRegisterScreen() {
 
   // =====================================================
   // ACCOUNT CREDENTIALS
-  // Kept with the personal section in the UI.
   // =====================================================
 
   const [username, setUsername] = useState("");
-  const [usernameSuggestionDismissed, setUsernameSuggestionDismissed] =
-    useState(false);
-
-  // =====================================================
-  // USERNAME AVAILABILITY
-  // =====================================================
 
   const [usernameAvailability, setUsernameAvailability] = useState<
     "idle" | "checking" | "available" | "taken" | "error"
@@ -396,6 +387,10 @@ export default function SellerRegisterScreen() {
     useState("");
 
   const usernameCheckRequestId = useRef(0);
+
+  // =====================================================
+  // CONTACT / EMAIL
+  // =====================================================
 
   const [email, setEmail] = useState("");
   const [contact, setContact] = useState("");
@@ -407,20 +402,33 @@ export default function SellerRegisterScreen() {
   const [affiliation, setAffiliation] =
     useState<Affiliation>("student");
 
+  const handleAffiliationChange = (nextAffiliation: Affiliation) => {
+    if (isLoading) return;
+
+    setAffiliation(nextAffiliation);
+    setGovernmentIdDropdownOpen(false);
+
+    // Clear identity fields that belong to the previous affiliation.
+    // This prevents stale ID information from being submitted after switching.
+    if (nextAffiliation === "student") {
+      setGovernmentIdType("");
+      setGovernmentIdNumber("");
+      setGovernmentIdFront(null);
+    } else {
+      setTupcId("");
+      setTupcIdFront(null);
+    }
+  };
+
   const [tupcId, setTupcId] = useState("");
   const [tupcIdFront, setTupcIdFront] =
     useState<string | null>(null);
-  const [tupcIdBack, setTupcIdBack] =
-    useState<string | null>(null);
-
   const [governmentIdType, setGovernmentIdType] = useState("");
   const [governmentIdDropdownOpen, setGovernmentIdDropdownOpen] =
     useState(false);
   const [governmentIdNumber, setGovernmentIdNumber] =
     useState("");
   const [governmentIdFront, setGovernmentIdFront] =
-    useState<string | null>(null);
-  const [governmentIdBack, setGovernmentIdBack] =
     useState<string | null>(null);
 
   // =====================================================
@@ -445,19 +453,9 @@ export default function SellerRegisterScreen() {
   const [biometricAvailable, setBiometricAvailable] =
     useState(false);
 
-  const [biometricLabel, setBiometricLabel] =
-    useState("Fingerprint");
-
   // Fingerprint is enabled only after the user successfully verifies
   // an enrolled fingerprint on this device.
   const [enableBiometric, setEnableBiometric] =
-    useState(false);
-
-  const [pin, setPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
-
-  const [showPin, setShowPin] = useState(false);
-  const [showConfirmPin, setShowConfirmPin] =
     useState(false);
 
   // =====================================================
@@ -488,126 +486,8 @@ export default function SellerRegisterScreen() {
   };
 
   // =====================================================
-  // FINGERPRINT AVAILABILITY
-  // =====================================================
-
-  useEffect(() => {
-    checkFingerprintAvailability();
-  }, []);
-
-  const checkFingerprintAvailability = async () => {
-    try {
-      const hasHardware =
-        await LocalAuthentication.hasHardwareAsync();
-
-      const isEnrolled =
-        await LocalAuthentication.isEnrolledAsync();
-
-      if (!hasHardware || !isEnrolled) {
-        setBiometricAvailable(false);
-        setBiometricType("none");
-        setBiometricLabel("Fingerprint");
-        setEnableBiometric(false);
-        return;
-      }
-
-      const types =
-        await LocalAuthentication.supportedAuthenticationTypesAsync();
-
-      const hasFingerprint = types.includes(
-        LocalAuthentication.AuthenticationType.FINGERPRINT
-      );
-
-      if (hasFingerprint) {
-        setBiometricType("fingerprint");
-        setBiometricLabel("Fingerprint");
-        setBiometricAvailable(true);
-        setEnableBiometric(false);
-        return;
-      }
-
-      setBiometricAvailable(false);
-      setBiometricType("none");
-      setBiometricLabel("Fingerprint");
-      setEnableBiometric(false);
-    } catch (error) {
-      console.error("Fingerprint detection error:", error);
-
-      setBiometricAvailable(false);
-      setBiometricType("none");
-      setBiometricLabel("Fingerprint");
-      setEnableBiometric(false);
-    }
-  };
-
-  // =====================================================
-  // PASSWORD CHECKER
-  // =====================================================
-
-  const passwordChecks = useMemo(() => {
-    return {
-      length: password.length >= 8,
-      uppercase: /[A-Z]/.test(password),
-      lowercase: /[a-z]/.test(password),
-      number: /[0-9]/.test(password),
-      special: /[^A-Za-z0-9]/.test(password),
-    };
-  }, [password]);
-
-  const passwordScore =
-    Object.values(passwordChecks).filter(Boolean).length;
-
-  const passwordStrong = passwordScore === 5;
-
-  // =====================================================
-  // USERNAME SUGGESTIONS
-  // =====================================================
-
-  const usernameSuggestions = useMemo(() => {
-    const first = firstName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "");
-
-    const last = lastName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "");
-
-    if (!first && !last) {
-      return [];
-    }
-
-    const suggestions: string[] = [];
-
-    if (first && last) {
-      suggestions.push(`${first}.${last}`);
-      suggestions.push(`${first}${last}`);
-      suggestions.push(`${first}_${last}`);
-      suggestions.push(`${first}.${last}26`);
-    }
-
-    if (first) {
-      suggestions.push(`${first}01`);
-      suggestions.push(`${first}26`);
-    }
-
-    if (last) {
-      suggestions.push(`${last}01`);
-    }
-
-    return [...new Set(suggestions)]
-      .filter((item) => item.length >= 4)
-      .slice(0, 4);
-  }, [firstName, lastName]);
-
-  // =====================================================
-  // SELECT USERNAME
-  // SAME BEHAVIOR AS CLIENT REGISTRATION
-  // =====================================================
-
-  // =====================================================
-  // USERNAME AVAILABILITY CHECK
+  // USERNAME AVAILABILITY
+  // Same live username authentication used by Client registration.
   // =====================================================
 
   useEffect(() => {
@@ -669,42 +549,73 @@ export default function SellerRegisterScreen() {
     return () => clearTimeout(timer);
   }, [username]);
 
-  // Suggestions are shown only while the username field is empty.
-  // Typing a custom username hides them immediately.
+  // =====================================================
+  // FINGERPRINT AVAILABILITY
+  // =====================================================
+
   useEffect(() => {
-    if (username.trim().length === 0) {
-      setUsernameSuggestionDismissed(false);
-    }
-  }, [firstName, lastName, username]);
+    checkFingerprintAvailability();
+  }, []);
 
-  const selectUsername = (value: string) => {
-    setUsername(value.toLowerCase());
-    setUsernameSuggestionDismissed(true);
+  const checkFingerprintAvailability = async () => {
+    try {
+      const hasHardware =
+        await LocalAuthentication.hasHardwareAsync();
+
+      const isEnrolled =
+        await LocalAuthentication.isEnrolledAsync();
+
+      if (!hasHardware || !isEnrolled) {
+        setBiometricAvailable(false);
+        setBiometricType("none");
+        setEnableBiometric(false);
+        return;
+      }
+
+      const types =
+        await LocalAuthentication.supportedAuthenticationTypesAsync();
+
+      const hasFingerprint = types.includes(
+        LocalAuthentication.AuthenticationType.FINGERPRINT
+      );
+
+      if (hasFingerprint) {
+        setBiometricType("fingerprint");
+        setBiometricAvailable(true);
+        setEnableBiometric(false);
+        return;
+      }
+
+      setBiometricAvailable(false);
+      setBiometricType("none");
+      setEnableBiometric(false);
+    } catch (error) {
+      console.error("Fingerprint detection error:", error);
+
+      setBiometricAvailable(false);
+      setBiometricType("none");
+      setEnableBiometric(false);
+    }
   };
 
   // =====================================================
-  // TUP AFFILIATION
+  // PASSWORD CHECKER
   // =====================================================
 
-  const handleAffiliationChange = (nextAffiliation: Affiliation) => {
-    if (isLoading) return;
+  const passwordChecks = useMemo(() => {
+    return {
+      length: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /[0-9]/.test(password),
+      special: /[^A-Za-z0-9]/.test(password),
+    };
+  }, [password]);
 
-    setAffiliation(nextAffiliation);
-    setGovernmentIdDropdownOpen(false);
+  const passwordScore =
+    Object.values(passwordChecks).filter(Boolean).length;
 
-    // Remove identity data that belongs to the previous affiliation.
-    // This prevents stale ID data from being submitted after switching.
-    if (nextAffiliation === "student") {
-      setGovernmentIdType("");
-      setGovernmentIdNumber("");
-      setGovernmentIdFront(null);
-      setGovernmentIdBack(null);
-    } else {
-      setTupcId("");
-      setTupcIdFront(null);
-      setTupcIdBack(null);
-    }
-  };
+  const passwordStrong = passwordScore === 5;
 
   // =====================================================
   // CONTACT
@@ -824,20 +735,6 @@ export default function SellerRegisterScreen() {
   };
 
   // =====================================================
-  // PIN
-  // =====================================================
-
-  const handlePinChange = (value: string) => {
-    setPin(value.replace(/\D/g, "").slice(0, 6));
-  };
-
-  const handleConfirmPinChange = (value: string) => {
-    setConfirmPin(
-      value.replace(/\D/g, "").slice(0, 6)
-    );
-  };
-
-  // =====================================================
   // EMAIL
   // =====================================================
 
@@ -860,11 +757,11 @@ export default function SellerRegisterScreen() {
   // ID IMAGE PICKER / CAMERA
   // SAME BEHAVIOR AS CLIENT REGISTRATION
   //
-  // TUPC-ID:
+  // TUPC-ID FRONT:
   //   - Phone/camera stays PORTRAIT
   //   - Capture frame = portrait
   //
-  // GOVERNMENT ID:
+  // GOVERNMENT ID FRONT:
   //   - Phone/camera stays PORTRAIT
   //   - Capture frame = landscape (16:10)
   //   - DO NOT rotate the whole phone to landscape
@@ -883,16 +780,8 @@ export default function SellerRegisterScreen() {
         setTupcIdFront(imageUri);
         break;
 
-      case "tupcBack":
-        setTupcIdBack(imageUri);
-        break;
-
       case "governmentFront":
         setGovernmentIdFront(imageUri);
-        break;
-
-      case "governmentBack":
-        setGovernmentIdBack(imageUri);
         break;
     }
   };
@@ -916,12 +805,10 @@ export default function SellerRegisterScreen() {
         return;
       }
 
-      const isTupcId =
-        type === "tupcFront" ||
-        type === "tupcBack";
+      const isTupcId = type === "tupcFront";
 
       // IMPORTANT:
-      // The PHONE/CAMERA screen must stay PORTRAIT for both IDs.
+      // The PHONE/CAMERA screen stays PORTRAIT for both ID types.
       // Government ID gets a LANDSCAPE 16:10 crop frame after capture.
       // We never lock the device to LANDSCAPE.
       const targetOrientation =
@@ -1072,18 +959,13 @@ export default function SellerRegisterScreen() {
   };
 
   const idPickerIsTupc =
-    idPickerType === "tupcFront" ||
-    idPickerType === "tupcBack";
+    idPickerType === "tupcFront";
 
-  const idPickerSide =
-    idPickerType === "tupcBack" ||
-    idPickerType === "governmentBack"
-      ? "Back"
-      : "Front";
+  const idPickerSide = "Front";
 
   const idPickerTitle = idPickerIsTupc
-    ? `TUPC-ID ${idPickerSide} Photo`
-    : `Government ID ${idPickerSide} Photo`;
+    ? "TUPC-ID Front Photo"
+    : "Government ID Front Photo";
 
   const idPickerDescription = idPickerIsTupc
     ? "Choose how you want to add your TUPC-ID photo."
@@ -1390,13 +1272,6 @@ export default function SellerRegisterScreen() {
         return;
       }
 
-      if (!tupcIdBack) {
-        Alert.alert(
-          "TUPC-ID Back Required",
-          "Please upload the back photo of your TUPC-ID."
-        );
-        return;
-      }
     }
 
     // GOVERNMENT ID IS REQUIRED ONLY FOR "OTHERS".
@@ -1443,13 +1318,6 @@ export default function SellerRegisterScreen() {
         return;
       }
 
-      if (!governmentIdBack) {
-        Alert.alert(
-          "Government ID Back Required",
-          "Please upload the back photo of your Government ID."
-        );
-        return;
-      }
     }
 
     // =================================================
@@ -1502,45 +1370,6 @@ export default function SellerRegisterScreen() {
     }
 
     // =================================================
-    // PIN
-    // IMPORTANT: The API expects BOTH `pin` and `confirmPin`.
-    // Normalize both values before validation/submission.
-    // =================================================
-
-    const cleanPin = pin.replace(/\D/g, "").slice(0, 6);
-    const cleanConfirmPin = confirmPin.replace(/\D/g, "").slice(0, 6);
-
-    if (cleanPin.length !== 6) {
-      Alert.alert(
-        "PIN Required",
-        "Please create a 6-digit PIN. It will be used as your backup authentication method."
-      );
-      return;
-    }
-
-    if (cleanConfirmPin.length !== 6) {
-      Alert.alert(
-        "Confirm PIN Required",
-        "Please enter the same 6-digit PIN again."
-      );
-      return;
-    }
-
-    if (cleanPin !== cleanConfirmPin) {
-      console.log("PIN DEBUG - FRONTEND MISMATCH", {
-        pinLength: cleanPin.length,
-        confirmPinLength: cleanConfirmPin.length,
-        pinsMatch: false,
-      });
-
-      Alert.alert(
-        "PINs Do Not Match",
-        "Please make sure both PINs are exactly the same."
-      );
-      return;
-    }
-
-    // =================================================
     // REGISTER
     // =================================================
 
@@ -1557,10 +1386,6 @@ export default function SellerRegisterScreen() {
         "========================================"
       );
 
-      console.log(
-        "Username:",
-        cleanUsername
-      );
       console.log(
         "Email:",
         cleanEmail
@@ -1586,20 +1411,11 @@ export default function SellerRegisterScreen() {
         !!tupcIdFront
       );
       console.log(
-        "TUPC ID Back:",
-        !!tupcIdBack
-      );
-      console.log(
         "Government ID Front:",
         !!governmentIdFront
       );
-      console.log(
-        "Government ID Back:",
-        !!governmentIdBack
-      );
-
       // IMPORTANT:
-      // Do NOT console.log actual passwords, PIN, or CAPTCHA token.
+      // Do NOT console.log actual passwords or CAPTCHA token.
       // Log lengths only so password mismatches can be diagnosed safely.
       console.log("PASSWORD DEBUG - FRONTEND", {
         passwordLength: password.length,
@@ -1607,11 +1423,6 @@ export default function SellerRegisterScreen() {
         passwordsMatch: password === confirmPassword,
       });
 
-      console.log("PIN DEBUG - FRONTEND", {
-        pinLength: cleanPin.length,
-        confirmPinLength: cleanConfirmPin.length,
-        pinsMatch: cleanPin === cleanConfirmPin,
-      });
 
       const data = await registerUser({
         firstName: cleanFirstName,
@@ -1663,14 +1474,6 @@ export default function SellerRegisterScreen() {
               }
             : undefined,
 
-        tupcIdBack:
-          affiliation === "student" && tupcIdBack
-            ? {
-                uri: tupcIdBack,
-                name: "tupc-id-back.jpg",
-                type: "image/jpeg",
-              }
-            : undefined,
 
         governmentIdFront:
           affiliation === "others" && governmentIdFront
@@ -1681,22 +1484,8 @@ export default function SellerRegisterScreen() {
               }
             : undefined,
 
-        governmentIdBack:
-          affiliation === "others" && governmentIdBack
-            ? {
-                uri: governmentIdBack,
-                name: "government-id-back.jpg",
-                type: "image/jpeg",
-              }
-            : undefined,
-
         biometricEnabled:
           enableBiometric,
-
-        // IMPORTANT: Send BOTH fields because the registration API
-        // validates the PIN against its confirmation value.
-        pin: cleanPin,
-        confirmPin: cleanConfirmPin,
 
         captchaToken,
       } as any);
@@ -2367,6 +2156,7 @@ export default function SellerRegisterScreen() {
               </Text>
             </View>
 
+            {/* USERNAME */}
             <Text style={styles.label}>
               Username
             </Text>
@@ -2396,14 +2186,9 @@ export default function SellerRegisterScreen() {
                     .replace(/[^a-z0-9._]/g, "");
 
                   setUsername(cleaned);
-                  setUsernameSuggestionDismissed(
-                    cleaned.trim().length > 0
-                  );
                 }}
                 placeholder="Choose a username"
-                placeholderTextColor={
-                  COLORS.lightMuted
-                }
+                placeholderTextColor={COLORS.lightMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!isLoading}
@@ -2439,51 +2224,6 @@ export default function SellerRegisterScreen() {
               <Text style={styles.usernameAvailabilityError}>
                 {usernameAvailabilityMessage || "Unable to check username availability."}
               </Text>
-            )}
-
-            {usernameSuggestions.length > 0 &&
-              !username &&
-              !usernameSuggestionDismissed && (
-              <View
-                style={styles.suggestions}
-              >
-                <Text
-                  style={
-                    styles.suggestionLabel
-                  }
-                >
-                  Suggestions
-                </Text>
-
-                <View
-                  style={
-                    styles.suggestionWrap
-                  }
-                >
-                  {usernameSuggestions.map(
-                    (item) => (
-                      <Pressable
-                        key={item}
-                        style={
-                          styles.suggestionChip
-                        }
-                        onPress={() =>
-                          selectUsername(item)
-                        }
-                        disabled={isLoading}
-                      >
-                        <Text
-                          style={
-                            styles.suggestionText
-                          }
-                        >
-                          {item}
-                        </Text>
-                      </Pressable>
-                    )
-                  )}
-                </View>
-              </View>
             )}
 
             <Text
@@ -2548,7 +2288,7 @@ export default function SellerRegisterScreen() {
                 <SectionHeader
                   icon="card-outline"
                   title="TUPC-ID Verification"
-                  description="Provide your TUPC-ID number and clear photos of both sides of your ID."
+                  description="Provide your TUPC-ID number and a clear photo of the front of your ID."
                 />
 
                 <View style={styles.requirementBanner}>
@@ -2619,14 +2359,6 @@ export default function SellerRegisterScreen() {
                     pickIdImageFromMenu("tupcFront")
                   }
                 />
-
-                <IdImageUpload
-                  title="TUPC-ID Back"
-                  imageUri={tupcIdBack}
-                  onPress={() =>
-                    pickIdImageFromMenu("tupcBack")
-                  }
-                />
               </View>
             )}
 
@@ -2637,7 +2369,7 @@ export default function SellerRegisterScreen() {
                 <SectionHeader
                   icon="shield-checkmark-outline"
                   title="Government ID Verification"
-                  description="Select a valid government-issued ID and upload clear photos of both sides."
+                  description="Select a valid government-issued ID and upload a clear photo of the front."
                 />
 
                 <View style={styles.requirementBanner}>
@@ -2649,7 +2381,7 @@ export default function SellerRegisterScreen() {
                   <View style={styles.requirementBannerText}>
                     <Text style={styles.requirementBannerTitle}>Identity verification</Text>
                     <Text style={styles.requirementBannerDescription}>
-                      Use an active government-issued ID. Your ID photos should be clear, complete, and readable.
+                      Use an active government-issued ID. Your ID photo should be clear, complete, and readable.
                     </Text>
                   </View>
                 </View>
@@ -2791,13 +2523,6 @@ export default function SellerRegisterScreen() {
                   }
                 />
 
-                <IdImageUpload
-                  title="Government ID Back"
-                  imageUri={governmentIdBack}
-                  onPress={() =>
-                    pickIdImage("governmentBack")
-                  }
-                />
               </View>
             )}
 
@@ -2928,40 +2653,42 @@ export default function SellerRegisterScreen() {
               </Pressable>
             </View>
 
-            <View
-              style={styles.requirements}
-            >
-              <PasswordRequirement
-                valid={
-                  passwordChecks.length
-                }
-                text="At least 8 characters"
-              />
-              <PasswordRequirement
-                valid={
-                  passwordChecks.uppercase
-                }
-                text="One uppercase letter"
-              />
-              <PasswordRequirement
-                valid={
-                  passwordChecks.lowercase
-                }
-                text="One lowercase letter"
-              />
-              <PasswordRequirement
-                valid={
-                  passwordChecks.number
-                }
-                text="One number"
-              />
-              <PasswordRequirement
-                valid={
-                  passwordChecks.special
-                }
-                text="One special character"
-              />
-            </View>
+            {password.length > 0 && (
+              <View
+                style={styles.requirements}
+              >
+                <PasswordRequirement
+                  valid={
+                    passwordChecks.length
+                  }
+                  text="At least 8 characters"
+                />
+                <PasswordRequirement
+                  valid={
+                    passwordChecks.uppercase
+                  }
+                  text="One uppercase letter"
+                />
+                <PasswordRequirement
+                  valid={
+                    passwordChecks.lowercase
+                  }
+                  text="One lowercase letter"
+                />
+                <PasswordRequirement
+                  valid={
+                    passwordChecks.number
+                  }
+                  text="One number"
+                />
+                <PasswordRequirement
+                  valid={
+                    passwordChecks.special
+                  }
+                  text="One special character"
+                />
+              </View>
+            )}
 
             <Text
               style={[
@@ -3062,7 +2789,7 @@ export default function SellerRegisterScreen() {
             <SectionHeader
               icon={securityIcon}
               title="Security"
-              description="Verify your fingerprint and create a 6-digit backup PIN."
+              description="Verify your fingerprint for faster and more secure sign-in."
             />
 
             <Pressable
@@ -3177,168 +2904,10 @@ export default function SellerRegisterScreen() {
               <Text style={styles.securityInfoText}>
                 Fingerprint sign-in uses the fingerprint already enrolled in
                 your device. TUPC-OrderUp never receives or stores your raw
-                fingerprint data. Your 6-digit PIN remains your backup login method.
+                fingerprint data.
               </Text>
             </View>
 
-            <Text
-              style={[
-                styles.label,
-                styles.secondLabel,
-              ]}
-            >
-              6-Digit Backup PIN
-            </Text>
-
-            <View
-              style={styles.inputWrapper}
-            >
-              <Ionicons
-                name="keypad-outline"
-                size={20}
-                color={COLORS.cardinal}
-              />
-
-              <TextInput
-                value={pin}
-                onChangeText={
-                  handlePinChange
-                }
-                placeholder="Create 6-digit PIN"
-                placeholderTextColor={
-                  COLORS.lightMuted
-                }
-                keyboardType="number-pad"
-                secureTextEntry={!showPin}
-                maxLength={6}
-                editable={!isLoading}
-                style={styles.inputWithIcon}
-              />
-
-              <Pressable
-                onPress={() =>
-                  setShowPin(!showPin)
-                }
-                hitSlop={10}
-                disabled={isLoading}
-              >
-                <Ionicons
-                  name={
-                    showPin
-                      ? "eye-off-outline"
-                      : "eye-outline"
-                  }
-                  size={21}
-                  color={COLORS.muted}
-                />
-              </Pressable>
-            </View>
-
-            <Text
-              style={[
-                styles.label,
-                styles.secondLabel,
-              ]}
-            >
-              Confirm PIN
-            </Text>
-
-            <View
-              style={styles.inputWrapper}
-            >
-              <Ionicons
-                name="keypad-outline"
-                size={20}
-                color={COLORS.cardinal}
-              />
-
-              <TextInput
-                value={confirmPin}
-                onChangeText={
-                  handleConfirmPinChange
-                }
-                placeholder="Confirm 6-digit PIN"
-                placeholderTextColor={
-                  COLORS.lightMuted
-                }
-                keyboardType="number-pad"
-                secureTextEntry={
-                  !showConfirmPin
-                }
-                maxLength={6}
-                editable={!isLoading}
-                style={styles.inputWithIcon}
-              />
-
-              <Pressable
-                onPress={() =>
-                  setShowConfirmPin(
-                    !showConfirmPin
-                  )
-                }
-                hitSlop={10}
-                disabled={isLoading}
-              >
-                <Ionicons
-                  name={
-                    showConfirmPin
-                      ? "eye-off-outline"
-                      : "eye-outline"
-                  }
-                  size={21}
-                  color={COLORS.muted}
-                />
-              </Pressable>
-            </View>
-
-            {confirmPin.length > 0 && (
-              <View
-                style={styles.matchRow}
-              >
-                <Ionicons
-                  name={
-                    pin === confirmPin
-                      ? "checkmark-circle"
-                      : "close-circle"
-                  }
-                  size={16}
-                  color={
-                    pin === confirmPin
-                      ? COLORS.success
-                      : COLORS.danger
-                  }
-                />
-
-                <Text
-                  style={styles.matchText}
-                >
-                  {pin === confirmPin
-                    ? "PINs match"
-                    : "PINs do not match"}
-                </Text>
-              </View>
-            )}
-
-            <View
-              style={styles.securityInfo}
-            >
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={19}
-                color={COLORS.cardinal}
-              />
-
-              <Text
-                style={
-                  styles.securityInfoText
-                }
-              >
-                Your PIN is securely processed
-                by the authentication system.
-                Your actual PIN should never be
-                stored as plain text.
-              </Text>
-            </View>
           </View>
 
           {/* CAPTCHA */}
@@ -4056,40 +3625,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 15,
     color: COLORS.muted,
-  },
-
-  // ===================================================
-  // USERNAME
-  // ===================================================
-
-  suggestions: {
-    marginTop: 9,
-  },
-
-  suggestionLabel: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: COLORS.muted,
-    marginBottom: 7,
-  },
-
-  suggestionWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 7,
-  },
-
-  suggestionChip: {
-    backgroundColor: COLORS.softRed,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-
-  suggestionText: {
-    color: COLORS.cardinal,
-    fontSize: 10,
-    fontWeight: "800",
   },
 
   // ===================================================

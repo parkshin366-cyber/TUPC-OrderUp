@@ -53,7 +53,7 @@ export type LoginResponse = {
   expiresIn: number;
   token: string;
   user: ApiUser;
-  requiresOtp: false;
+  requiresOtp: boolean;
 };
 
 // =====================================================
@@ -215,12 +215,30 @@ export type UsernameAvailabilityResponse = {
 async function parseResponse(
   response: Response
 ): Promise<any> {
+  const rawText = await response.text();
+
+  console.log("========================================");
+  console.log("API RESPONSE");
+  console.log("STATUS:", response.status);
+  console.log("OK:", response.ok);
+  console.log("URL:", response.url);
+  console.log("RAW RESPONSE:", rawText);
+  console.log("========================================");
+
+  if (!rawText.trim()) {
+    return {
+      success: false,
+      message: `Empty server response. HTTP ${response.status}.`,
+    };
+  }
+
   try {
-    return await response.json();
+    return JSON.parse(rawText);
   } catch {
     return {
       success: false,
-      message: "Invalid server response.",
+      message: `Invalid server response. HTTP ${response.status}.`,
+      rawResponse: rawText,
     };
   }
 }
@@ -243,24 +261,54 @@ export async function loginUser(
     throw new Error("Password is required.");
   }
 
-  try {
-    const response = await fetch(
-      `${API_URL}/auth/login`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: cleanUsername,
-          password,
-        }),
-      }
+  if (!API_URL) {
+    throw new Error(
+      "API URL is not configured. Check your EXPO_PUBLIC_API_URL in .env."
     );
+  }
+
+  const loginUrl = `${API_URL}/auth/login`;
+
+  console.log("========================================");
+  console.log("LOGIN REQUEST");
+  console.log("API URL:", API_URL);
+  console.log("LOGIN URL:", loginUrl);
+  console.log("USERNAME:", cleanUsername);
+  console.log("========================================");
+
+  try {
+    const response = await fetch(loginUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: cleanUsername,
+        password,
+      }),
+    });
 
     const data = await parseResponse(response);
 
+    console.log("LOGIN PARSED RESPONSE:", data);
+
     if (!response.ok) {
+      const serverMessage =
+        typeof data?.message === "string"
+          ? data.message
+          : `Login failed. HTTP ${response.status}.`;
+
+      throw new Error(serverMessage);
+    }
+
+    if (!data || typeof data !== "object") {
+      throw new Error(
+        "Server returned an invalid login response."
+      );
+    }
+
+    if (data.success === false) {
       throw new Error(
         data.message || "Login failed."
       );
@@ -268,7 +316,10 @@ export async function loginUser(
 
     return data as LoginResponse;
   } catch (error) {
-    console.error("LOGIN API ERROR:", error);
+    console.error(
+      "LOGIN API ERROR:",
+      error
+    );
 
     if (error instanceof Error) {
       throw error;
@@ -299,6 +350,12 @@ export async function checkUsernameAvailability(
     };
   }
 
+  if (!API_URL) {
+    throw new Error(
+      "API URL is not configured."
+    );
+  }
+
   try {
     const url =
       `${API_URL}/auth/check-username` +
@@ -316,7 +373,8 @@ export async function checkUsernameAvailability(
       },
     });
 
-    const data = await parseResponse(response);
+    const data =
+      await parseResponse(response);
 
     console.log(
       "CHECK USERNAME RESPONSE:",
@@ -477,10 +535,6 @@ export async function registerUser(
   data: RegisterUserData
 ): Promise<RegisterResponse> {
   try {
-    // =================================================
-    // PASSWORD VALIDATION
-    // =================================================
-
     if (
       typeof data.password !== "string" ||
       typeof data.confirmPassword !== "string"
@@ -498,10 +552,6 @@ export async function registerUser(
         "Passwords do not match."
       );
     }
-
-    // =================================================
-    // PIN VALIDATION
-    // =================================================
 
     const actualPin =
       typeof data.pin === "string"
@@ -546,16 +596,9 @@ export async function registerUser(
       }
     }
 
-    // =================================================
-    // CREATE FORMDATA
-    // =================================================
-
     const formData = new FormData();
 
-    // =================================================
     // BASIC INFORMATION
-    // =================================================
-
     formData.append(
       "firstName",
       String(data.firstName)
@@ -581,10 +624,7 @@ export async function registerUser(
       String(data.contact)
     );
 
-    // =================================================
     // STORE INFORMATION
-    // =================================================
-
     if (
       typeof data.storeName ===
       "string"
@@ -605,10 +645,7 @@ export async function registerUser(
       );
     }
 
-    // =================================================
     // PASSWORD
-    // =================================================
-
     formData.append(
       "password",
       data.password
@@ -619,19 +656,13 @@ export async function registerUser(
       data.confirmPassword
     );
 
-    // =================================================
     // ROLE
-    // =================================================
-
     formData.append(
       "role",
       data.role
     );
 
-    // =================================================
     // TUP AFFILIATION
-    // =================================================
-
     if (data.tupAffiliation) {
       formData.append(
         "tupAffiliation",
@@ -639,10 +670,7 @@ export async function registerUser(
       );
     }
 
-    // =================================================
     // TUPC ID
-    // =================================================
-
     if (data.tupcId) {
       formData.append(
         "tupcId",
@@ -650,10 +678,7 @@ export async function registerUser(
       );
     }
 
-    // =================================================
     // GOVERNMENT ID
-    // =================================================
-
     if (data.governmentIdType) {
       formData.append(
         "governmentIdType",
@@ -668,10 +693,7 @@ export async function registerUser(
       );
     }
 
-    // =================================================
     // BIOMETRIC
-    // =================================================
-
     formData.append(
       "biometricEnabled",
       String(
@@ -679,10 +701,7 @@ export async function registerUser(
       )
     );
 
-    // =================================================
     // PIN
-    // =================================================
-
     if (actualPin.length > 0) {
       formData.append(
         "pin",
@@ -695,19 +714,13 @@ export async function registerUser(
       );
     }
 
-    // =================================================
     // CAPTCHA
-    // =================================================
-
     formData.append(
       "captchaToken",
       String(data.captchaToken)
     );
 
-    // =================================================
     // STUDENT ID IMAGES
-    // =================================================
-
     await appendImage(
       formData,
       "tupcIdFront",
@@ -720,10 +733,7 @@ export async function registerUser(
       data.tupcIdBack
     );
 
-    // =================================================
     // GOVERNMENT ID IMAGES
-    // =================================================
-
     await appendImage(
       formData,
       "governmentIdFront",
@@ -736,33 +746,17 @@ export async function registerUser(
       data.governmentIdBack
     );
 
-    // =================================================
     // SEND REGISTER REQUEST
-    // =================================================
-
     const response = await fetch(
       `${API_URL}/auth/register`,
       {
         method: "POST",
-
-        // DO NOT manually set Content-Type.
-        // fetch automatically creates the
-        // multipart/form-data boundary.
-
         body: formData,
       }
     );
 
-    // =================================================
-    // PARSE RESPONSE
-    // =================================================
-
     const result =
       await parseResponse(response);
-
-    // =================================================
-    // SERVER ERROR
-    // =================================================
 
     if (!response.ok) {
       console.error(
@@ -778,10 +772,6 @@ export async function registerUser(
           "Unable to create account."
       );
     }
-
-    // =================================================
-    // SUCCESS
-    // =================================================
 
     console.log(
       "REGISTER SUCCESS"
@@ -825,6 +815,7 @@ export async function sendOtp(
       {
         method: "POST",
         headers: {
+          Accept: "application/json",
           "Content-Type":
             "application/json",
         },
@@ -894,6 +885,7 @@ export async function verifyOtp(
       {
         method: "POST",
         headers: {
+          Accept: "application/json",
           "Content-Type":
             "application/json",
         },
@@ -954,6 +946,7 @@ export async function forgotPassword(
       {
         method: "POST",
         headers: {
+          Accept: "application/json",
           "Content-Type":
             "application/json",
         },
@@ -1022,6 +1015,7 @@ export async function verifyResetOtp(
       {
         method: "POST",
         headers: {
+          Accept: "application/json",
           "Content-Type":
             "application/json",
         },
@@ -1120,6 +1114,7 @@ export async function resetPassword(
       {
         method: "POST",
         headers: {
+          Accept: "application/json",
           "Content-Type":
             "application/json",
         },
@@ -1178,6 +1173,7 @@ export async function getCurrentUser(
       {
         method: "GET",
         headers: {
+          Accept: "application/json",
           Authorization:
             `Bearer ${token}`,
           "Content-Type":

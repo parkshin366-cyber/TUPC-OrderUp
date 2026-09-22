@@ -71,9 +71,7 @@ type BiometricType = "fingerprint" | "none";
 
 type IdImageType =
   | "tupcFront"
-  | "tupcBack"
-  | "governmentFront"
-  | "governmentBack";
+  | "governmentFront";
 
 
 type GovernmentIdConfig = {
@@ -332,8 +330,6 @@ export default function ClientRegisterScreen() {
   const [tupcIdFront, setTupcIdFront] =
     useState<string | null>(null);
 
-  const [tupcIdBack, setTupcIdBack] =
-    useState<string | null>(null);
 
   const [governmentIdType, setGovernmentIdType] =
     useState("");
@@ -346,9 +342,6 @@ export default function ClientRegisterScreen() {
     useState("");
 
   const [governmentIdFront, setGovernmentIdFront] =
-    useState<string | null>(null);
-
-  const [governmentIdBack, setGovernmentIdBack] =
     useState<string | null>(null);
 
   // =====================================================
@@ -390,12 +383,6 @@ export default function ClientRegisterScreen() {
   const [isRegisteringFingerprint, setIsRegisteringFingerprint] =
     useState(false);
 
-  const [pin, setPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
-
-  const [showPin, setShowPin] = useState(false);
-  const [showConfirmPin, setShowConfirmPin] =
-    useState(false);
 
   // =====================================================
   // UI
@@ -623,7 +610,7 @@ export default function ClientRegisterScreen() {
 
       Alert.alert(
         "Fingerprint Registration Failed",
-        "We could not verify your fingerprint. Please try again or use your 6-digit PIN instead."
+        "We could not verify your fingerprint. Please try again or use your password instead."
       );
     } finally {
       setIsRegisteringFingerprint(false);
@@ -703,11 +690,9 @@ export default function ClientRegisterScreen() {
       setGovernmentIdType("");
       setGovernmentIdNumber("");
       setGovernmentIdFront(null);
-      setGovernmentIdBack(null);
     } else {
       setTupcId("");
       setTupcIdFront(null);
-      setTupcIdBack(null);
     }
   };
 
@@ -786,23 +771,6 @@ export default function ClientRegisterScreen() {
     );
   };
 
-  // =====================================================
-  // PIN
-  // =====================================================
-
-  const handlePinChange = (value: string) => {
-    setPin(
-      value.replace(/\D/g, "").slice(0, 6)
-    );
-  };
-
-  const handleConfirmPinChange = (
-    value: string
-  ) => {
-    setConfirmPin(
-      value.replace(/\D/g, "").slice(0, 6)
-    );
-  };
 
   // =====================================================
   // EMAIL
@@ -836,7 +804,7 @@ export default function ClientRegisterScreen() {
   // TUPC-ID:
   //   Portrait camera orientation
   //
-  // Government ID:
+  // Government ID Front:
   //   Portrait phone/camera orientation
   //   Landscape ID capture frame (16:10 crop)
   //
@@ -860,9 +828,7 @@ export default function ClientRegisterScreen() {
         return;
       }
 
-      const isTupcId =
-        type === "tupcFront" ||
-        type === "tupcBack";
+      const isTupcId = type === "tupcFront";
 
       /*
        * IMPORTANT:
@@ -916,16 +882,8 @@ export default function ClientRegisterScreen() {
           setTupcIdFront(imageUri);
           break;
 
-        case "tupcBack":
-          setTupcIdBack(imageUri);
-          break;
-
         case "governmentFront":
           setGovernmentIdFront(imageUri);
-          break;
-
-        case "governmentBack":
-          setGovernmentIdBack(imageUri);
           break;
       }
     } catch (error) {
@@ -981,7 +939,7 @@ export default function ClientRegisterScreen() {
   // ID IMAGE SOURCE MENU
   // =====================================================
   //
-  // TUPC-ID Front / Back:
+  // TUPC-ID Front:
   //   Tap the upload box first.
   //   User chooses:
   //     1. Take Photo
@@ -1026,7 +984,7 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
       Alert.alert("Gallery Permission Required", "Please allow photo library access so you can choose an existing ID photo.");
       return;
     }
-    const isTupcId = type === "tupcFront" || type === "tupcBack";
+    const isTupcId = type === "tupcFront";
     const targetAspect: [number, number] = isTupcId ? [3, 4] : [16, 10];
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
@@ -1038,10 +996,12 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
     if (result.canceled || !result.assets?.length) return;
     const imageUri = result.assets[0].uri;
     switch (type) {
-      case "tupcFront": setTupcIdFront(imageUri); break;
-      case "tupcBack": setTupcIdBack(imageUri); break;
-      case "governmentFront": setGovernmentIdFront(imageUri); break;
-      case "governmentBack": setGovernmentIdBack(imageUri); break;
+      case "tupcFront":
+        setTupcIdFront(imageUri);
+        break;
+      case "governmentFront":
+        setGovernmentIdFront(imageUri);
+        break;
     }
   } catch (error) {
     console.error("ID GALLERY ERROR:", error);
@@ -1242,14 +1202,6 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
         return;
       }
 
-      // TUPC BACK
-      if (!tupcIdBack) {
-        Alert.alert(
-          "TUPC-ID Back Required",
-          "Please upload the back photo of your TUPC-ID."
-        );
-        return;
-      }
     }
 
     if (affiliation === "others") {
@@ -1290,15 +1242,6 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
         Alert.alert(
           "Government ID Front Required",
           "Please upload the front photo of your Government ID."
-        );
-        return;
-      }
-
-      // GOVERNMENT BACK
-      if (!governmentIdBack) {
-        Alert.alert(
-          "Government ID Back Required",
-          "Please upload the back photo of your Government ID."
         );
         return;
       }
@@ -1346,25 +1289,6 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
       return;
     }
 
-    // =================================================
-    // PIN
-    // =================================================
-
-    if (pin.length !== 6) {
-      Alert.alert(
-        "PIN Required",
-        "Please create a 6-digit PIN. It will be used as your backup authentication method."
-      );
-      return;
-    }
-
-    if (pin !== confirmPin) {
-      Alert.alert(
-        "PINs Do Not Match",
-        "Please make sure both PINs are the same."
-      );
-      return;
-    }
 
     // =================================================
     // CAPTCHA
@@ -1427,23 +1351,14 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
         !!tupcIdFront
       );
 
-      console.log(
-        "TUPC ID Back:",
-        !!tupcIdBack
-      );
 
       console.log(
         "Government ID Front:",
         !!governmentIdFront
       );
 
-      console.log(
-        "Government ID Back:",
-        !!governmentIdBack
-      );
-
       // IMPORTANT:
-      // Do NOT console.log password or PIN.
+      // Do NOT console.log the password.
 
       const data = await registerUser({
         firstName: cleanFirstName,
@@ -1491,14 +1406,6 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
               }
             : undefined,
 
-        tupcIdBack:
-          affiliation === "student" && tupcIdBack
-            ? {
-                uri: tupcIdBack,
-                name: "tupc-id-back.jpg",
-                type: "image/jpeg",
-              }
-            : undefined,
 
         governmentIdFront:
           affiliation === "others" && governmentIdFront
@@ -1509,20 +1416,9 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
               }
             : undefined,
 
-        governmentIdBack:
-          affiliation === "others" && governmentIdBack
-            ? {
-                uri: governmentIdBack,
-                name: "government-id-back.jpg",
-                type: "image/jpeg",
-              }
-            : undefined,
-
         biometricEnabled:
           enableBiometric,
 
-        pin,
-        confirmPin,
 
         captchaToken,
       });
@@ -2292,8 +2188,8 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
               }
               description={
                 affiliation === "student"
-                  ? "Provide your TUPC-ID details and clear front and back photos."
-                  : "Provide a valid government ID number and clear front and back photos."
+                  ? "Provide your TUPC-ID details and a clear front photo."
+                  : "Provide a valid government ID number and a clear front photo."
               }
             />
 
@@ -2381,24 +2277,7 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
   }
 />
 
-                {/* BACK */}
 
-                <IdImageUpload
-                  title="TUPC-ID Back"
-                  imageUri={
-                    tupcIdBack
-                  }
-                  onPress={() =>
-                    pickIdImageFromMenu(
-                      "tupcBack"
-                    )
-                  }
-                  onRemove={() =>
-                    setTupcIdBack(
-                      null
-                    )
-                  }
-                />
               </View>
             )}
 
@@ -2494,14 +2373,7 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
                   }
                 />
 
-                {/* BACK */}
 
-<IdImageUpload
-  title="Government ID Back"
-  imageUri={governmentIdBack}
-  onPress={() => pickIdImageFromMenu("governmentBack")}
-  onRemove={() => setGovernmentIdBack(null)}
-/>
               </View>
             )}
 
@@ -2793,7 +2665,7 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
             <SectionHeader
               icon="shield-checkmark-outline"
               title="Security Setup"
-              description="Secure your account with fingerprint and a backup PIN."
+              description="Secure your account with fingerprint authentication."
             />
 
             {/* FINGERPRINT REGISTRATION */}
@@ -2869,232 +2741,6 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
               )}
             </View>
 
-            {/* PIN */}
-
-            <View
-              style={styles.pinCard}
-            >
-              <View
-                style={styles.pinTop}
-              >
-                <View
-                  style={
-                    styles.pinIconBox
-                  }
-                >
-                  <Ionicons
-                    name="keypad-outline"
-                    size={22}
-                    color={
-                      COLORS.cardinal
-                    }
-                  />
-                </View>
-
-                <View
-                  style={
-                    styles.pinTextContainer
-                  }
-                >
-                  <Text
-                    style={
-                      styles.pinTitle
-                    }
-                  >
-                    6-Digit PIN
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.pinDescription
-                    }
-                  >
-                    Your backup authentication method
-                    if fingerprint sign-in is unavailable.
-                  </Text>
-                </View>
-
-                <View
-                  style={
-                    styles.requiredBadge
-                  }
-                >
-                  <Text
-                    style={
-                      styles.requiredBadgeText
-                    }
-                  >
-                    REQUIRED
-                  </Text>
-                </View>
-              </View>
-
-              {/* CREATE PIN */}
-
-              <Text
-                style={styles.label}
-              >
-                Create PIN
-              </Text>
-
-              <View
-                style={
-                  styles.inputWrapper
-                }
-              >
-                <Ionicons
-                  name="keypad-outline"
-                  size={20}
-                  color={COLORS.cardinal}
-                />
-
-                <TextInput
-                  value={pin}
-                  onChangeText={
-                    handlePinChange
-                  }
-                  placeholder="Enter 6-digit PIN"
-                  placeholderTextColor={
-                    COLORS.lightMuted
-                  }
-                  keyboardType="number-pad"
-                  secureTextEntry={
-                    !showPin
-                  }
-                  maxLength={6}
-                  editable={!isLoading}
-                  style={
-                    styles.inputWithIcon
-                  }
-                />
-
-                <Pressable
-                  onPress={() =>
-                    setShowPin(
-                      !showPin
-                    )
-                  }
-                  hitSlop={10}
-                  disabled={isLoading}
-                >
-                  <Ionicons
-                    name={
-                      showPin
-                        ? "eye-off-outline"
-                        : "eye-outline"
-                    }
-                    size={21}
-                    color={
-                      COLORS.muted
-                    }
-                  />
-                </Pressable>
-              </View>
-
-              {/* CONFIRM PIN */}
-
-              <Text
-                style={[
-                  styles.label,
-                  styles.secondLabel,
-                ]}
-              >
-                Confirm PIN
-              </Text>
-
-              <View
-                style={
-                  styles.inputWrapper
-                }
-              >
-                <Ionicons
-                  name="keypad-outline"
-                  size={20}
-                  color={COLORS.cardinal}
-                />
-
-                <TextInput
-                  value={
-                    confirmPin
-                  }
-                  onChangeText={
-                    handleConfirmPinChange
-                  }
-                  placeholder="Confirm 6-digit PIN"
-                  placeholderTextColor={
-                    COLORS.lightMuted
-                  }
-                  keyboardType="number-pad"
-                  secureTextEntry={
-                    !showConfirmPin
-                  }
-                  maxLength={6}
-                  editable={!isLoading}
-                  style={
-                    styles.inputWithIcon
-                  }
-                />
-
-                <Pressable
-                  onPress={() =>
-                    setShowConfirmPin(
-                      !showConfirmPin
-                    )
-                  }
-                  hitSlop={10}
-                  disabled={isLoading}
-                >
-                  <Ionicons
-                    name={
-                      showConfirmPin
-                        ? "eye-off-outline"
-                        : "eye-outline"
-                    }
-                    size={21}
-                    color={
-                      COLORS.muted
-                    }
-                  />
-                </Pressable>
-              </View>
-
-              {confirmPin.length >
-                0 && (
-                <View
-                  style={
-                    styles.matchRow
-                  }
-                >
-                  <Ionicons
-                    name={
-                      pin ===
-                      confirmPin
-                        ? "checkmark-circle"
-                        : "close-circle"
-                    }
-                    size={16}
-                    color={
-                      pin ===
-                      confirmPin
-                        ? COLORS.success
-                        : COLORS.danger
-                    }
-                  />
-
-                  <Text
-                    style={
-                      styles.matchText
-                    }
-                  >
-                    {pin ===
-                    confirmPin
-                      ? "PINs match"
-                      : "PINs do not match"}
-                  </Text>
-                </View>
-              )}
-            </View>
-
             {/* SECURITY INFO */}
 
             <View
@@ -3118,8 +2764,7 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
                 Fingerprint authentication is handled by
                 your device's secure biometric system.
                 TUPC-OrderUp does not receive or store
-                your fingerprint data. Your 6-digit PIN
-                remains available as the backup sign-in method.
+                your fingerprint data.
               </Text>
             </View>
           </View>
@@ -3366,9 +3011,9 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
         <View style={styles.idImageModalCard}>
           <View style={styles.idImageModalHandle} />
           <Text style={styles.idImageModalTitle}>
-            {idImageMenuType === "tupcFront" ? "TUPC-ID Front" :
-              idImageMenuType === "tupcBack" ? "TUPC-ID Back" :
-              idImageMenuType === "governmentFront" ? "Government ID Front" : "Government ID Back"}
+            {idImageMenuType === "tupcFront"
+              ? "TUPC-ID Front"
+              : "Government ID Front"}
           </Text>
           <Text style={styles.idImageModalSubtitle}>Choose how you want to add your ID photo.</Text>
 
@@ -4492,69 +4137,6 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
 
-  // ===================================================
-  // PIN
-  // ===================================================
-
-  pinCard: {
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor:
-      "#FCFCFC",
-    borderWidth: 1,
-    borderColor:
-      COLORS.border,
-  },
-
-  pinTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-
-  pinIconBox: {
-    width: 43,
-    height: 43,
-    borderRadius: 12,
-    backgroundColor:
-      COLORS.softRed,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  pinTextContainer: {
-    flex: 1,
-    marginLeft: 10,
-  },
-
-  pinTitle: {
-    fontSize: 13,
-    fontWeight: "900",
-    color: COLORS.text,
-  },
-
-  pinDescription: {
-    marginTop: 3,
-    fontSize: 10,
-    lineHeight: 15,
-    color: COLORS.muted,
-  },
-
-  requiredBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor:
-      COLORS.softRed,
-  },
-
-  requiredBadgeText: {
-    fontSize: 7,
-    fontWeight: "900",
-    color: COLORS.cardinal,
-    letterSpacing: 0.5,
-  },
 
   securityInfo: {
     flexDirection: "row",

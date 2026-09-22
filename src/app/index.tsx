@@ -26,19 +26,27 @@ import {
 } from "../services/authStorage";
 
 // =====================================================
-// COLORS
+// TUPC CARDINAL COLORS
 // =====================================================
 
 const COLORS = {
   cardinal: "#A6192E",
   cardinalDark: "#7D1021",
   cardinalDeep: "#570B17",
+  cardinalLight: "#C52A42",
+
   gold: "#D8B56A",
-  background: "#F7F7F8",
+  goldLight: "#E8D39D",
+
   white: "#FFFFFF",
-  text: "#171717",
+  offWhite: "#FAFAFA",
+
+  text: "#1A1A1A",
   muted: "#737373",
-  border: "#E5E5E5",
+  border: "#E6E6E6",
+
+  inputBackground: "#F8F8F8",
+  error: "#C62828",
 };
 
 // =====================================================
@@ -55,14 +63,11 @@ export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const [showPassword, setShowPassword] =
-    useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const [rememberMe, setRememberMe] =
-    useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
-  const [isLoading, setIsLoading] =
-    useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [
     loadingRememberedCredentials,
@@ -87,14 +92,8 @@ export default function LoginScreen() {
         savedCredentials.username &&
         savedCredentials.password
       ) {
-        setUsername(
-          savedCredentials.username
-        );
-
-        setPassword(
-          savedCredentials.password
-        );
-
+        setUsername(savedCredentials.username);
+        setPassword(savedCredentials.password);
         setRememberMe(true);
 
         console.log(
@@ -120,8 +119,7 @@ export default function LoginScreen() {
   // =====================================================
 
   const handleLogin = async () => {
-    const trimmedUsername =
-      username.trim();
+    const trimmedUsername = username.trim();
 
     // ===================================================
     // VALIDATE USERNAME
@@ -153,11 +151,7 @@ export default function LoginScreen() {
       setIsLoading(true);
 
       // =================================================
-      // LOGIN REQUEST FIRST
-      // =================================================
-      //
-      // We only save credentials AFTER successful login.
-      // This prevents invalid credentials from being stored.
+      // LOGIN REQUEST
       // =================================================
 
       const data = await login(
@@ -183,8 +177,7 @@ export default function LoginScreen() {
 
       if (!data?.success) {
         throw new Error(
-          data?.message ||
-            "Login failed."
+          data?.message || "Login failed."
         );
       }
 
@@ -223,32 +216,21 @@ export default function LoginScreen() {
       // LOGIN SUCCESS
       // =================================================
 
-      console.log(
-        "Login successful."
-      );
-
-      console.log(
-        "Remember Me:",
-        rememberMe
-      );
+      console.log("Login successful.");
 
       // =================================================
       // GO TO SECURITY
       // =================================================
 
       router.replace({
-        pathname:
-          "/(auth)/security",
+        pathname: "/(auth)/security",
 
         params: {
-          role:
-            data.role ??
-            "client",
+          role: data.role ?? "client",
 
-          rememberMe:
-            rememberMe
-              ? "true"
-              : "false",
+          rememberMe: rememberMe
+            ? "true"
+            : "false",
         },
       });
     } catch (error) {
@@ -262,8 +244,7 @@ export default function LoginScreen() {
 
       if (error instanceof Error) {
         message =
-          error.message ||
-          message;
+          error.message || message;
       }
 
       Alert.alert(
@@ -316,11 +297,6 @@ export default function LoginScreen() {
 
     setRememberMe(nextValue);
 
-    // ===================================================
-    // If user manually turns Remember Me OFF,
-    // immediately remove the saved credentials.
-    // ===================================================
-
     if (!nextValue) {
       try {
         await clearRememberedCredentials();
@@ -358,17 +334,28 @@ export default function LoginScreen() {
   if (loadingRememberedCredentials) {
     return (
       <SafeAreaView
-        style={styles.safeArea}
+        style={styles.loadingSafeArea}
       >
         <View
-          style={
-            styles.initialLoadingContainer
-          }
+          style={styles.initialLoadingContainer}
         >
+          <View style={styles.loadingLogo}>
+            <Ionicons
+              name="school-outline"
+              size={30}
+              color={COLORS.white}
+            />
+          </View>
+
           <ActivityIndicator
             size="small"
-            color={COLORS.cardinal}
+            color={COLORS.white}
+            style={styles.loadingIndicator}
           />
+
+          <Text style={styles.loadingText}>
+            TUPC-OrderUp
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -408,67 +395,92 @@ export default function LoginScreen() {
               : "on-drag"
           }
         >
-          {/* =====================================================
-              BRAND HEADER
-          ===================================================== */}
 
-          <View
-            style={styles.brandSection}
-          >
-            <View
-              style={styles.logoOuter}
-            >
-              <View
-                style={styles.logoInner}
-              >
+          {/* =================================================
+              TOP BRAND AREA
+          ================================================= */}
+
+          <View style={styles.brandSection}>
+
+            {/* TUPC Badge */}
+
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
                 <Ionicons
-                  name="restaurant-outline"
-                  size={34}
-                  color={COLORS.white}
+                  name="school-outline"
+                  size={36}
+                  color={COLORS.cardinal}
                 />
               </View>
             </View>
 
-            <Text
-              style={styles.brandTitle}
-            >
+            <Text style={styles.universityName}>
+              TECHNOLOGICAL UNIVERSITY
+            </Text>
+
+            <Text style={styles.universitySubName}>
+              OF THE PHILIPPINES
+            </Text>
+
+            <View style={styles.goldDivider}>
+              <View
+                style={styles.goldDividerLine}
+              />
+
+              <View
+                style={styles.goldDiamond}
+              />
+
+              <View
+                style={styles.goldDividerLine}
+              />
+            </View>
+
+            <Text style={styles.appName}>
               TUPC-OrderUp
             </Text>
 
-            <Text
-              style={styles.brandSubtitle}
-            >
-              Campus ordering made simple.
+            <Text style={styles.appSubtitle}>
+              Campus Ordering System
             </Text>
+
           </View>
 
-          {/* =====================================================
+          {/* =================================================
               LOGIN CARD
-          ===================================================== */}
+          ================================================= */}
 
           <View style={styles.card}>
-            <Text
-              style={styles.welcome}
-            >
-              Welcome back
-            </Text>
 
-            <Text
-              style={styles.loginSubtitle}
-            >
-              Sign in to continue to your account
-            </Text>
+            {/* Card Header */}
+
+            <View style={styles.cardHeader}>
+              <View>
+                <Text style={styles.welcome}>
+                  Welcome Back
+                </Text>
+
+                <Text style={styles.loginSubtitle}>
+                  Sign in to continue to your account
+                </Text>
+              </View>
+
+              <View style={styles.headerIcon}>
+                <Ionicons
+                  name="log-in-outline"
+                  size={24}
+                  color={COLORS.cardinal}
+                />
+              </View>
+            </View>
 
             {/* =================================================
                 USERNAME / EMAIL
             ================================================= */}
 
-            <View
-              style={styles.inputGroup}
-            >
-              <Text
-                style={styles.label}
-              >
+            <View style={styles.inputGroup}>
+
+              <Text style={styles.label}>
                 Username or Email
               </Text>
 
@@ -481,19 +493,23 @@ export default function LoginScreen() {
                     styles.inputWrapperRemembered,
                 ]}
               >
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color={COLORS.muted}
-                />
+                <View style={styles.inputIcon}>
+                  <Ionicons
+                    name="person-outline"
+                    size={19}
+                    color={
+                      username.length > 0
+                        ? COLORS.cardinal
+                        : COLORS.muted
+                    }
+                  />
+                </View>
 
                 <TextInput
                   value={username}
-                  onChangeText={
-                    setUsername
-                  }
+                  onChangeText={setUsername}
                   placeholder="Enter your username or email"
-                  placeholderTextColor="#A3A3A3"
+                  placeholderTextColor="#A6A6A6"
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="username"
@@ -504,9 +520,7 @@ export default function LoginScreen() {
                 />
               </View>
 
-              {/* =================================================
-                  REMEMBERED CREDENTIALS INDICATOR
-              ================================================= */}
+              {/* Remembered Credentials */}
 
               {username.length > 0 &&
                 rememberMe && (
@@ -517,10 +531,8 @@ export default function LoginScreen() {
                   >
                     <Ionicons
                       name="checkmark-circle"
-                      size={15}
-                      color={
-                        COLORS.cardinal
-                      }
+                      size={14}
+                      color={COLORS.cardinal}
                     />
 
                     <Text
@@ -528,41 +540,43 @@ export default function LoginScreen() {
                         styles.rememberedHintText
                       }
                     >
-                      Remembered credentials
+                      Saved credentials
                     </Text>
                   </View>
                 )}
+
             </View>
 
             {/* =================================================
                 PASSWORD
             ================================================= */}
 
-            <View
-              style={styles.inputGroup}
-            >
-              <Text
-                style={styles.label}
-              >
+            <View style={styles.inputGroup}>
+
+              <Text style={styles.label}>
                 Password
               </Text>
 
               <View
                 style={styles.inputWrapper}
               >
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color={COLORS.muted}
-                />
+                <View style={styles.inputIcon}>
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={19}
+                    color={
+                      password.length > 0
+                        ? COLORS.cardinal
+                        : COLORS.muted
+                    }
+                  />
+                </View>
 
                 <TextInput
                   value={password}
-                  onChangeText={
-                    setPassword
-                  }
+                  onChangeText={setPassword}
                   placeholder="Enter your password"
-                  placeholderTextColor="#A3A3A3"
+                  placeholderTextColor="#A6A6A6"
                   secureTextEntry={
                     !showPassword
                   }
@@ -594,21 +608,21 @@ export default function LoginScreen() {
                         : "eye-outline"
                     }
                     size={21}
-                    color={
-                      COLORS.muted
-                    }
+                    color={COLORS.muted}
                   />
                 </Pressable>
               </View>
+
             </View>
 
             {/* =================================================
-                REMEMBER ME + FORGOT PASSWORD
+                OPTIONS
             ================================================= */}
 
             <View
               style={styles.optionsRow}
             >
+
               <Pressable
                 style={
                   styles.rememberContainer
@@ -630,10 +644,8 @@ export default function LoginScreen() {
                   {rememberMe && (
                     <Ionicons
                       name="checkmark"
-                      size={15}
-                      color={
-                        COLORS.white
-                      }
+                      size={14}
+                      color={COLORS.white}
                     />
                   )}
                 </View>
@@ -662,6 +674,7 @@ export default function LoginScreen() {
                   Forgot password?
                 </Text>
               </Pressable>
+
             </View>
 
             {/* =================================================
@@ -669,9 +682,7 @@ export default function LoginScreen() {
             ================================================= */}
 
             <Pressable
-              style={({
-                pressed,
-              }) => [
+              style={({ pressed }) => [
                 styles.loginButton,
 
                 pressed &&
@@ -681,19 +692,14 @@ export default function LoginScreen() {
                 isLoading &&
                   styles.loginButtonDisabled,
               ]}
-              onPress={
-                handleLogin
-              }
+              onPress={handleLogin}
               disabled={isLoading}
             >
               {isLoading ? (
                 <>
-                  <Ionicons
-                    name="sync-outline"
-                    size={20}
-                    color={
-                      COLORS.white
-                    }
+                  <ActivityIndicator
+                    size="small"
+                    color={COLORS.white}
                   />
 
                   <Text
@@ -714,13 +720,17 @@ export default function LoginScreen() {
                     Sign In
                   </Text>
 
-                  <Ionicons
-                    name="arrow-forward"
-                    size={20}
-                    color={
-                      COLORS.white
+                  <View
+                    style={
+                      styles.buttonIcon
                     }
-                  />
+                  >
+                    <Ionicons
+                      name="arrow-forward"
+                      size={18}
+                      color={COLORS.cardinal}
+                    />
+                  </View>
                 </>
               )}
             </Pressable>
@@ -730,70 +740,77 @@ export default function LoginScreen() {
             ================================================= */}
 
             <View
-              style={
-                styles.dividerRow
-              }
+              style={styles.dividerRow}
             >
               <View
-                style={
-                  styles.divider
-                }
+                style={styles.divider}
               />
 
               <Text
-                style={
-                  styles.dividerText
-                }
+                style={styles.dividerText}
               >
                 OR
               </Text>
 
               <View
-                style={
-                  styles.divider
-                }
+                style={styles.divider}
               />
             </View>
 
             {/* =================================================
-                SIGNUP
+                REGISTER
             ================================================= */}
 
             <View
               style={styles.signupRow}
             >
               <Text
-                style={
-                  styles.signupText
-                }
+                style={styles.signupText}
               >
                 Don't have an account?
               </Text>
 
               <Pressable
-                onPress={
-                  handleRegister
-                }
+                onPress={handleRegister}
                 disabled={isLoading}
+                hitSlop={8}
               >
                 <Text
-                  style={
-                    styles.signupLink
-                  }
+                  style={styles.signupLink}
                 >
                   {" "}Create one
                 </Text>
               </Pressable>
             </View>
+
           </View>
 
-          {/* =====================================================
-              FOOTER
-          ===================================================== */}
+          {/* =================================================
+              SECURITY NOTICE
+          ================================================= */}
 
-          <View
-            style={styles.footer}
-          >
+          <View style={styles.securityNotice}>
+
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={17}
+              color={COLORS.white}
+            />
+
+            <Text
+              style={styles.securityText}
+            >
+              Secure TUPC account authentication
+            </Text>
+
+          </View>
+
+          {/* =================================================
+              FOOTER
+          ================================================= */}
+
+          <View style={styles.footer}>
+
             <View
               style={styles.footerLine}
             >
@@ -802,13 +819,9 @@ export default function LoginScreen() {
               />
 
               <Text
-                style={
-                  styles.footerText
-                }
+                style={styles.footerText}
               >
-                TECHNOLOGICAL UNIVERSITY OF
-                {"\n"}
-                THE PHILIPPINES
+                TUP CAVITE
               </Text>
 
               <View
@@ -821,7 +834,9 @@ export default function LoginScreen() {
             >
               TUPC-OrderUp • Campus Edition
             </Text>
+
           </View>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -833,16 +848,19 @@ export default function LoginScreen() {
 // =====================================================
 
 const styles = StyleSheet.create({
+
+  // ===================================================
+  // MAIN SCREEN
+  // ===================================================
+
   safeArea: {
     flex: 1,
-    backgroundColor:
-      COLORS.background,
+    backgroundColor: COLORS.cardinal,
   },
 
-  initialLoadingContainer: {
+  loadingSafeArea: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: COLORS.cardinal,
   },
 
   keyboard: {
@@ -851,9 +869,40 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 36,
-    paddingBottom: 30,
+    paddingHorizontal: 22,
+    paddingTop: 26,
+    paddingBottom: 28,
+  },
+
+  // ===================================================
+  // INITIAL LOADING
+  // ===================================================
+
+  initialLoadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  loadingLogo: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: COLORS.white,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+
+  loadingIndicator: {
+    marginBottom: 12,
+  },
+
+  loadingText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
 
   // ===================================================
@@ -862,51 +911,86 @@ const styles = StyleSheet.create({
 
   brandSection: {
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: 22,
   },
 
-  logoOuter: {
-    width: 82,
-    height: 82,
+  logoContainer: {
+    marginBottom: 14,
+  },
+
+  logoCircle: {
+    width: 76,
+    height: 76,
     borderRadius: 24,
-    backgroundColor:
-      COLORS.cardinalDark,
+    backgroundColor: COLORS.white,
     alignItems: "center",
     justifyContent: "center",
+
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 7,
+  },
+
+  universityName: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    textAlign: "center",
+  },
+
+  universitySubName: {
+    color: COLORS.goldLight,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.4,
+    marginTop: 3,
+    textAlign: "center",
+  },
+
+  goldDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 13,
+  },
+
+  goldDividerLine: {
+    width: 34,
+    height: 1,
+    backgroundColor: COLORS.gold,
+  },
+
+  goldDiamond: {
+    width: 6,
+    height: 6,
+    backgroundColor: COLORS.gold,
     transform: [
       {
         rotate: "45deg",
       },
     ],
-    marginBottom: 20,
+    marginHorizontal: 9,
   },
 
-  logoInner: {
-    width: 62,
-    height: 62,
-    borderRadius: 18,
-    backgroundColor:
-      COLORS.cardinal,
-    alignItems: "center",
-    justifyContent: "center",
-    transform: [
-      {
-        rotate: "-45deg",
-      },
-    ],
-  },
-
-  brandTitle: {
-    fontSize: 30,
+  appName: {
+    color: COLORS.white,
+    fontSize: 25,
     fontWeight: "900",
-    color: COLORS.cardinalDark,
-    letterSpacing: -0.7,
+    letterSpacing: -0.4,
   },
 
-  brandSubtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: COLORS.muted,
+  appSubtitle: {
+    color: "#F2DDE1",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 3,
+    letterSpacing: 0.4,
   },
 
   // ===================================================
@@ -914,37 +998,52 @@ const styles = StyleSheet.create({
   // ===================================================
 
   card: {
-    backgroundColor:
-      COLORS.white,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
+    borderRadius: 25,
+    padding: 23,
 
     shadowColor: "#000",
-
     shadowOffset: {
       width: 0,
-      height: 8,
+      height: 12,
     },
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
+    elevation: 9,
+  },
 
-    shadowOpacity: 0.07,
-    shadowRadius: 20,
-    elevation: 5,
+  // ===================================================
+  // CARD HEADER
+  // ===================================================
+
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 25,
   },
 
   welcome: {
     fontSize: 25,
-    fontWeight: "800",
+    fontWeight: "900",
     color: COLORS.text,
+    letterSpacing: -0.4,
   },
 
   loginSubtitle: {
-    marginTop: 7,
-    marginBottom: 25,
-    fontSize: 14,
-    lineHeight: 20,
+    marginTop: 5,
+    fontSize: 13,
+    lineHeight: 19,
     color: COLORS.muted,
+  },
+
+  headerIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 13,
+    backgroundColor: "#FFF1F3",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // ===================================================
@@ -956,39 +1055,52 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "800",
     color: COLORS.text,
     marginBottom: 8,
+    letterSpacing: 0.2,
   },
 
   inputWrapper: {
-    minHeight: 54,
+    minHeight: 55,
+
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 14,
+
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 15,
-    backgroundColor: "#FAFAFA",
+
+    paddingHorizontal: 13,
+
+    backgroundColor:
+      COLORS.inputBackground,
   },
 
   inputWrapperRemembered: {
-    borderColor: "#DDB6BE",
-    backgroundColor: "#FFF9FA",
+    borderColor: "#D6AAB3",
+    backgroundColor: "#FFF8F9",
+  },
+
+  inputIcon: {
+    width: 27,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   input: {
     flex: 1,
-    marginLeft: 11,
+    marginLeft: 7,
     fontSize: 15,
     color: COLORS.text,
     paddingVertical: 0,
+    minHeight: 52,
   },
 
   eyeButton: {
     paddingLeft: 8,
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
 
   // ===================================================
@@ -999,26 +1111,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 6,
-    marginLeft: 3,
+    marginLeft: 2,
   },
 
   rememberedHintText: {
     marginLeft: 5,
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "700",
     color: COLORS.cardinal,
   },
 
   // ===================================================
-  // REMEMBER ME / FORGOT PASSWORD
+  // REMEMBER ME
   // ===================================================
 
   optionsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 2,
-    marginBottom: 22,
+    marginTop: 1,
+    marginBottom: 21,
     minHeight: 24,
   },
 
@@ -1033,65 +1145,62 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: "#CFCFCF",
+    borderColor: "#D0D0D0",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor:
-      COLORS.white,
+    backgroundColor: COLORS.white,
   },
 
   checkboxActive: {
-    backgroundColor:
-      COLORS.cardinal,
-    borderColor:
-      COLORS.cardinal,
+    backgroundColor: COLORS.cardinal,
+    borderColor: COLORS.cardinal,
   },
 
   rememberText: {
     marginLeft: 8,
-    fontSize: 13,
+    fontSize: 12.5,
     color: COLORS.muted,
+    fontWeight: "600",
   },
 
   forgotText: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 12.5,
+    fontWeight: "800",
     color: COLORS.cardinal,
   },
 
   // ===================================================
-  // BUTTON
+  // LOGIN BUTTON
   // ===================================================
 
   loginButton: {
-    height: 55,
+    height: 56,
     borderRadius: 15,
-    backgroundColor:
-      COLORS.cardinal,
+
+    backgroundColor: COLORS.cardinal,
+
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
 
-    shadowColor:
-      COLORS.cardinal,
+    paddingHorizontal: 18,
 
+    shadowColor: COLORS.cardinal,
     shadowOffset: {
       width: 0,
       height: 5,
     },
-
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.28,
     shadowRadius: 10,
-    elevation: 4,
+    elevation: 5,
   },
 
   loginButtonDisabled: {
-    opacity: 0.7,
+    opacity: 0.72,
   },
 
   buttonPressed: {
-    opacity: 0.85,
+    opacity: 0.88,
     transform: [
       {
         scale: 0.985,
@@ -1101,8 +1210,19 @@ const styles = StyleSheet.create({
 
   loginButtonText: {
     color: COLORS.white,
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 15,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+
+  buttonIcon: {
+    width: 29,
+    height: 29,
+    borderRadius: 9,
+    backgroundColor: COLORS.white,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 10,
   },
 
   // ===================================================
@@ -1112,21 +1232,21 @@ const styles = StyleSheet.create({
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 23,
+    marginVertical: 22,
   },
 
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor:
-      COLORS.border,
+    backgroundColor: COLORS.border,
   },
 
   dividerText: {
     marginHorizontal: 12,
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#A3A3A3",
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#A0A0A0",
+    letterSpacing: 0.7,
   },
 
   // ===================================================
@@ -1140,14 +1260,35 @@ const styles = StyleSheet.create({
   },
 
   signupText: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.muted,
   },
 
   signupLink: {
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "900",
     color: COLORS.cardinal,
+  },
+
+  // ===================================================
+  // SECURITY NOTICE
+  // ===================================================
+
+  securityNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+
+    marginTop: 17,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+
+  securityText: {
+    marginLeft: 6,
+    color: "#F7DDE2",
+    fontSize: 10.5,
+    fontWeight: "600",
   },
 
   // ===================================================
@@ -1156,7 +1297,7 @@ const styles = StyleSheet.create({
 
   footer: {
     alignItems: "center",
-    marginTop: 28,
+    marginTop: 7,
   },
 
   footerLine: {
@@ -1168,24 +1309,25 @@ const styles = StyleSheet.create({
 
   goldLine: {
     flex: 1,
-    maxWidth: 35,
+    maxWidth: 38,
     height: 1,
-    backgroundColor:
-      COLORS.gold,
+    backgroundColor: COLORS.gold,
+    opacity: 0.75,
   },
 
   footerText: {
-    marginHorizontal: 9,
+    marginHorizontal: 10,
     fontSize: 8,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    color: "#8A8A8A",
+    fontWeight: "900",
+    letterSpacing: 1.2,
+    color: COLORS.goldLight,
     textAlign: "center",
   },
 
   version: {
-    marginTop: 8,
-    fontSize: 10,
-    color: "#A3A3A3",
+    marginTop: 7,
+    fontSize: 9,
+    color: "#E8C9CF",
+    fontWeight: "500",
   },
 });
