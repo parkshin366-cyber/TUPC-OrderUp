@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import * as LocalAuthentication from "expo-local-authentication";
 import { router } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -55,7 +54,6 @@ const TUPC_LOGO = require("../../../assets/LOGO.png");
 const TUPC_BG = require("../../../assets/BG.jpg");
 
 type Affiliation = "student" | "others";
-type BiometricType = "none" | "fingerprint";
 type IdImageType =
   | "tupcFront"
   | "governmentFront";
@@ -444,21 +442,6 @@ export default function SellerRegisterScreen() {
     useState(false);
 
   // =====================================================
-  // SECURITY
-  // =====================================================
-
-  const [biometricType, setBiometricType] =
-    useState<BiometricType>("none");
-
-  const [biometricAvailable, setBiometricAvailable] =
-    useState(false);
-
-  // Fingerprint is enabled only after the user successfully verifies
-  // an enrolled fingerprint on this device.
-  const [enableBiometric, setEnableBiometric] =
-    useState(false);
-
-  // =====================================================
   // CAPTCHA
   // =====================================================
 
@@ -550,55 +533,6 @@ export default function SellerRegisterScreen() {
   }, [username]);
 
   // =====================================================
-  // FINGERPRINT AVAILABILITY
-  // =====================================================
-
-  useEffect(() => {
-    checkFingerprintAvailability();
-  }, []);
-
-  const checkFingerprintAvailability = async () => {
-    try {
-      const hasHardware =
-        await LocalAuthentication.hasHardwareAsync();
-
-      const isEnrolled =
-        await LocalAuthentication.isEnrolledAsync();
-
-      if (!hasHardware || !isEnrolled) {
-        setBiometricAvailable(false);
-        setBiometricType("none");
-        setEnableBiometric(false);
-        return;
-      }
-
-      const types =
-        await LocalAuthentication.supportedAuthenticationTypesAsync();
-
-      const hasFingerprint = types.includes(
-        LocalAuthentication.AuthenticationType.FINGERPRINT
-      );
-
-      if (hasFingerprint) {
-        setBiometricType("fingerprint");
-        setBiometricAvailable(true);
-        setEnableBiometric(false);
-        return;
-      }
-
-      setBiometricAvailable(false);
-      setBiometricType("none");
-      setEnableBiometric(false);
-    } catch (error) {
-      console.error("Fingerprint detection error:", error);
-
-      setBiometricAvailable(false);
-      setBiometricType("none");
-      setEnableBiometric(false);
-    }
-  };
-
-  // =====================================================
   // PASSWORD CHECKER
   // =====================================================
 
@@ -680,58 +614,6 @@ export default function SellerRegisterScreen() {
         selectedGovernmentIdConfig.maxLength
       )
     );
-  };
-
-  // =====================================================
-  // FINGERPRINT VERIFICATION / REGISTRATION
-  // =====================================================
-
-  const handleFingerprintRegistration = async () => {
-    // Once fingerprint verification is complete, registration is locked.
-    // The user must not be able to trigger the biometric prompt again.
-    if (isLoading || enableBiometric) return;
-
-    if (!biometricAvailable) {
-      Alert.alert(
-        "Fingerprint Unavailable",
-        "This device does not have an enrolled fingerprint available for authentication."
-      );
-      return;
-    }
-
-    try {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Verify your enrolled fingerprint",
-        cancelLabel: "Cancel",
-        disableDeviceFallback: true,
-        fallbackLabel: "Use Fingerprint",
-      });
-
-      if (result.success) {
-        setEnableBiometric(true);
-        Alert.alert(
-          "Fingerprint Registration Complete",
-          "Your enrolled device fingerprint has been verified. You can use it for faster sign-in."
-        );
-        return;
-      }
-
-      setEnableBiometric(false);
-
-      if (result.error !== "user_cancel") {
-        Alert.alert(
-          "Fingerprint Verification Failed",
-          "We could not verify your enrolled fingerprint. Please try again."
-        );
-      }
-    } catch (error) {
-      console.error("FINGERPRINT REGISTRATION ERROR:", error);
-      setEnableBiometric(false);
-      Alert.alert(
-        "Fingerprint Verification Failed",
-        "Unable to start fingerprint authentication. Please try again."
-      );
-    }
   };
 
   // =====================================================
@@ -1358,18 +1240,6 @@ export default function SellerRegisterScreen() {
     }
 
     // =================================================
-    // BIOMETRIC
-    // =================================================
-
-    if (biometricAvailable && !enableBiometric) {
-      Alert.alert(
-        "Fingerprint Verification Required",
-        "Please tap Register Fingerprint and successfully verify your enrolled fingerprint before creating your seller account."
-      );
-      return;
-    }
-
-    // =================================================
     // REGISTER
     // =================================================
 
@@ -1397,14 +1267,6 @@ export default function SellerRegisterScreen() {
       console.log(
         "Affiliation:",
         affiliation
-      );
-      console.log(
-        "Biometric Enabled:",
-        enableBiometric
-      );
-      console.log(
-        "Biometric Type:",
-        biometricType
       );
       console.log(
         "TUPC ID Front:",
@@ -1483,9 +1345,6 @@ export default function SellerRegisterScreen() {
                 type: "image/jpeg",
               }
             : undefined,
-
-        biometricEnabled:
-          enableBiometric,
 
         captchaToken,
       } as any);
@@ -1580,10 +1439,6 @@ export default function SellerRegisterScreen() {
     );
   };
 
-  const securityIcon =
-    biometricType === "fingerprint"
-      ? "finger-print-outline"
-      : "shield-outline";
 
   // =====================================================
   // PREMIUM UI ANIMATIONS
@@ -2781,133 +2636,6 @@ export default function SellerRegisterScreen() {
                 </Text>
               </View>
             )}
-          </View>
-
-          {/* SECURITY */}
-
-          <View style={styles.card}>
-            <SectionHeader
-              icon={securityIcon}
-              title="Security"
-              description="Verify your fingerprint for faster and more secure sign-in."
-            />
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.biometricBox,
-                enableBiometric && styles.biometricBoxVerified,
-                pressed && !enableBiometric && { opacity: 0.9 },
-              ]}
-              onPress={handleFingerprintRegistration}
-              disabled={isLoading || !biometricAvailable || enableBiometric}
-            >
-              <View style={styles.biometricIcon}>
-                <Ionicons
-                  name={
-                    enableBiometric
-                      ? "checkmark-circle"
-                      : biometricAvailable
-                        ? "finger-print-outline"
-                        : "shield-outline"
-                  }
-                  size={27}
-                  color={
-                    enableBiometric
-                      ? COLORS.success
-                      : biometricAvailable
-                        ? COLORS.cardinal
-                        : COLORS.muted
-                  }
-                />
-              </View>
-
-              <View style={styles.biometricText}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Text style={styles.biometricTitle}>
-                    {enableBiometric
-                      ? "Fingerprint Registered"
-                      : "Register Fingerprint"}
-                  </Text>
-
-                  <View
-                    style={{
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 999,
-                      backgroundColor: enableBiometric
-                        ? "#EAF7EF"
-                        : biometricAvailable
-                          ? COLORS.white
-                          : "#F3F4F6",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 9,
-                        fontWeight: "900",
-                        color: enableBiometric
-                          ? COLORS.success
-                          : biometricAvailable
-                            ? COLORS.cardinal
-                            : COLORS.muted,
-                      }}
-                    >
-                      {enableBiometric
-                        ? "✓ VERIFIED"
-                        : biometricAvailable
-                          ? "DEVICE READY"
-                          : "UNAVAILABLE"}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={styles.biometricDescription}>
-                  {enableBiometric
-                    ? "Fingerprint registration is complete. You can use it for faster sign-in."
-                    : biometricAvailable
-                      ? "Verify your enrolled device fingerprint to enable fingerprint sign-in."
-                      : "Fingerprint authentication is not available on this device."}
-                </Text>
-              </View>
-
-              <Ionicons
-                name={
-                  enableBiometric
-                    ? "checkmark-circle"
-                    : biometricAvailable
-                      ? "finger-print-outline"
-                      : "lock-closed-outline"
-                }
-                size={24}
-                color={
-                  enableBiometric
-                    ? COLORS.success
-                    : biometricAvailable
-                      ? COLORS.cardinal
-                      : COLORS.muted
-                }
-              />
-            </Pressable>
-
-            <View style={styles.securityInfo}>
-              <Ionicons
-                name="information-circle-outline"
-                size={18}
-                color={COLORS.cardinal}
-              />
-              <Text style={styles.securityInfoText}>
-                Fingerprint sign-in uses the fingerprint already enrolled in
-                your device. TUPC-OrderUp never receives or stores your raw
-                fingerprint data.
-              </Text>
-            </View>
-
           </View>
 
           {/* CAPTCHA */}
@@ -4161,92 +3889,6 @@ const styles = StyleSheet.create({
   matchText: {
     fontSize: 10,
     fontWeight: "700",
-    color: COLORS.muted,
-  },
-
-  // ===================================================
-  // SECURITY
-  // ===================================================
-
-  biometricBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.softRed,
-    borderRadius: 15,
-    padding: 13,
-  },
-
-  biometricIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: COLORS.white,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  biometricBoxVerified: {
-    borderColor: "#B7E3C9",
-    backgroundColor: "#F4FBF7",
-  },
-
-  biometricText: {
-    flex: 1,
-    marginLeft: 11,
-    paddingRight: 8,
-  },
-
-  biometricTitle: {
-    fontSize: 13,
-    fontWeight: "900",
-    color: COLORS.text,
-  },
-
-  biometricDescription: {
-    fontSize: 10,
-    lineHeight: 15,
-    color: COLORS.muted,
-    marginTop: 3,
-  },
-
-  switch: {
-    width: 47,
-    height: 27,
-    borderRadius: 20,
-    backgroundColor: "#D1D5DB",
-    justifyContent: "center",
-    paddingHorizontal: 3,
-  },
-
-  switchActive: {
-    backgroundColor: COLORS.cardinal,
-  },
-
-  switchThumb: {
-    width: 21,
-    height: 21,
-    borderRadius: 11,
-    backgroundColor: COLORS.white,
-  },
-
-  switchThumbActive: {
-    alignSelf: "flex-end",
-  },
-
-  securityInfo: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: COLORS.softGold,
-    borderRadius: 12,
-    padding: 11,
-    marginTop: 15,
-    gap: 8,
-  },
-
-  securityInfoText: {
-    flex: 1,
-    fontSize: 10,
-    lineHeight: 15,
     color: COLORS.muted,
   },
 

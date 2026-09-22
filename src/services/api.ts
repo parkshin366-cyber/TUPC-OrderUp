@@ -90,18 +90,14 @@ export type RegisterUserData = {
   // STUDENT
   tupcId?: string;
   tupcIdFront?: RegisterImage;
-  tupcIdBack?: RegisterImage;
 
   // OTHERS
   governmentIdType?: string;
   governmentIdNumber?: string;
   governmentIdFront?: RegisterImage;
-  governmentIdBack?: RegisterImage;
 
   // SECURITY
   biometricEnabled?: boolean;
-  pin?: string;
-  confirmPin?: string;
 
   // CLOUDFLARE TURNSTILE CAPTCHA
   captchaToken: string;
@@ -384,10 +380,27 @@ export async function checkUsernameAvailability(
       }
     );
 
+    // Some backend versions do not expose /auth/check-username yet.
+    // A 404 means the optional pre-check endpoint is unavailable, not
+    // that the username is taken. Registration will still be validated
+    // by the backend's unique username rule when the account is created.
+    if (response.status === 404) {
+      console.warn(
+        "USERNAME CHECK ENDPOINT NOT FOUND. Falling back to server-side registration validation."
+      );
+
+      return {
+        success: true,
+        available: true,
+        message:
+          "Username format accepted. Availability will be verified when you create your account.",
+      };
+    }
+
     if (!response.ok) {
       throw new Error(
         data.message ||
-          "Unable to check username availability."
+          `Unable to check username availability. HTTP ${response.status}.`
       );
     }
 
@@ -539,211 +552,78 @@ export async function registerUser(
       typeof data.password !== "string" ||
       typeof data.confirmPassword !== "string"
     ) {
-      throw new Error(
-        "Invalid password data."
-      );
+      throw new Error("Invalid password data.");
     }
 
-    if (
-      data.password !==
-      data.confirmPassword
-    ) {
-      throw new Error(
-        "Passwords do not match."
-      );
-    }
-
-    const actualPin =
-      typeof data.pin === "string"
-        ? data.pin.trim()
-        : "";
-
-    const actualConfirmPin =
-      typeof data.confirmPin === "string"
-        ? data.confirmPin.trim()
-        : "";
-
-    if (actualPin.length > 0) {
-      if (!/^\d{6}$/.test(actualPin)) {
-        throw new Error(
-          "PIN must be exactly 6 digits."
-        );
-      }
-
-      if (actualConfirmPin.length === 0) {
-        throw new Error(
-          "Please confirm your 6-digit PIN."
-        );
-      }
-
-      if (
-        !/^\d{6}$/.test(
-          actualConfirmPin
-        )
-      ) {
-        throw new Error(
-          "Confirm PIN must be exactly 6 digits."
-        );
-      }
-
-      if (
-        actualPin !==
-        actualConfirmPin
-      ) {
-        throw new Error(
-          "PINs do not match."
-        );
-      }
+    if (data.password !== data.confirmPassword) {
+      throw new Error("Passwords do not match.");
     }
 
     const formData = new FormData();
 
     // BASIC INFORMATION
-    formData.append(
-      "firstName",
-      String(data.firstName)
-    );
-
-    formData.append(
-      "lastName",
-      String(data.lastName)
-    );
-
-    formData.append(
-      "username",
-      String(data.username)
-    );
-
-    formData.append(
-      "email",
-      String(data.email)
-    );
-
-    formData.append(
-      "contact",
-      String(data.contact)
-    );
+    formData.append("firstName", String(data.firstName));
+    formData.append("lastName", String(data.lastName));
+    formData.append("username", String(data.username));
+    formData.append("email", String(data.email));
+    formData.append("contact", String(data.contact));
 
     // STORE INFORMATION
-    if (
-      typeof data.storeName ===
-      "string"
-    ) {
-      formData.append(
-        "storeName",
-        data.storeName
-      );
+    if (typeof data.storeName === "string") {
+      formData.append("storeName", data.storeName);
     }
 
-    if (
-      typeof data.storeDescription ===
-      "string"
-    ) {
-      formData.append(
-        "storeDescription",
-        data.storeDescription
-      );
+    if (typeof data.storeDescription === "string") {
+      formData.append("storeDescription", data.storeDescription);
     }
 
     // PASSWORD
-    formData.append(
-      "password",
-      data.password
-    );
-
-    formData.append(
-      "confirmPassword",
-      data.confirmPassword
-    );
+    formData.append("password", data.password);
+    formData.append("confirmPassword", data.confirmPassword);
 
     // ROLE
-    formData.append(
-      "role",
-      data.role
-    );
+    formData.append("role", data.role);
 
     // TUP AFFILIATION
     if (data.tupAffiliation) {
-      formData.append(
-        "tupAffiliation",
-        data.tupAffiliation
-      );
+      formData.append("tupAffiliation", data.tupAffiliation);
     }
 
     // TUPC ID
     if (data.tupcId) {
-      formData.append(
-        "tupcId",
-        data.tupcId
-      );
+      formData.append("tupcId", data.tupcId);
     }
 
-    // GOVERNMENT ID
+    // GOVERNMENT ID INFORMATION
     if (data.governmentIdType) {
-      formData.append(
-        "governmentIdType",
-        data.governmentIdType
-      );
+      formData.append("governmentIdType", data.governmentIdType);
     }
 
     if (data.governmentIdNumber) {
-      formData.append(
-        "governmentIdNumber",
-        data.governmentIdNumber
-      );
+      formData.append("governmentIdNumber", data.governmentIdNumber);
     }
 
     // BIOMETRIC
     formData.append(
       "biometricEnabled",
-      String(
-        data.biometricEnabled === true
-      )
+      String(data.biometricEnabled === true)
     );
-
-    // PIN
-    if (actualPin.length > 0) {
-      formData.append(
-        "pin",
-        actualPin
-      );
-
-      formData.append(
-        "confirmPin",
-        actualConfirmPin
-      );
-    }
 
     // CAPTCHA
-    formData.append(
-      "captchaToken",
-      String(data.captchaToken)
-    );
+    formData.append("captchaToken", String(data.captchaToken));
 
-    // STUDENT ID IMAGES
+    // STUDENT ID - FRONT ONLY
     await appendImage(
       formData,
       "tupcIdFront",
       data.tupcIdFront
     );
 
-    await appendImage(
-      formData,
-      "tupcIdBack",
-      data.tupcIdBack
-    );
-
-    // GOVERNMENT ID IMAGES
+    // GOVERNMENT ID - FRONT ONLY
     await appendImage(
       formData,
       "governmentIdFront",
       data.governmentIdFront
-    );
-
-    await appendImage(
-      formData,
-      "governmentIdBack",
-      data.governmentIdBack
     );
 
     // SEND REGISTER REQUEST
@@ -755,17 +635,13 @@ export async function registerUser(
       }
     );
 
-    const result =
-      await parseResponse(response);
+    const result = await parseResponse(response);
 
     if (!response.ok) {
-      console.error(
-        "REGISTER SERVER ERROR:",
-        {
-          status: response.status,
-          result,
-        }
-      );
+      console.error("REGISTER SERVER ERROR:", {
+        status: response.status,
+        result,
+      });
 
       throw new Error(
         result.message ||
@@ -773,24 +649,17 @@ export async function registerUser(
       );
     }
 
-    console.log(
-      "REGISTER SUCCESS"
-    );
+    console.log("REGISTER SUCCESS");
 
     return result as RegisterResponse;
   } catch (error) {
-    console.error(
-      "REGISTER REQUEST ERROR:",
-      error
-    );
+    console.error("REGISTER REQUEST ERROR:", error);
 
     if (error instanceof Error) {
       throw error;
     }
 
-    throw new Error(
-      "Unable to create account."
-    );
+    throw new Error("Unable to create account.");
   }
 }
 

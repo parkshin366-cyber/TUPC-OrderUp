@@ -115,11 +115,103 @@ export default function LoginScreen() {
   }
 
   // =====================================================
+  // GO DIRECTLY TO DASHBOARD
+  // =====================================================
+  //
+  // ACTUAL ROUTES FROM YOUR PROJECT:
+  //
+  // Client:
+  //   src/app/(client)/dashboard.tsx
+  //
+  // Seller:
+  //   src/app/(seller)/dashboard.tsx
+  //
+  // Admin:
+  //   src/app/(admin)/index.tsx
+  //
+  // NO SECURITY SCREEN
+  // NO FINGERPRINT SCREEN
+  // NO PIN SCREEN
+  // =====================================================
+
+  const goToDashboard = (
+    role: string | undefined
+  ) => {
+    const normalizedRole =
+      String(role ?? "")
+        .toLowerCase()
+        .trim();
+
+    // ===================================================
+    // CLIENT
+    // ===================================================
+
+    if (normalizedRole === "client") {
+      console.log(
+        "Redirecting to Client Dashboard..."
+      );
+
+      router.replace({
+        pathname: "/(client)/dashboard",
+      });
+
+      return;
+    }
+
+    // ===================================================
+    // SELLER
+    // ===================================================
+
+    if (normalizedRole === "seller") {
+      console.log(
+        "Redirecting to Seller Dashboard..."
+      );
+
+      router.replace({
+        pathname: "/(seller)/dashboard",
+      });
+
+      return;
+    }
+
+    // ===================================================
+    // ADMIN
+    // ===================================================
+
+    if (normalizedRole === "admin") {
+      console.log(
+        "Redirecting to Admin Dashboard..."
+      );
+
+      router.replace({
+        pathname: "/(admin)",
+      });
+
+      return;
+    }
+
+    // ===================================================
+    // INVALID ROLE
+    // ===================================================
+
+    console.error(
+      "Unknown user role:",
+      role
+    );
+
+    Alert.alert(
+      "Login Error",
+      "Your account role is invalid or not configured."
+    );
+  };
+
+  // =====================================================
   // LOGIN
   // =====================================================
 
   const handleLogin = async () => {
-    const trimmedUsername = username.trim();
+    const trimmedUsername =
+      username.trim();
 
     // ===================================================
     // VALIDATE USERNAME
@@ -216,23 +308,41 @@ export default function LoginScreen() {
       // LOGIN SUCCESS
       // =================================================
 
-      console.log("Login successful.");
+      console.log(
+        "Login successful."
+      );
+
+      console.log(
+        "User role:",
+        data.role
+      );
 
       // =================================================
-      // GO TO SECURITY
+      // DIRECT DASHBOARD REDIRECT
+      // =================================================
+      //
+      // IMPORTANT:
+      // There is NO:
+      //
+      // /(auth)/security
+      //
+      // after login.
+      //
+      // There is NO:
+      //
+      // fingerprint
+      //
+      // or:
+      //
+      // PIN
+      //
+      // login step.
+      //
+      // User goes directly to their dashboard.
       // =================================================
 
-      router.replace({
-        pathname: "/(auth)/security",
+      goToDashboard(data.role);
 
-        params: {
-          role: data.role ?? "client",
-
-          rememberMe: rememberMe
-            ? "true"
-            : "false",
-        },
-      });
     } catch (error) {
       console.error(
         "LOGIN ERROR:",
@@ -293,7 +403,8 @@ export default function LoginScreen() {
       return;
     }
 
-    const nextValue = !rememberMe;
+    const nextValue =
+      !rememberMe;
 
     setRememberMe(nextValue);
 
@@ -331,15 +442,25 @@ export default function LoginScreen() {
   // INITIAL LOADING
   // =====================================================
 
-  if (loadingRememberedCredentials) {
+  if (
+    loadingRememberedCredentials
+  ) {
     return (
       <SafeAreaView
-        style={styles.loadingSafeArea}
+        style={
+          styles.loadingSafeArea
+        }
       >
         <View
-          style={styles.initialLoadingContainer}
+          style={
+            styles.initialLoadingContainer
+          }
         >
-          <View style={styles.loadingLogo}>
+          <View
+            style={
+              styles.loadingLogo
+            }
+          >
             <Ionicons
               name="school-outline"
               size={30}
@@ -350,10 +471,16 @@ export default function LoginScreen() {
           <ActivityIndicator
             size="small"
             color={COLORS.white}
-            style={styles.loadingIndicator}
+            style={
+              styles.loadingIndicator
+            }
           />
 
-          <Text style={styles.loadingText}>
+          <Text
+            style={
+              styles.loadingText
+            }
+          >
             TUPC-OrderUp
           </Text>
         </View>
@@ -395,81 +522,135 @@ export default function LoginScreen() {
               : "on-drag"
           }
         >
-
           {/* =================================================
               TOP BRAND AREA
           ================================================= */}
 
-          <View style={styles.brandSection}>
-
+          <View
+            style={
+              styles.brandSection
+            }
+          >
             {/* TUPC Badge */}
 
-            <View style={styles.logoContainer}>
-              <View style={styles.logoCircle}>
+            <View
+              style={
+                styles.logoContainer
+              }
+            >
+              <View
+                style={
+                  styles.logoCircle
+                }
+              >
                 <Ionicons
                   name="school-outline"
                   size={36}
-                  color={COLORS.cardinal}
+                  color={
+                    COLORS.cardinal
+                  }
                 />
               </View>
             </View>
 
-            <Text style={styles.universityName}>
+            <Text
+              style={
+                styles.universityName
+              }
+            >
               TECHNOLOGICAL UNIVERSITY
             </Text>
 
-            <Text style={styles.universitySubName}>
+            <Text
+              style={
+                styles.universitySubName
+              }
+            >
               OF THE PHILIPPINES
             </Text>
 
-            <View style={styles.goldDivider}>
+            <View
+              style={
+                styles.goldDivider
+              }
+            >
               <View
-                style={styles.goldDividerLine}
+                style={
+                  styles.goldDividerLine
+                }
               />
 
               <View
-                style={styles.goldDiamond}
+                style={
+                  styles.goldDiamond
+                }
               />
 
               <View
-                style={styles.goldDividerLine}
+                style={
+                  styles.goldDividerLine
+                }
               />
             </View>
 
-            <Text style={styles.appName}>
+            <Text
+              style={styles.appName}
+            >
               TUPC-OrderUp
             </Text>
 
-            <Text style={styles.appSubtitle}>
+            <Text
+              style={
+                styles.appSubtitle
+              }
+            >
               Campus Ordering System
             </Text>
-
           </View>
 
           {/* =================================================
               LOGIN CARD
           ================================================= */}
 
-          <View style={styles.card}>
-
+          <View
+            style={styles.card}
+          >
             {/* Card Header */}
 
-            <View style={styles.cardHeader}>
+            <View
+              style={
+                styles.cardHeader
+              }
+            >
               <View>
-                <Text style={styles.welcome}>
+                <Text
+                  style={
+                    styles.welcome
+                  }
+                >
                   Welcome Back
                 </Text>
 
-                <Text style={styles.loginSubtitle}>
+                <Text
+                  style={
+                    styles.loginSubtitle
+                  }
+                >
                   Sign in to continue to your account
                 </Text>
               </View>
 
-              <View style={styles.headerIcon}>
+              <View
+                style={
+                  styles.headerIcon
+                }
+              >
                 <Ionicons
                   name="log-in-outline"
                   size={24}
-                  color={COLORS.cardinal}
+                  color={
+                    COLORS.cardinal
+                  }
                 />
               </View>
             </View>
@@ -478,9 +659,14 @@ export default function LoginScreen() {
                 USERNAME / EMAIL
             ================================================= */}
 
-            <View style={styles.inputGroup}>
-
-              <Text style={styles.label}>
+            <View
+              style={
+                styles.inputGroup
+              }
+            >
+              <Text
+                style={styles.label}
+              >
                 Username or Email
               </Text>
 
@@ -493,7 +679,11 @@ export default function LoginScreen() {
                     styles.inputWrapperRemembered,
                 ]}
               >
-                <View style={styles.inputIcon}>
+                <View
+                  style={
+                    styles.inputIcon
+                  }
+                >
                   <Ionicons
                     name="person-outline"
                     size={19}
@@ -507,7 +697,9 @@ export default function LoginScreen() {
 
                 <TextInput
                   value={username}
-                  onChangeText={setUsername}
+                  onChangeText={
+                    setUsername
+                  }
                   placeholder="Enter your username or email"
                   placeholderTextColor="#A6A6A6"
                   autoCapitalize="none"
@@ -516,7 +708,9 @@ export default function LoginScreen() {
                   keyboardType="default"
                   editable={!isLoading}
                   returnKeyType="next"
-                  style={styles.input}
+                  style={
+                    styles.input
+                  }
                 />
               </View>
 
@@ -532,7 +726,9 @@ export default function LoginScreen() {
                     <Ionicons
                       name="checkmark-circle"
                       size={14}
-                      color={COLORS.cardinal}
+                      color={
+                        COLORS.cardinal
+                      }
                     />
 
                     <Text
@@ -544,23 +740,33 @@ export default function LoginScreen() {
                     </Text>
                   </View>
                 )}
-
             </View>
 
             {/* =================================================
                 PASSWORD
             ================================================= */}
 
-            <View style={styles.inputGroup}>
-
-              <Text style={styles.label}>
+            <View
+              style={
+                styles.inputGroup
+              }
+            >
+              <Text
+                style={styles.label}
+              >
                 Password
               </Text>
 
               <View
-                style={styles.inputWrapper}
+                style={
+                  styles.inputWrapper
+                }
               >
-                <View style={styles.inputIcon}>
+                <View
+                  style={
+                    styles.inputIcon
+                  }
+                >
                   <Ionicons
                     name="lock-closed-outline"
                     size={19}
@@ -574,7 +780,9 @@ export default function LoginScreen() {
 
                 <TextInput
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={
+                    setPassword
+                  }
                   placeholder="Enter your password"
                   placeholderTextColor="#A6A6A6"
                   secureTextEntry={
@@ -588,7 +796,9 @@ export default function LoginScreen() {
                   onSubmitEditing={
                     handleLogin
                   }
-                  style={styles.input}
+                  style={
+                    styles.input
+                  }
                 />
 
                 <Pressable
@@ -608,11 +818,12 @@ export default function LoginScreen() {
                         : "eye-outline"
                     }
                     size={21}
-                    color={COLORS.muted}
+                    color={
+                      COLORS.muted
+                    }
                   />
                 </Pressable>
               </View>
-
             </View>
 
             {/* =================================================
@@ -620,9 +831,10 @@ export default function LoginScreen() {
             ================================================= */}
 
             <View
-              style={styles.optionsRow}
+              style={
+                styles.optionsRow
+              }
             >
-
               <Pressable
                 style={
                   styles.rememberContainer
@@ -645,7 +857,9 @@ export default function LoginScreen() {
                     <Ionicons
                       name="checkmark"
                       size={14}
-                      color={COLORS.white}
+                      color={
+                        COLORS.white
+                      }
                     />
                   )}
                 </View>
@@ -674,7 +888,6 @@ export default function LoginScreen() {
                   Forgot password?
                 </Text>
               </Pressable>
-
             </View>
 
             {/* =================================================
@@ -692,14 +905,18 @@ export default function LoginScreen() {
                 isLoading &&
                   styles.loginButtonDisabled,
               ]}
-              onPress={handleLogin}
+              onPress={
+                handleLogin
+              }
               disabled={isLoading}
             >
               {isLoading ? (
                 <>
                   <ActivityIndicator
                     size="small"
-                    color={COLORS.white}
+                    color={
+                      COLORS.white
+                    }
                   />
 
                   <Text
@@ -728,7 +945,9 @@ export default function LoginScreen() {
                     <Ionicons
                       name="arrow-forward"
                       size={18}
-                      color={COLORS.cardinal}
+                      color={
+                        COLORS.cardinal
+                      }
                     />
                   </View>
                 </>
@@ -740,20 +959,28 @@ export default function LoginScreen() {
             ================================================= */}
 
             <View
-              style={styles.dividerRow}
+              style={
+                styles.dividerRow
+              }
             >
               <View
-                style={styles.divider}
+                style={
+                  styles.divider
+                }
               />
 
               <Text
-                style={styles.dividerText}
+                style={
+                  styles.dividerText
+                }
               >
                 OR
               </Text>
 
               <View
-                style={styles.divider}
+                style={
+                  styles.divider
+                }
               />
             </View>
 
@@ -762,35 +989,45 @@ export default function LoginScreen() {
             ================================================= */}
 
             <View
-              style={styles.signupRow}
+              style={
+                styles.signupRow
+              }
             >
               <Text
-                style={styles.signupText}
+                style={
+                  styles.signupText
+                }
               >
                 Don't have an account?
               </Text>
 
               <Pressable
-                onPress={handleRegister}
+                onPress={
+                  handleRegister
+                }
                 disabled={isLoading}
                 hitSlop={8}
               >
                 <Text
-                  style={styles.signupLink}
+                  style={
+                    styles.signupLink
+                  }
                 >
                   {" "}Create one
                 </Text>
               </Pressable>
             </View>
-
           </View>
 
           {/* =================================================
               SECURITY NOTICE
           ================================================= */}
 
-          <View style={styles.securityNotice}>
-
+          <View
+            style={
+              styles.securityNotice
+            }
+          >
             <Ionicons
               name="shield-checkmark-outline"
               size={17}
@@ -798,45 +1035,55 @@ export default function LoginScreen() {
             />
 
             <Text
-              style={styles.securityText}
+              style={
+                styles.securityText
+              }
             >
               Secure TUPC account authentication
             </Text>
-
           </View>
 
           {/* =================================================
               FOOTER
           ================================================= */}
 
-          <View style={styles.footer}>
-
+          <View
+            style={styles.footer}
+          >
             <View
-              style={styles.footerLine}
+              style={
+                styles.footerLine
+              }
             >
               <View
-                style={styles.goldLine}
+                style={
+                  styles.goldLine
+                }
               />
 
               <Text
-                style={styles.footerText}
+                style={
+                  styles.footerText
+                }
               >
                 TUP CAVITE
               </Text>
 
               <View
-                style={styles.goldLine}
+                style={
+                  styles.goldLine
+                }
               />
             </View>
 
             <Text
-              style={styles.version}
+              style={
+                styles.version
+              }
             >
               TUPC-OrderUp • Campus Edition
             </Text>
-
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -848,7 +1095,6 @@ export default function LoginScreen() {
 // =====================================================
 
 const styles = StyleSheet.create({
-
   // ===================================================
   // MAIN SCREEN
   // ===================================================
