@@ -29,6 +29,20 @@ router.get(
 // =========================================================
 // REGISTER
 // =========================================================
+//
+// Accepted registration images:
+//
+// Student:
+//   - tupcIdFront
+//
+// Others:
+//   - governmentIdFront
+//
+// NO:
+//   - tupcIdBack
+//   - governmentIdBack
+//   - PIN
+// =========================================================
 
 router.post(
   "/register",
@@ -38,15 +52,7 @@ router.post(
       maxCount: 1,
     },
     {
-      name: "tupcIdBack",
-      maxCount: 1,
-    },
-    {
       name: "governmentIdFront",
-      maxCount: 1,
-    },
-    {
-      name: "governmentIdBack",
       maxCount: 1,
     },
   ]),
@@ -83,12 +89,6 @@ router.post(
 // =========================================================
 // FORGOT PASSWORD
 // =========================================================
-// POST /api/auth/forgot-password
-//
-// Body:
-// {
-//   "emailOrUsername": "example@email.com"
-// }
 
 router.post(
   "/forgot-password",
@@ -98,13 +98,6 @@ router.post(
 // =========================================================
 // VERIFY PASSWORD RESET OTP
 // =========================================================
-// POST /api/auth/verify-reset-otp
-//
-// Body:
-// {
-//   "userId": "...",
-//   "otp": "123456"
-// }
 
 router.post(
   "/verify-reset-otp",
@@ -114,15 +107,6 @@ router.post(
 // =========================================================
 // RESET PASSWORD
 // =========================================================
-// POST /api/auth/reset-password
-//
-// Body:
-// {
-//   "userId": "...",
-//   "otp": "123456",
-//   "newPassword": "NewPassword123!",
-//   "confirmPassword": "NewPassword123!"
-// }
 
 router.post(
   "/reset-password",

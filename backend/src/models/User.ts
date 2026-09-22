@@ -42,9 +42,11 @@ export interface IIdVerification {
 
   idType: string;
 
+  // FRONT ID IS REQUIRED
   frontImagePath: string;
 
-  backImagePath: string;
+  // BACK ID IS NO LONGER REQUIRED
+  backImagePath?: string;
 
   verifiedAt: Date;
 }
@@ -53,9 +55,7 @@ export interface IIdVerification {
 // USER INTERFACE
 // =====================================================
 
-export interface IUser
-  extends Document {
-
+export interface IUser extends Document {
   firstName: string;
 
   lastName: string;
@@ -76,8 +76,7 @@ export interface IUser
   // TUP AFFILIATION
   // ===================================================
 
-  tupAffiliation?:
-    TupAffiliation;
+  tupAffiliation?: TupAffiliation;
 
   // ===================================================
   // STUDENT ID
@@ -105,8 +104,7 @@ export interface IUser
   // ID OCR VERIFICATION
   // ===================================================
 
-  idVerification?:
-    IIdVerification;
+  idVerification?: IIdVerification;
 
   // ===================================================
   // OTP
@@ -180,15 +178,24 @@ const IdVerificationSchema =
         trim: true,
       },
 
+      // =================================================
+      // FRONT ID
+      // =================================================
       frontImagePath: {
         type: String,
         required: true,
         trim: true,
       },
 
+      // =================================================
+      // BACK ID
+      //
+      // NO LONGER REQUIRED.
+      // The registration flow now accepts FRONT ID only.
+      // =================================================
       backImagePath: {
         type: String,
-        required: true,
+        required: false,
         trim: true,
       },
 
@@ -364,8 +371,7 @@ const UserSchema =
       // =================================================
       // OTP
       //
-      // These are also excluded from normal queries where
-      // possible because they are temporary secrets.
+      // These are temporary secrets.
       // =================================================
 
       otpHash: {
@@ -386,11 +392,6 @@ const UserSchema =
 
 // =====================================================
 // INDEXES
-// =====================================================
-//
-// username/email already use unique:true.
-// These indexes make admin/user lookup easier.
-//
 // =====================================================
 
 UserSchema.index({
@@ -417,3 +418,4 @@ const User: Model<IUser> =
   );
 
 export default User;
+

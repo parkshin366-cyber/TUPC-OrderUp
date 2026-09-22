@@ -5,11 +5,8 @@ import fs from "fs/promises";
 import path from "path";
 
 import User from "../models/User";
-
 import { sendOtpEmail } from "../services/emailService";
-
 import { generateToken } from "../utils/generateToken";
-
 import {
   extractTextFromIdImages,
   verifyIdIdentity,
@@ -74,7 +71,7 @@ const GOVERNMENT_ID_PATTERNS: Record<string, RegExp> = {
 };
 
 /* =========================================================
-   HELPER FUNCTIONS
+   OTP HELPERS
 ========================================================= */
 
 function generateOtp(): string {
@@ -90,44 +87,33 @@ function hashOtp(otp: string): string {
     .digest("hex");
 }
 
-function normalizeText(
-  value: unknown
-): string {
+/* =========================================================
+   NORMALIZATION HELPERS
+========================================================= */
+
+function normalizeText(value: unknown): string {
   return String(value ?? "")
     .trim()
     .replace(/\s+/g, " ");
 }
 
-function normalizeEmail(
-  value: unknown
-): string {
+function normalizeEmail(value: unknown): string {
   return normalizeText(value).toLowerCase();
 }
 
-function normalizeUsername(
-  value: unknown
-): string {
+function normalizeUsername(value: unknown): string {
   return normalizeText(value).toLowerCase();
 }
 
-function normalizeName(
-  value: unknown
-): string {
+function normalizeName(value: unknown): string {
   return normalizeText(value).toLowerCase();
 }
 
-function normalizeContact(
-  value: unknown
-): string {
-  return String(value ?? "").replace(
-    /\D/g,
-    ""
-  );
+function normalizeContact(value: unknown): string {
+  return String(value ?? "").replace(/\D/g, "");
 }
 
-function normalizeTupcId(
-  value: unknown
-): string {
+function normalizeTupcId(value: unknown): string {
   return normalizeText(value).toUpperCase();
 }
 
@@ -141,12 +127,8 @@ function normalizeGovernmentIdNumber(
    EMAIL VALIDATION
 ========================================================= */
 
-function isValidEmail(
-  email: string
-): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-    email
-  );
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 /* =========================================================
@@ -187,16 +169,6 @@ function isValidPassword(
     /\d/.test(password) &&
     /[^A-Za-z0-9]/.test(password)
   );
-}
-
-/* =========================================================
-   PIN VALIDATION
-========================================================= */
-
-function isValidPin(
-  pin: string
-): boolean {
-  return /^\d{6}$/.test(pin);
 }
 
 /* =========================================================
@@ -320,15 +292,13 @@ function getSafeImageExtension(
 }
 
 /* =========================================================
-   SAVE ID IMAGES
+   SAVE FRONT ID IMAGE ONLY
 ========================================================= */
 
 async function saveIdImages(
-  frontFile: UploadedFile,
-  backFile: UploadedFile
+  frontFile: UploadedFile
 ): Promise<{
   frontPath: string;
-  backPath: string;
 }> {
   await fs.mkdir(
     UPLOAD_DIRECTORY,
@@ -342,16 +312,8 @@ async function saveIdImages(
       frontFile
     );
 
-  const backExtension =
-    getSafeImageExtension(
-      backFile
-    );
-
   const frontFileName =
     `${crypto.randomUUID()}-front${frontExtension}`;
-
-  const backFileName =
-    `${crypto.randomUUID()}-back${backExtension}`;
 
   const frontPath =
     path.join(
@@ -359,20 +321,9 @@ async function saveIdImages(
       frontFileName
     );
 
-  const backPath =
-    path.join(
-      UPLOAD_DIRECTORY,
-      backFileName
-    );
-
   await fs.writeFile(
     frontPath,
     frontFile.buffer
-  );
-
-  await fs.writeFile(
-    backPath,
-    backFile.buffer
   );
 
   console.log(
@@ -381,15 +332,8 @@ async function saveIdImages(
 
   console.log(frontPath);
 
-  console.log(
-    "ID BACK IMAGE SAVED:"
-  );
-
-  console.log(backPath);
-
   return {
     frontPath,
-    backPath,
   };
 }
 
@@ -492,6 +436,11 @@ export async function checkUsernameAvailability(
 
 /* =========================================================
    REGISTER
+   FINGERPRINT / BIOMETRIC REMOVED
+
+   STATUS RULE:
+   CLIENT = APPROVED
+   SELLER = PENDING
 ========================================================= */
 
 export async function register(
@@ -499,10 +448,6 @@ export async function register(
   res: Response
 ) {
   let savedFrontPath:
-    | string
-    | undefined;
-
-  let savedBackPath:
     | string
     | undefined;
 
@@ -525,11 +470,12 @@ export async function register(
       tupcId,
       governmentIdType,
       governmentIdNumber,
-      biometricEnabled,
-      pin,
-      confirmPin,
       captchaToken,
     } = req.body;
+
+    /* =====================================================
+       NORMALIZE
+    ===================================================== */
 
     const normalizedFirstName =
       normalizeName(firstName);
@@ -578,20 +524,6 @@ export async function register(
 
     const cleanConfirmPassword =
       String(confirmPassword ?? "");
-
-    /* =====================================================
-       PIN
-    ===================================================== */
-
-    const cleanPin =
-      String(pin ?? "")
-        .replace(/\D/g, "")
-        .slice(0, 6);
-
-    const cleanConfirmPin =
-      String(confirmPin ?? "")
-        .replace(/\D/g, "")
-        .slice(0, 6);
 
     /* =====================================================
        REQUIRED NAME
@@ -750,71 +682,8 @@ export async function register(
     }
 
     /* =====================================================
-       BIOMETRIC
+       NO FINGERPRINT / BIOMETRIC REQUIREMENT
     ===================================================== */
-
-    const biometricIsEnabled =
-      biometricEnabled === true ||
-      biometricEnabled === "true";
-
-    if (!biometricIsEnabled) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Fingerprint registration is required.",
-      });
-    }
-
-    /* =====================================================
-       PIN
-    ===================================================== */
-
-    if (!cleanPin) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "PIN is required.",
-      });
-    }
-
-    if (!cleanConfirmPin) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Confirm PIN is required.",
-      });
-    }
-
-    if (
-      !isValidPin(cleanPin)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "PIN must be exactly 6 digits.",
-      });
-    }
-
-    if (
-      !isValidPin(cleanConfirmPin)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Confirm PIN must be exactly 6 digits.",
-      });
-    }
-
-    if (
-      cleanPin !==
-      cleanConfirmPin
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "PINs do not match.",
-      });
-    }
 
     /* =====================================================
        AFFILIATION-SPECIFIC VALIDATION
@@ -876,17 +745,13 @@ export async function register(
     }
 
     /* =====================================================
-       GET UPLOADED IMAGES
+       GET FRONT ID IMAGE ONLY
     ===================================================== */
 
     const uploadedFiles =
       getUploadedFiles(req);
 
     let frontFile:
-      | UploadedFile
-      | undefined;
-
-    let backFile:
       | UploadedFile
       | undefined;
 
@@ -899,23 +764,11 @@ export async function register(
           uploadedFiles,
           "tupcIdFront"
         );
-
-      backFile =
-        getSingleUploadedFile(
-          uploadedFiles,
-          "tupcIdBack"
-        );
     } else {
       frontFile =
         getSingleUploadedFile(
           uploadedFiles,
           "governmentIdFront"
-        );
-
-      backFile =
-        getSingleUploadedFile(
-          uploadedFiles,
-          "governmentIdBack"
         );
     }
 
@@ -924,14 +777,6 @@ export async function register(
         success: false,
         message:
           "Front ID image is required.",
-      });
-    }
-
-    if (!backFile) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Back ID image is required.",
       });
     }
 
@@ -944,7 +789,7 @@ export async function register(
     );
 
     console.log(
-      "UPLOADED ID IMAGES"
+      "UPLOADED ID IMAGE"
     );
 
     console.log(
@@ -952,13 +797,6 @@ export async function register(
       frontFile.originalname,
       frontFile.mimetype,
       frontFile.size
-    );
-
-    console.log(
-      "Back:",
-      backFile.originalname,
-      backFile.mimetype,
-      backFile.size
     );
 
     console.log(
@@ -1007,12 +845,13 @@ export async function register(
 
     /* =====================================================
        OCR
+       FRONT ID ONLY
     ===================================================== */
 
     const ocrText =
       await extractTextFromIdImages(
         frontFile.buffer,
-        backFile.buffer,
+        frontFile.buffer,
         idOrientation
       );
 
@@ -1047,7 +886,7 @@ export async function register(
       return res.status(422).json({
         success: false,
         message:
-          "ID verification failed. None of the submitted identity details matched the information detected from the ID images.",
+          "ID verification failed. None of the submitted identity details matched the information detected from the ID image.",
         verification: {
           passed: false,
           matchCount:
@@ -1107,18 +946,12 @@ export async function register(
     }
 
     /* =====================================================
-       HASH PASSWORD + PIN
+       HASH PASSWORD
     ===================================================== */
 
     const passwordHash =
       await bcrypt.hash(
         cleanPassword,
-        12
-      );
-
-    const pinHash =
-      await bcrypt.hash(
-        cleanPin,
         12
       );
 
@@ -1141,23 +974,58 @@ export async function register(
       );
 
     /* =====================================================
-       SAVE ID IMAGES
+       SAVE FRONT ID IMAGE ONLY
     ===================================================== */
 
     const savedImages =
       await saveIdImages(
-        frontFile,
-        backFile
+        frontFile
       );
 
     savedFrontPath =
       savedImages.frontPath;
 
-    savedBackPath =
-      savedImages.backPath;
+    /* =====================================================
+       ACCOUNT STATUS
+
+       CLIENT  -> APPROVED
+       SELLER  -> PENDING
+
+       IMPORTANT:
+       Client accounts do NOT require admin approval.
+       Seller accounts require admin approval.
+    ===================================================== */
+
+    const initialStatus =
+      normalizedRole === "client"
+        ? "approved"
+        : "pending";
+
+    console.log(
+      "========================================"
+    );
+
+    console.log(
+      "ACCOUNT STATUS ASSIGNMENT"
+    );
+
+    console.log(
+      "Role:",
+      normalizedRole
+    );
+
+    console.log(
+      "Status:",
+      initialStatus
+    );
+
+    console.log(
+      "========================================"
+    );
 
     /* =====================================================
        CREATE USER
+       BIOMETRIC NOT SAVED
     ===================================================== */
 
     const user =
@@ -1184,7 +1052,7 @@ export async function register(
           normalizedRole,
 
         status:
-          "pending",
+          initialStatus,
 
         tupAffiliation:
           normalizedAffiliation,
@@ -1202,11 +1070,6 @@ export async function register(
               governmentIdNumber:
                 normalizedGovernmentIdNumber,
             }),
-
-        biometricEnabled:
-          true,
-
-        pinHash,
 
         otpHash,
 
@@ -1230,9 +1093,6 @@ export async function register(
 
           frontImagePath:
             savedFrontPath,
-
-          backImagePath:
-            savedBackPath,
 
           verifiedAt:
             new Date(),
@@ -1263,10 +1123,6 @@ export async function register(
 
       await deleteFileIfExists(
         savedFrontPath
-      );
-
-      await deleteFileIfExists(
-        savedBackPath
       );
 
       return res.status(500).json({
@@ -1351,10 +1207,6 @@ export async function register(
       savedFrontPath
     );
 
-    await deleteFileIfExists(
-      savedBackPath
-    );
-
     return res.status(500).json({
       success: false,
       message:
@@ -1376,10 +1228,6 @@ export async function login(
       username,
       password,
     } = req.body;
-
-    /* =====================================================
-       NORMALIZE INPUT
-    ===================================================== */
 
     const cleanUsername =
       normalizeUsername(username);
@@ -1435,7 +1283,11 @@ export async function login(
        USERNAME FORMAT
     ===================================================== */
 
-    if (!isValidUsername(cleanUsername)) {
+    if (
+      !isValidUsername(
+        cleanUsername
+      )
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -1445,20 +1297,18 @@ export async function login(
 
     /* =====================================================
        FIND USER
-       
-       First try exact normalized username.
     ===================================================== */
 
     let user =
       await User.findOne({
-        username: cleanUsername,
-      }).select("+password");
+        username:
+          cleanUsername,
+      }).select(
+        "+password"
+      );
 
     /* =====================================================
        CASE-INSENSITIVE FALLBACK
-
-       Supports older accounts where the username
-       may have been saved using uppercase/mixed case.
     ===================================================== */
 
     if (!user) {
@@ -1475,7 +1325,9 @@ export async function login(
               `^${escapedUsername}$`,
             $options: "i",
           },
-        }).select("+password");
+        }).select(
+          "+password"
+        );
     }
 
     /* =====================================================
@@ -1529,7 +1381,8 @@ export async function login(
 
     if (
       !user.password ||
-      typeof user.password !== "string"
+      typeof user.password !==
+        "string"
     ) {
       console.error(
         "LOGIN ERROR: Password hash is missing for user:",
@@ -1595,7 +1448,8 @@ export async function login(
     ===================================================== */
 
     if (
-      user.status === "rejected"
+      user.status ===
+      "rejected"
     ) {
       return res.status(403).json({
         success: false,
@@ -1607,7 +1461,8 @@ export async function login(
     }
 
     if (
-      user.status === "pending"
+      user.status ===
+      "pending"
     ) {
       return res.status(403).json({
         success: false,
@@ -1677,9 +1532,6 @@ export async function login(
 
         tupAffiliation:
           user.tupAffiliation,
-
-        biometricEnabled:
-          user.biometricEnabled,
       },
     });
   } catch (error) {
@@ -1801,16 +1653,11 @@ export async function sendOtp(
       });
     }
 
-    if (
-      user.status !==
-      "pending"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "OTP can only be sent for pending registration accounts.",
-      });
-    }
+    /*
+      OTP resend is allowed for both:
+      CLIENT   -> approved
+      SELLER   -> pending
+    */
 
     const otp =
       generateOtp();
@@ -1926,10 +1773,6 @@ export async function verifyOtp(
       });
     }
 
-    /* =====================================================
-       REGISTRATION ONLY
-    ===================================================== */
-
     if (
       purpose ===
       "reset-password"
@@ -2021,11 +1864,15 @@ export async function verifyOtp(
 
     return res.status(200).json({
       success: true,
+
       message:
         "Email verification successful.",
+
       token,
+
       registrationVerified:
         true,
+
       requiresApproval:
         user.status ===
         "pending",
@@ -2057,9 +1904,6 @@ export async function verifyOtp(
 
         tupAffiliation:
           user.tupAffiliation,
-
-        biometricEnabled:
-          user.biometricEnabled,
       },
     });
   } catch (error) {
