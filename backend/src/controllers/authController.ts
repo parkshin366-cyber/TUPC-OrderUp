@@ -5,8 +5,11 @@ import fs from "fs/promises";
 import path from "path";
 
 import User from "../models/User";
+
 import { sendOtpEmail } from "../services/emailService";
+
 import { generateToken } from "../utils/generateToken";
+
 import {
   extractTextFromIdImages,
   verifyIdIdentity,
@@ -375,11 +378,13 @@ async function saveIdImages(
   console.log(
     "ID FRONT IMAGE SAVED:"
   );
+
   console.log(frontPath);
 
   console.log(
     "ID BACK IMAGE SAVED:"
   );
+
   console.log(backPath);
 
   return {
@@ -1372,52 +1377,116 @@ export async function login(
       password,
     } = req.body;
 
+    /* =====================================================
+       NORMALIZE INPUT
+    ===================================================== */
+
     const cleanUsername =
       normalizeUsername(username);
 
     const cleanPassword =
       String(password ?? "");
 
+    console.log(
+      "========================================"
+    );
+
+    console.log(
+      "LOGIN ATTEMPT"
+    );
+
+    console.log(
+      "Username:",
+      cleanUsername
+    );
+
+    console.log(
+      "Password received:",
+      cleanPassword.length > 0
+        ? `YES (${cleanPassword.length} characters)`
+        : "NO"
+    );
+
+    console.log(
+      "========================================"
+    );
+
     /* =====================================================
        REQUIRED FIELDS
     ===================================================== */
 
-    if (
-      !cleanUsername ||
-      !cleanPassword
-    ) {
+    if (!cleanUsername) {
       return res.status(400).json({
         success: false,
         message:
-          "Username and password are required.",
+          "Username is required.",
+      });
+    }
+
+    if (!cleanPassword) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password is required.",
+      });
+    }
+
+    /* =====================================================
+       USERNAME FORMAT
+    ===================================================== */
+
+    if (!isValidUsername(cleanUsername)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid username format.",
       });
     }
 
     /* =====================================================
        FIND USER
-    =====================================================
-    
-    password is NOT select:false
-    in the current User.ts.
-
-    +password is harmless here and also
-    keeps this login compatible if the
-    schema is later changed to select:false.
+       
+       First try exact normalized username.
     ===================================================== */
 
-    const user =
+    let user =
       await User.findOne({
-        username:
-          cleanUsername,
-      }).select(
-        "+password"
-      );
+        username: cleanUsername,
+      }).select("+password");
+
+    /* =====================================================
+       CASE-INSENSITIVE FALLBACK
+
+       Supports older accounts where the username
+       may have been saved using uppercase/mixed case.
+    ===================================================== */
+
+    if (!user) {
+      const escapedUsername =
+        cleanUsername.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      user =
+        await User.findOne({
+          username: {
+            $regex:
+              `^${escapedUsername}$`,
+            $options: "i",
+          },
+        }).select("+password");
+    }
 
     /* =====================================================
        USER NOT FOUND
     ===================================================== */
 
     if (!user) {
+      console.log(
+        "LOGIN RESULT: USER NOT FOUND"
+      );
+
       return res.status(401).json({
         success: false,
         message:
@@ -1425,14 +1494,42 @@ export async function login(
       });
     }
 
+    console.log(
+      "LOGIN RESULT: USER FOUND"
+    );
+
+    console.log(
+      "User ID:",
+      user._id.toString()
+    );
+
+    console.log(
+      "Stored username:",
+      user.username
+    );
+
+    console.log(
+      "Stored role:",
+      user.role
+    );
+
+    console.log(
+      "Stored status:",
+      user.status
+    );
+
+    console.log(
+      "Password hash exists:",
+      Boolean(user.password)
+    );
+
     /* =====================================================
        PASSWORD HASH CHECK
     ===================================================== */
 
     if (
       !user.password ||
-      typeof user.password !==
-        "string"
+      typeof user.password !== "string"
     ) {
       console.error(
         "LOGIN ERROR: Password hash is missing for user:",
@@ -1472,7 +1569,20 @@ export async function login(
       });
     }
 
+    console.log(
+      "Password matches:",
+      passwordMatches
+    );
+
+    /* =====================================================
+       INVALID PASSWORD
+    ===================================================== */
+
     if (!passwordMatches) {
+      console.log(
+        "LOGIN RESULT: PASSWORD DOES NOT MATCH"
+      );
+
       return res.status(401).json({
         success: false,
         message:
@@ -1485,8 +1595,7 @@ export async function login(
     ===================================================== */
 
     if (
-      user.status ===
-      "rejected"
+      user.status === "rejected"
     ) {
       return res.status(403).json({
         success: false,
@@ -1498,8 +1607,7 @@ export async function login(
     }
 
     if (
-      user.status ===
-      "pending"
+      user.status === "pending"
     ) {
       return res.status(403).json({
         success: false,
@@ -1522,6 +1630,14 @@ export async function login(
     /* =====================================================
        SUCCESS
     ===================================================== */
+
+    console.log(
+      "LOGIN RESULT: SUCCESS"
+    );
+
+    console.log(
+      "========================================"
+    );
 
     return res.status(200).json({
       success: true,
@@ -1568,9 +1684,18 @@ export async function login(
     });
   } catch (error) {
     console.error(
-      "Login error:",
-      error
+      "========================================"
     );
+
+    console.error(
+      "LOGIN SERVER ERROR"
+    );
+
+    console.error(
+      "========================================"
+    );
+
+    console.error(error);
 
     return res.status(500).json({
       success: false,
@@ -1737,13 +1862,10 @@ export async function sendOtp(
 
     return res.status(200).json({
       success: true,
-
       message:
         "A new OTP has been sent to your email.",
-
       expiresIn:
         OTP_EXPIRATION_MINUTES,
-
       otpPurpose:
         "register",
     });
@@ -1899,15 +2021,11 @@ export async function verifyOtp(
 
     return res.status(200).json({
       success: true,
-
       message:
         "Email verification successful.",
-
       token,
-
       registrationVerified:
         true,
-
       requiresApproval:
         user.status ===
         "pending",
@@ -2103,19 +2221,14 @@ export async function forgotPassword(
 
     return res.status(200).json({
       success: true,
-
       message:
         "A password reset OTP has been sent to your registered email.",
-
       userId:
         user._id.toString(),
-
       email:
         user.email,
-
       expiresIn:
         OTP_EXPIRATION_MINUTES,
-
       otpPurpose:
         "reset-password",
     });
@@ -2269,13 +2382,10 @@ export async function verifyResetOtp(
 
     return res.status(200).json({
       success: true,
-
       message:
         "OTP verified successfully. You may now create a new password.",
-
       userId:
         user._id.toString(),
-
       resetVerified:
         true,
     });
@@ -2563,4 +2673,3 @@ export async function resetPassword(
     });
   }
 }
-

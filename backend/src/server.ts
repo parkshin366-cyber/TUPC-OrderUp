@@ -8,11 +8,12 @@ import express, {
   Response,
 } from "express";
 import multer from "multer";
+
+import authRoutes from "./routes/auth";
 import captchaRoutes from "./routes/captcha";
+import userRoutes from "./routes/users";
 
 import { connectDB } from "./config/db";
-import authRoutes from "./routes/auth";
-import userRoutes from "./routes/users";
 
 const app = express();
 
@@ -41,12 +42,6 @@ app.use(
 );
 
 /* =========================================================
-   CAPTCHA ROUTES
-========================================================= */
-
-app.use("/captcha", captchaRoutes);
-
-/* =========================================================
    BODY PARSERS
 ========================================================= */
 
@@ -64,43 +59,54 @@ app.use(
 );
 
 /* =========================================================
+   CAPTCHA ROUTES
+========================================================= */
+
+app.use("/captcha", captchaRoutes);
+
+/* =========================================================
    API ROUTES
 ========================================================= */
 
 /*
-   Main API route
+   MAIN AUTH API
 
-   Example:
-   /api/auth/login
-   /api/auth/register
-   /api/auth/check-username
+   Examples:
+
+   POST /api/auth/login
+   POST /api/auth/register
+   POST /api/auth/send-otp
+   POST /api/auth/verify-otp
+   GET  /api/auth/me
 */
+
 app.use("/api/auth", authRoutes);
 
-app.use("/api/users", userRoutes);
+/*
+   AUTH COMPATIBILITY ALIAS
 
-/* =========================================================
-   AUTH COMPATIBILITY ROUTE
-========================================================= */
+   Examples:
+
+   POST /auth/login
+   POST /auth/register
+   POST /auth/send-otp
+   POST /auth/verify-otp
+   GET  /auth/me
+*/
+
+app.use("/auth", authRoutes);
 
 /*
-   Your mobile app is currently calling:
+   USER API
 
-   /auth/check-username
+   Examples:
 
-   while the backend normally uses:
-
-   /api/auth/check-username
-
-   This alias allows BOTH URLs to work.
-
-   Existing:
-   /api/auth/...
-
-   Also supported:
-   /auth/...
+   GET  /api/users
+   GET  /api/users/:id
+   PUT  /api/users/:id
 */
-app.use("/auth", authRoutes);
+
+app.use("/api/users", userRoutes);
 
 /* =========================================================
    HEALTH CHECK
@@ -109,7 +115,7 @@ app.use("/auth", authRoutes);
 app.get(
   "/api/health",
   (_req: Request, res: Response) => {
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "TUPC-OrderUp API is running",
       database: "MongoDB",
@@ -122,14 +128,39 @@ app.get(
 );
 
 /* =========================================================
+   ROOT CHECK
+========================================================= */
+
+app.get(
+  "/",
+  (_req: Request, res: Response) => {
+    return res.status(200).json({
+      success: true,
+      message: "TUPC-OrderUp Backend is running",
+      api: "/api",
+      health: "/api/health",
+      auth: "/api/auth",
+    });
+  }
+);
+
+/* =========================================================
    404 HANDLER
 ========================================================= */
 
 app.use(
-  (_req: Request, res: Response) => {
-    res.status(404).json({
+  (req: Request, res: Response) => {
+    console.log(
+      "404 ROUTE NOT FOUND:",
+      req.method,
+      req.originalUrl
+    );
+
+    return res.status(404).json({
       success: false,
       message: "API route not found",
+      method: req.method,
+      path: req.originalUrl,
     });
   }
 );
@@ -191,7 +222,7 @@ app.use(
     }
 
     /* =====================================================
-       FILE TYPE / CUSTOM MULTER ERROR
+       CUSTOM FILE TYPE ERROR
     ===================================================== */
 
     if (error instanceof Error) {
@@ -218,10 +249,10 @@ app.use(
     }
 
     /* =====================================================
-       PASS OTHER ERRORS TO FINAL HANDLER
+       PASS OTHER ERRORS
     ===================================================== */
 
-    next(error);
+    return next(error);
   }
 );
 
@@ -237,9 +268,18 @@ app.use(
     _next: NextFunction
   ) => {
     console.error(
-      "Unhandled server error:",
-      error
+      "========================================"
     );
+
+    console.error(
+      "UNHANDLED SERVER ERROR"
+    );
+
+    console.error(
+      "========================================"
+    );
+
+    console.error(error);
 
     if (error instanceof Error) {
       console.error(
@@ -252,7 +292,7 @@ app.use(
       }
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Internal server error",
     });
@@ -272,7 +312,7 @@ async function startServer() {
       "0.0.0.0",
       () => {
         console.log(
-          "----------------------------------------"
+          "========================================"
         );
 
         console.log(
@@ -280,7 +320,11 @@ async function startServer() {
         );
 
         console.log(
-          `Local: http://localhost:${PORT}`
+          "========================================"
+        );
+
+        console.log(
+          `Local:   http://localhost:${PORT}`
         );
 
         console.log(
@@ -288,23 +332,23 @@ async function startServer() {
         );
 
         console.log(
-          `API: http://localhost:${PORT}/api`
+          `API:     http://localhost:${PORT}/api`
         );
 
         console.log(
-          `Health: http://localhost:${PORT}/api/health`
+          `Health:  http://localhost:${PORT}/api/health`
         );
 
         console.log(
-          `Auth API: http://localhost:${PORT}/api/auth`
+          `Auth:    http://localhost:${PORT}/api/auth`
         );
 
         console.log(
-          `Auth Alias: http://localhost:${PORT}/auth`
+          `Alias:   http://localhost:${PORT}/auth`
         );
 
         console.log(
-          `Email: ${
+          `Email:   ${
             process.env.EMAIL_USER
               ? "Configured"
               : "NOT CONFIGURED"
@@ -312,7 +356,7 @@ async function startServer() {
         );
 
         console.log(
-          "----------------------------------------"
+          "========================================"
         );
       }
     );
