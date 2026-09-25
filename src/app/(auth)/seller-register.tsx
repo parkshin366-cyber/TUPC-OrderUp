@@ -33,6 +33,7 @@ const API_CAPTCHA_URL = `${API_URL}/captcha`;
 
 const COLORS = {
   cardinal: "#A6192E",
+  textMuted: "#6F686A",
   cardinalDark: "#7D1021",
   cardinalDeep: "#570B17",
   gold: "#D8B56A",
@@ -2879,7 +2880,10 @@ export default function SellerRegisterScreen() {
             <View style={styles.footerDivider} />
             <Image source={TUPC_LOGO} style={styles.footerLogo} resizeMode="contain" />
             <Text style={styles.footerBrandName}>TUPC-ORDERUP</Text>
-            <Text style={styles.footerBrandSub}>Campus commerce made simple • TUP Cavite</Text>
+                      <Text style={styles.footerCopyright}>
+                        © 2026 Technological University of the Philippines
+                        {" "}– Cavite Campus
+                      </Text>
           </View>
 
           <View style={styles.bottomSpace} />
@@ -4030,6 +4034,13 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
   },
 
+    footerCopyright: {
+    color: COLORS.textMuted,
+    fontSize: 10.5,
+    textAlign: "center",
+    lineHeight: 15,
+  },
+
   // ===================================================
   // BUTTON
   // ===================================================
@@ -4086,7 +4097,7 @@ const styles = StyleSheet.create({
 
   footerLogo: {
     width: 150,
-    height: 70,
+    height: 50,
     opacity: 0.20,
     marginBottom: 4,
   },

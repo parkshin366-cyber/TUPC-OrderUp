@@ -40,6 +40,7 @@ const COLORS = {
   text: "#171717",
   muted: "#737373",
   lightMuted: "#A3A3A3",
+  textMuted: "#6F686A",
 
   border: "#E5E5E5",
   input: "#FAFAFA",
@@ -2708,7 +2709,10 @@ const handleIdImageMenuAction = async (action: "gallery" | "camera") => {
             <View style={styles.footerDivider} />
             <Image source={TUPC_LOGO} style={styles.footerLogo} resizeMode="contain" />
             <Text style={styles.footerBrandName}>TUPC-ORDERUP</Text>
-            <Text style={styles.footerBrandSub}>Campus ordering made simple • TUP Cavite</Text>
+                                 <Text style={styles.footerCopyright}>
+                                    © 2026 Technological University of the Philippines
+                                    {" "}– Cavite Campus
+                                  </Text>
           </View>
         </ScrollView>
         </Animated.View>
@@ -3703,6 +3707,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+    footerCopyright: {
+    color: COLORS.textMuted,
+    fontSize: 10.5,
+    textAlign: "center",
+    lineHeight: 15,
+  },
+
 
   toggle: {
     width: 42,
@@ -4024,7 +4035,7 @@ const styles = StyleSheet.create({
 
   footerLogo: {
     width: 150,
-    height: 70,
+    height: 50,
     opacity: 0.20,
     marginBottom: 4,
   },

@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import { useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
-  ScrollView,
+  RefreshControl,
+  StatusBar,
   StyleSheet,
   Text,
   View,
@@ -41,47 +43,7 @@ const SUCCESS_BG = "#EAF7EF";
 // TYPES
 // =====================================================
 
-type IconName = keyof typeof Ionicons.glyphMap;
-
-type Category = {
-  icon: IconName;
-  label: string;
-  description: string;
-};
-
 type FilterType = "all" | StoreType;
-
-// =====================================================
-// CATEGORIES
-// =====================================================
-
-const categories: Category[] = [
-  {
-    icon: "restaurant-outline",
-    label: "Food",
-    description: "Meals and dishes",
-  },
-  {
-    icon: "cafe-outline",
-    label: "Drinks",
-    description: "Coffee and beverages",
-  },
-  {
-    icon: "fast-food-outline",
-    label: "Snacks",
-    description: "Quick bites",
-  },
-  {
-    icon: "school-outline",
-    label: "School",
-    description: "School needs",
-  },
-  {
-    icon: "bag-handle-outline",
-    label: "Essentials",
-    description: "Daily essentials",
-  },
-];
 
 // =====================================================
 // STORE FILTERS
@@ -90,7 +52,7 @@ const categories: Category[] = [
 const STORE_FILTERS: {
   id: FilterType;
   label: string;
-  icon: IconName;
+  icon: keyof typeof Ionicons.glyphMap;
 }[] = [
   {
     id: "all",
@@ -99,7 +61,7 @@ const STORE_FILTERS: {
   },
   {
     id: "canteen",
-    label: "Canteens",
+    label: "Canteen",
     icon: "restaurant-outline",
   },
   {
@@ -109,7 +71,7 @@ const STORE_FILTERS: {
   },
   {
     id: "others",
-    label: "Other Sellers",
+    label: "Others",
     icon: "ellipsis-horizontal-circle-outline",
   },
 ];
@@ -140,7 +102,7 @@ const getStoreTypeLabel = (type: StoreType) => {
 
 const getStoreTypeIcon = (
   type: StoreType
-): IconName => {
+): keyof typeof Ionicons.glyphMap => {
   switch (type) {
     case "canteen":
       return "restaurant-outline";
@@ -172,7 +134,7 @@ const getFilterTitle = (filter: FilterType) => {
       return "Other Sellers";
 
     default:
-      return "All Results";
+      return "All Stores";
   }
 };
 
@@ -180,96 +142,53 @@ const getFilterTitle = (filter: FilterType) => {
 // MAIN SCREEN
 // =====================================================
 
-export default function ExploreScreen() {
-  const params = useLocalSearchParams<{
-    category?: string;
-  }>();
-
-  const initialCategory =
-    typeof params.category === "string"
-      ? params.category
-      : "";
-
-  const [selectedCategory, setSelectedCategory] =
-    useState<string>(initialCategory);
-
+export default function StoreScreen() {
   const [selectedFilter, setSelectedFilter] =
     useState<FilterType>("all");
+
+  const [refreshing, setRefreshing] = useState(false);
 
   const [openingStoreId, setOpeningStoreId] =
     useState<string | null>(null);
 
   // ===================================================
-  // CATEGORY FILTER
-  // ===================================================
-
-  const categoryFilteredStores = useMemo(() => {
-    if (!selectedCategory) {
-      return STORES;
-    }
-
-    return STORES.filter((store) =>
-      store.categories.some(
-        (category) =>
-          category.toLowerCase() ===
-          selectedCategory.toLowerCase()
-      )
-    );
-  }, [selectedCategory]);
-
-  // ===================================================
-  // STORE TYPE FILTER
+  // FILTER STORES
   // ===================================================
 
   const filteredStores = useMemo(() => {
-    if (selectedFilter === "all") {
-      return categoryFilteredStores;
-    }
+    return STORES.filter((store) => {
+      if (selectedFilter === "all") {
+        return true;
+      }
 
-    return categoryFilteredStores.filter(
-      (store) => store.type === selectedFilter
-    );
-  }, [
-    categoryFilteredStores,
-    selectedFilter,
-  ]);
+      return store.type === selectedFilter;
+    });
+  }, [selectedFilter]);
 
   // ===================================================
-  // ALL RESULTS
+  // REFRESH
   // ===================================================
 
-  const showingAllResults =
-    !selectedCategory &&
-    selectedFilter === "all";
-
-  // ===================================================
-  // SELECT CATEGORY
-  // ===================================================
-
-  const handleCategoryPress = (
-    category: string
-  ) => {
-    if (selectedCategory === category) {
-      setSelectedCategory("");
-      setSelectedFilter("all");
+  const handleRefresh = async () => {
+    if (refreshing) {
       return;
     }
 
-    setSelectedCategory(category);
-    setSelectedFilter("all");
+    setRefreshing(true);
+
+    try {
+      // Temporary refresh.
+      // Replace this later with your real API request.
+      await new Promise((resolve) => {
+        setTimeout(resolve, 700);
+      });
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // ===================================================
-  // VIEW ALL RESULTS
-  // ===================================================
-
-  const handleViewAllResults = () => {
-    setSelectedCategory("");
-    setSelectedFilter("all");
-  };
-
-  // ===================================================
-  // STORE DETAIL
+  // OPEN STORE
   // ===================================================
 
   const openStore = (store: Store) => {
@@ -283,8 +202,7 @@ export default function ExploreScreen() {
       setOpeningStoreId(null);
 
       router.push({
-        pathname:
-          "/(client)/(client-details)/store/[id]",
+        pathname: "/(client)/(client-details)/store/[id]",
         params: {
           id: store.id,
         },
@@ -293,18 +211,28 @@ export default function ExploreScreen() {
   };
 
   // ===================================================
+  // CLEAR FILTER
+  // ===================================================
+
+  const clearFilters = () => {
+    setSelectedFilter("all");
+  };
+
+  // ===================================================
   // STORE CARD
   // ===================================================
 
-  const renderStore = (store: Store) => {
-    const isOpen = store.status === "Open";
-    const isOpening =
-      openingStoreId === store.id;
+  const renderStore = ({
+    item,
+  }: {
+    item: Store;
+  }) => {
+    const isOpen = item.status === "Open";
+    const isOpening = openingStoreId === item.id;
 
     return (
       <Pressable
-        key={store.id}
-        onPress={() => openStore(store)}
+        onPress={() => openStore(item)}
         disabled={openingStoreId !== null}
         style={({ pressed }) => [
           styles.storeCard,
@@ -312,18 +240,20 @@ export default function ExploreScreen() {
           isOpening && styles.storeCardOpening,
         ]}
       >
-        {/* STORE ICON */}
+        {/* ===========================================
+            STORE ICON
+        =========================================== */}
 
         <View style={styles.storeIconWrapper}>
           <View style={styles.storeIconCircle}>
             <Ionicons
-              name={store.icon}
+              name={item.icon}
               size={29}
               color={CARDINAL}
             />
           </View>
 
-          {store.featured && (
+          {item.featured && (
             <View style={styles.featuredBadge}>
               <Ionicons
                 name="star"
@@ -338,7 +268,9 @@ export default function ExploreScreen() {
           )}
         </View>
 
-        {/* STORE CONTENT */}
+        {/* ===========================================
+            STORE CONTENT
+        =========================================== */}
 
         <View style={styles.storeContent}>
           {/* TITLE + STATUS */}
@@ -348,7 +280,7 @@ export default function ExploreScreen() {
               style={styles.storeName}
               numberOfLines={1}
             >
-              {store.name}
+              {item.name}
             </Text>
 
             <View
@@ -376,24 +308,22 @@ export default function ExploreScreen() {
                     : styles.statusTextClosed,
                 ]}
               >
-                {store.status}
+                {item.status}
               </Text>
             </View>
           </View>
 
-          {/* TYPE */}
+          {/* STORE TYPE */}
 
           <View style={styles.typeRow}>
             <Ionicons
-              name={getStoreTypeIcon(
-                store.type
-              )}
+              name={getStoreTypeIcon(item.type)}
               size={13}
               color={CARDINAL}
             />
 
             <Text style={styles.storeType}>
-              {getStoreTypeLabel(store.type)}
+              {getStoreTypeLabel(item.type)}
             </Text>
           </View>
 
@@ -403,13 +333,13 @@ export default function ExploreScreen() {
             style={styles.storeDescription}
             numberOfLines={2}
           >
-            {store.description}
+            {item.description}
           </Text>
 
           {/* CATEGORIES */}
 
           <View style={styles.categoryRow}>
-            {store.categories
+            {item.categories
               .slice(0, 3)
               .map((category) => (
                 <View
@@ -417,9 +347,7 @@ export default function ExploreScreen() {
                   style={styles.categoryChip}
                 >
                   <Text
-                    style={
-                      styles.categoryChipText
-                    }
+                    style={styles.categoryChipText}
                   >
                     {category}
                   </Text>
@@ -430,6 +358,8 @@ export default function ExploreScreen() {
           {/* META */}
 
           <View style={styles.metaRow}>
+            {/* RATING */}
+
             <View style={styles.metaItem}>
               <Ionicons
                 name="star"
@@ -438,11 +368,13 @@ export default function ExploreScreen() {
               />
 
               <Text style={styles.metaText}>
-                {store.rating.toFixed(1)}
+                {item.rating.toFixed(1)}
               </Text>
             </View>
 
             <View style={styles.metaDivider} />
+
+            {/* DELIVERY TIME */}
 
             <View style={styles.metaItem}>
               <Ionicons
@@ -452,9 +384,11 @@ export default function ExploreScreen() {
               />
 
               <Text style={styles.metaText}>
-                {store.deliveryTime}
+                {item.deliveryTime}
               </Text>
             </View>
+
+            {/* ARROW */}
 
             <View style={styles.storeArrow}>
               {isOpening ? (
@@ -477,10 +411,12 @@ export default function ExploreScreen() {
   };
 
   // ===================================================
-  // EMPTY
+  // EMPTY STATE
   // ===================================================
 
   const renderEmpty = () => {
+    const hasFilter = selectedFilter !== "all";
+
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIcon}>
@@ -492,32 +428,139 @@ export default function ExploreScreen() {
         </View>
 
         <Text style={styles.emptyTitle}>
-          No results found
+          No stores found
         </Text>
 
         <Text style={styles.emptyText}>
-          There are no stores available for
-          this selection yet.
+          There are no stores available in this
+          category yet.
         </Text>
 
-        <Pressable
-          onPress={handleViewAllResults}
-          style={({ pressed }) => [
-            styles.resetButton,
-            pressed &&
-              styles.resetButtonPressed,
-          ]}
-        >
-          <Ionicons
-            name="apps-outline"
-            size={15}
-            color={WHITE}
-          />
+        {hasFilter && (
+          <Pressable
+            onPress={clearFilters}
+            style={({ pressed }) => [
+              styles.resetButton,
+              pressed &&
+                styles.resetButtonPressed,
+            ]}
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={15}
+              color={WHITE}
+            />
 
-          <Text style={styles.resetButtonText}>
-            View All Results
-          </Text>
-        </Pressable>
+            <Text style={styles.resetButtonText}>
+              Clear Filters
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  };
+
+  // ===================================================
+  // HEADER
+  // ===================================================
+
+  const ListHeader = () => {
+    return (
+      <View>
+        {/* ===========================================
+            PAGE HEADER
+        =========================================== */}
+
+        <View style={styles.header}>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>
+              Stores
+            </Text>
+
+            <Text style={styles.subtitle}>
+              Find canteens, organizations, and other
+              sellers around campus.
+            </Text>
+          </View>
+        </View>
+
+        {/* ===========================================
+            FILTERS
+        =========================================== */}
+
+        <FlatList
+          data={STORE_FILTERS}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={
+            styles.filterContent
+          }
+          renderItem={({ item }) => {
+            const active =
+              selectedFilter === item.id;
+
+            return (
+              <Pressable
+                onPress={() =>
+                  setSelectedFilter(item.id)
+                }
+                style={({ pressed }) => [
+                  styles.filterButton,
+                  active &&
+                    styles.filterButtonActive,
+                  pressed &&
+                    styles.filterButtonPressed,
+                ]}
+              >
+                <Ionicons
+                  name={item.icon}
+                  size={16}
+                  color={
+                    active ? WHITE : MUTED
+                  }
+                />
+
+                <Text
+                  style={[
+                    styles.filterText,
+                    active &&
+                      styles.filterTextActive,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          }}
+        />
+
+        {/* ===========================================
+            RESULT HEADER
+        =========================================== */}
+
+        <View style={styles.resultHeader}>
+          <View>
+            <Text style={styles.resultTitle}>
+              {getFilterTitle(selectedFilter)}
+            </Text>
+
+            <Text style={styles.resultCount}>
+              {filteredStores.length}{" "}
+              {filteredStores.length === 1
+                ? "store"
+                : "stores"}{" "}
+              available
+            </Text>
+          </View>
+
+          {refreshing && (
+            <ActivityIndicator
+              size="small"
+              color={CARDINAL}
+            />
+          )}
+        </View>
       </View>
     );
   };
@@ -531,288 +574,35 @@ export default function ExploreScreen() {
       style={styles.safeArea}
       edges={["top"]}
     >
-      <ScrollView
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={BACKGROUND}
+      />
+
+      <FlatList
+        data={filteredStores}
+        keyExtractor={(item) => item.id}
+        renderItem={renderStore}
+        ListHeaderComponent={ListHeader}
+        ListEmptyComponent={renderEmpty}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={
-          styles.scrollContent
-        }
-      >
-        {/* =================================================
-            TOP SPACING
-            NO LOGO / NO STORES TITLE
-        ================================================= */}
-
-        <View style={styles.topSpacing} />
-
-        {/* =================================================
-            CATEGORY BOXES
-            THESE ARE KEPT
-        ================================================= */}
-
-        <View style={styles.categoryHeaderRow}>
-          <View>
-            <Text style={styles.categoryEyebrow}>
-              BROWSE BY CATEGORY
-            </Text>
-
-            <Text style={styles.categoryTitle}>
-              What are you looking for?
-            </Text>
-          </View>
-        </View>
-
-        {/* CATEGORY GRID */}
-
-        <View style={styles.categoryGrid}>
-          {categories.map((category) => {
-            const active =
-              selectedCategory ===
-              category.label;
-
-            return (
-              <Pressable
-                key={category.label}
-                onPress={() =>
-                  handleCategoryPress(
-                    category.label
-                  )
-                }
-                style={({ pressed }) => [
-                  styles.categoryBox,
-                  active &&
-                    styles.categoryBoxActive,
-                  pressed &&
-                    styles.categoryBoxPressed,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.categoryIcon,
-                    active &&
-                      styles.categoryIconActive,
-                  ]}
-                >
-                  <Ionicons
-                    name={category.icon}
-                    size={23}
-                    color={
-                      active
-                        ? WHITE
-                        : CARDINAL
-                    }
-                  />
-                </View>
-
-                <Text
-                  style={[
-                    styles.categoryLabel,
-                    active &&
-                      styles.categoryLabelActive,
-                  ]}
-                >
-                  {category.label}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.categoryDescription,
-                    active &&
-                      styles.categoryDescriptionActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {category.description}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* =================================================
-            RESULTS SECTION
-        ================================================= */}
-
-        <View style={styles.resultsTopRow}>
-          <View>
-            <Text style={styles.resultsEyebrow}>
-              CAMPUS STORES
-            </Text>
-
-            <Text style={styles.resultsTitle}>
-              {getFilterTitle(
-                selectedFilter
-              )}
-            </Text>
-
-            <Text style={styles.resultsCount}>
-              {filteredStores.length}{" "}
-              {filteredStores.length === 1
-                ? "store"
-                : "stores"}{" "}
-              available
-            </Text>
-          </View>
-
-          {!showingAllResults && (
-            <Pressable
-              onPress={handleViewAllResults}
-              style={({ pressed }) => [
-                styles.viewAllButton,
-                pressed &&
-                  styles.viewAllButtonPressed,
-              ]}
-            >
-              <Text style={styles.viewAllText}>
-                View All
-              </Text>
-
-              <Ionicons
-                name="arrow-forward"
-                size={14}
-                color={CARDINAL}
-              />
-            </Pressable>
-          )}
-        </View>
-
-        {/* =================================================
-            STORE TYPE FILTERS
-        ================================================= */}
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={
-            styles.filterContent
-          }
-        >
-          {STORE_FILTERS.map((filter) => {
-            const active =
-              selectedFilter === filter.id;
-
-            return (
-              <Pressable
-                key={filter.id}
-                onPress={() => {
-                  setSelectedFilter(
-                    filter.id
-                  );
-                }}
-                style={({ pressed }) => [
-                  styles.filterButton,
-                  active &&
-                    styles.filterButtonActive,
-                  pressed &&
-                    styles.filterButtonPressed,
-                ]}
-              >
-                <Ionicons
-                  name={filter.icon}
-                  size={15}
-                  color={
-                    active
-                      ? WHITE
-                      : MUTED
-                  }
-                />
-
-                <Text
-                  style={[
-                    styles.filterText,
-                    active &&
-                      styles.filterTextActive,
-                  ]}
-                >
-                  {filter.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        {/* =================================================
-            ALL RESULTS / STORE LIST
-        ================================================= */}
-
-        <View style={styles.storeList}>
-          {filteredStores.length > 0 ? (
-            filteredStores.map(renderStore)
-          ) : (
-            renderEmpty()
-          )}
-        </View>
-
-        {/* =================================================
-            VIEW ALL RESULTS
-        ================================================= */}
-
-        {!showingAllResults &&
-          filteredStores.length > 0 && (
-            <Pressable
-              onPress={
-                handleViewAllResults
-              }
-              style={({ pressed }) => [
-                styles.fullViewAllButton,
-                pressed &&
-                  styles.fullViewAllPressed,
-              ]}
-            >
-              <View
-                style={styles.fullViewAllIcon}
-              >
-                <Ionicons
-                  name="apps-outline"
-                  size={18}
-                  color={CARDINAL}
-                />
-              </View>
-
-              <View
-                style={styles.fullViewAllContent}
-              >
-                <Text
-                  style={
-                    styles.fullViewAllTitle
-                  }
-                >
-                  View All Results
-                </Text>
-
-                <Text
-                  style={
-                    styles.fullViewAllSubtitle
-                  }
-                >
-                  Browse all {STORES.length}{" "}
-                  campus stores
-                </Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={19}
-                color={CARDINAL}
-              />
-            </Pressable>
-          )}
-
-        {/* =================================================
-            FOOTER
-        ================================================= */}
-
-        <View style={styles.footer}>
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={15}
-            color={MUTED}
+        contentContainerStyle={[
+          styles.listContent,
+          filteredStores.length === 0 &&
+            styles.listContentEmpty,
+        ]}
+        ItemSeparatorComponent={() => (
+          <View style={styles.cardSeparator} />
+        )}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={CARDINAL}
+            colors={[CARDINAL]}
           />
-
-          <Text style={styles.footerText}>
-            TUPC campus marketplace
-          </Text>
-        </View>
-      </ScrollView>
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -831,173 +621,40 @@ const styles = StyleSheet.create({
     backgroundColor: BACKGROUND,
   },
 
-  scrollContent: {
+  listContent: {
     paddingHorizontal: 18,
-    paddingBottom: 35,
+    paddingTop: 12,
+    paddingBottom: 30,
   },
 
-  topSpacing: {
-    height: 8,
+  listContentEmpty: {
+    flexGrow: 1,
   },
 
   // ===================================================
-  // CATEGORY HEADER
+  // HEADER
   // ===================================================
 
-  categoryHeaderRow: {
-    marginBottom: 13,
+  header: {
+    marginBottom: 18,
   },
 
-  categoryEyebrow: {
-    fontSize: 9,
+  headerTextContainer: {
+    width: "100%",
+  },
+
+  title: {
+    fontSize: 30,
     fontWeight: "900",
-    letterSpacing: 1.1,
-    color: CARDINAL,
-    marginBottom: 4,
+    color: CARDINAL_DARK,
+    letterSpacing: -0.7,
   },
 
-  categoryTitle: {
-    fontSize: 21,
-    fontWeight: "900",
-    color: TEXT,
-    letterSpacing: -0.4,
-  },
-
-  // ===================================================
-  // CATEGORY GRID
-  // ===================================================
-
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    rowGap: 10,
-    marginBottom: 25,
-  },
-
-  categoryBox: {
-    width: "31.8%",
-    minHeight: 112,
-    borderRadius: 17,
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 11,
-    alignItems: "flex-start",
-    justifyContent: "center",
-
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.035,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-
-  categoryBoxActive: {
-    backgroundColor: CARDINAL,
-    borderColor: CARDINAL,
-  },
-
-  categoryBoxPressed: {
-    opacity: 0.8,
-    transform: [
-      {
-        scale: 0.97,
-      },
-    ],
-  },
-
-  categoryIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "#FBECEF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-
-  categoryIconActive: {
-    backgroundColor: CARDINAL_DARK,
-  },
-
-  categoryLabel: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: TEXT,
-  },
-
-  categoryLabelActive: {
-    color: WHITE,
-  },
-
-  categoryDescription: {
-    marginTop: 2,
-    fontSize: 8,
-    fontWeight: "600",
+  subtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
     color: MUTED,
-  },
-
-  categoryDescriptionActive: {
-    color: "#F6DDE1",
-  },
-
-  // ===================================================
-  // RESULTS HEADER
-  // ===================================================
-
-  resultsTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 11,
-  },
-
-  resultsEyebrow: {
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1,
-    color: MUTED,
-    marginBottom: 2,
-  },
-
-  resultsTitle: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: TEXT,
-    letterSpacing: -0.4,
-  },
-
-  resultsCount: {
-    marginTop: 2,
-    fontSize: 10,
-    fontWeight: "600",
-    color: MUTED,
-  },
-
-  viewAllButton: {
-    height: 35,
-    paddingHorizontal: 11,
-    borderRadius: 11,
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: "#F0D9DD",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-
-  viewAllButtonPressed: {
-    opacity: 0.7,
-  },
-
-  viewAllText: {
-    fontSize: 10,
-    fontWeight: "900",
-    color: CARDINAL,
   },
 
   // ===================================================
@@ -1005,21 +662,20 @@ const styles = StyleSheet.create({
   // ===================================================
 
   filterContent: {
-    gap: 7,
-    paddingBottom: 15,
     paddingRight: 10,
+    gap: 8,
+    paddingBottom: 22,
   },
 
   filterButton: {
-    height: 37,
-    paddingHorizontal: 13,
-    borderRadius: 19,
+    height: 39,
+    paddingHorizontal: 14,
+    borderRadius: 20,
     backgroundColor: WHITE,
     borderWidth: 1,
     borderColor: BORDER,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
+    flexDirection: "row",    alignItems: "center",
+    gap: 6,
   },
 
   filterButtonActive: {
@@ -1037,7 +693,7 @@ const styles = StyleSheet.create({
   },
 
   filterText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "800",
     color: MUTED,
   },
@@ -1047,11 +703,27 @@ const styles = StyleSheet.create({
   },
 
   // ===================================================
-  // STORE LIST
+  // RESULT HEADER
   // ===================================================
 
-  storeList: {
-    gap: 10,
+  resultHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+
+  resultTitle: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  resultCount: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: "600",
+    color: MUTED,
   },
 
   // ===================================================
@@ -1088,6 +760,10 @@ const styles = StyleSheet.create({
 
   storeCardOpening: {
     opacity: 0.7,
+  },
+
+  cardSeparator: {
+    height: 10,
   },
 
   // ===================================================
@@ -1158,7 +834,7 @@ const styles = StyleSheet.create({
   },
 
   // ===================================================
-  // TYPE
+  // STORE TYPE
   // ===================================================
 
   typeRow: {
@@ -1187,7 +863,7 @@ const styles = StyleSheet.create({
   },
 
   // ===================================================
-  // CATEGORIES
+  // PRODUCT CATEGORIES
   // ===================================================
 
   categoryRow: {
@@ -1303,75 +979,15 @@ const styles = StyleSheet.create({
   },
 
   // ===================================================
-  // VIEW ALL RESULTS
-  // ===================================================
-
-  fullViewAllButton: {
-    marginTop: 16,
-    minHeight: 68,
-    borderRadius: 17,
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: "#F0D9DD",
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-
-  fullViewAllPressed: {
-    opacity: 0.75,
-    transform: [
-      {
-        scale: 0.985,
-      },
-    ],
-  },
-
-  fullViewAllIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: "#FBECEF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-  },
-
-  fullViewAllContent: {
-    flex: 1,
-  },
-
-  fullViewAllTitle: {
-    fontSize: 12,
-    fontWeight: "900",
-    color: TEXT,
-  },
-
-  fullViewAllSubtitle: {
-    marginTop: 2,
-    fontSize: 9,
-    fontWeight: "600",
-    color: MUTED,
-  },
-
-  // ===================================================
-  // EMPTY
+  // EMPTY STATE
   // ===================================================
 
   emptyContainer: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 30,
-    paddingVertical: 55,
+    paddingTop: 55,
   },
 
   emptyIcon: {
@@ -1425,23 +1041,5 @@ const styles = StyleSheet.create({
     color: WHITE,
     fontSize: 12,
     fontWeight: "900",
-  },
-
-  // ===================================================
-  // FOOTER
-  // ===================================================
-
-  footer: {
-    marginTop: 22,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-  },
-
-  footerText: {
-    fontSize: 9,
-    fontWeight: "600",
-    color: MUTED,
   },
 });

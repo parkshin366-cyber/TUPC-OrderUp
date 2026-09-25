@@ -22,16 +22,24 @@ export default function ClientLayout() {
       screenOptions={{
         headerShown: false,
 
-        // Tab colors
+        // =================================================
+        // TAB COLORS
+        // =================================================
+
         tabBarActiveTintColor: CARDINAL,
         tabBarInactiveTintColor: MUTED,
 
-        // Bottom navigation
+        // =================================================
+        // BOTTOM NAVIGATION
+        // =================================================
+
         tabBarStyle: {
           height: Platform.OS === "ios" ? 82 : 70,
           paddingTop: 7,
           paddingBottom: Platform.OS === "ios" ? 10 : 7,
+
           backgroundColor: WHITE,
+
           borderTopWidth: 1,
           borderTopColor: BORDER,
 
@@ -58,6 +66,7 @@ export default function ClientLayout() {
           marginTop: 1,
         },
 
+        // Hide keyboard automatically when keyboard opens
         tabBarHideOnKeyboard: true,
       }}
     >
@@ -90,13 +99,17 @@ export default function ClientLayout() {
       />
 
       {/* =================================================
-          EXPLORE
+          STORE
+          
+          NEW BOTTOM TAB
+          
+          This replaces Explore in the bottom navigation.
       ================================================= */}
 
       <Tabs.Screen
-        name="explore"
+        name="store"
         options={{
-          title: "Explore",
+          title: "Store",
 
           tabBarIcon: ({ color, focused }) => {
             return (
@@ -107,17 +120,35 @@ export default function ClientLayout() {
                 ]}
               >
                 <Ionicons
-                  name={
-                    focused
-                      ? "compass"
-                      : "compass-outline"
-                  }
+                  name={focused ? "storefront" : "storefront-outline"}
                   size={22}
                   color={color}
                 />
               </View>
             );
           },
+        }}
+      />
+
+      {/* =================================================
+          EXPLORE
+          
+          HIDDEN FROM BOTTOM NAVIGATION ONLY.
+          
+          IMPORTANT:
+          explore.tsx IS NOT DELETED.
+          
+          You can still navigate to:
+          
+          router.push("/explore")
+          
+          from dashboard, search, categories, etc.
+      ================================================= */}
+
+      <Tabs.Screen
+        name="explore"
+        options={{
+          href: null,
         }}
       />
 
@@ -139,11 +170,7 @@ export default function ClientLayout() {
                 ]}
               >
                 <Ionicons
-                  name={
-                    focused
-                      ? "receipt"
-                      : "receipt-outline"
-                  }
+                  name={focused ? "receipt" : "receipt-outline"}
                   size={21}
                   color={color}
                 />
@@ -171,11 +198,7 @@ export default function ClientLayout() {
                 ]}
               >
                 <Ionicons
-                  name={
-                    focused
-                      ? "person"
-                      : "person-outline"
-                  }
+                  name={focused ? "person" : "person-outline"}
                   size={21}
                   color={color}
                 />

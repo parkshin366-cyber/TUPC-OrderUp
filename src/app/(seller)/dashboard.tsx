@@ -197,11 +197,18 @@ export default function SellerDashboard() {
   };
 
   // ===================================================
-  // SELLER NAME
+  // STORE NAME
   // ===================================================
+  // Supports common auth shapes without changing your AuthContext type.
+  const userData = user as typeof user & {
+    storeName?: string;
+    store?: { name?: string };
+  };
 
-  const sellerName =
-    user?.firstName?.trim() || "Seller";
+  const storeName =
+    userData?.storeName?.trim() ||
+    userData?.store?.name?.trim() ||
+    "My Store";
 
   // ===================================================
   // UI
@@ -227,7 +234,7 @@ export default function SellerDashboard() {
             </Text>
 
             <Text style={styles.title}>
-              Good morning, {sellerName} 👋
+              Welcome to {storeName} 👋
             </Text>
 
             <Text style={styles.subtitle}>
@@ -304,8 +311,12 @@ export default function SellerDashboard() {
             </View>
 
             <View>
-              <Text style={styles.storeName}>
-                My Campus Store
+              <Text
+                style={styles.storeName}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {storeName}
               </Text>
 
               <View style={styles.onlineRow}>

@@ -1,15 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import {
-  Image,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const TUPC_LOGO = require("../../../assets/LOGO.png");
 
 const COLORS = {
   cardinal: "#A6192E",
@@ -188,26 +185,6 @@ export default function RegisterScreen() {
 
           </View>
         </Pressable>
-
-        {/* FOOTER */}
-
-        <View style={styles.footer}>
-
-          <Image
-            source={TUPC_LOGO}
-            style={styles.footerLogo}
-            resizeMode="contain"
-          />
-
-          <Text style={styles.footerBrandName}>
-            TUPC-ORDERUP
-          </Text>
-
-          <Text style={styles.footerBrandSub}>
-            Campus ordering made simple • TUP Cavite
-          </Text>
-
-        </View>
 
       </View>
     </SafeAreaView>
@@ -422,37 +399,5 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardinal,
     alignItems: "center",
     justifyContent: "center",
-  },
-
-  /* FOOTER */
-
-  footer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    paddingTop: 6,
-  },
-
-  footerLogo: {
-    width: 100,
-    height: 44,
-    opacity: 0.18,
-    marginBottom: 1,
-  },
-
-  footerBrandName: {
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.7,
-    color: COLORS.cardinalDark,
-  },
-
-  footerBrandSub: {
-    marginTop: 3,
-    fontSize: 8.5,
-    fontWeight: "600",
-    letterSpacing: 0.3,
-    color: COLORS.lightMuted,
-    textAlign: "center",
   },
 });
