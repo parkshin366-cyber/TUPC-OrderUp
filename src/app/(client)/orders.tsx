@@ -1,19 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { useAuth } from "../../context/AuthContext";
+import { getMyOrders } from "../../services/api";
 
 // =====================================================
 // COLORS
@@ -21,6 +22,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
+
 const BG = "#F7F7F8";
 const TEXT = "#171717";
 const MUTED = "#737373";
@@ -35,15 +37,6 @@ const SOFT_RED = "#FCECEF";
 const SOFT_GREEN = "#EAF7EE";
 const SOFT_YELLOW = "#FFF8E7";
 const SOFT_GRAY = "#F4F4F5";
-
-// =====================================================
-// STORAGE
-// IMPORTANT:
-// Your checkout/place-order flow should save orders
-// using this same key.
-// =====================================================
-
-export const ORDERS_STORAGE_KEY = "@tuporderup_orders";
 
 // =====================================================
 // TYPES
@@ -95,20 +88,45 @@ const getItemCount = (items: OrderItem[]) => {
 };
 
 const normalizeStatus = (status: unknown): OrderStatus => {
-  const value = String(status || "").trim().toLowerCase();
+  const value = String(status || "")
+    .trim()
+    .toLowerCase();
 
-  if (value === "pending") return "Pending";
-  if (value === "preparing") return "Preparing";
-  if (value === "ready") return "Ready for Pickup";
-  if (value === "ready for pickup") return "Ready for Pickup";
-  if (value === "completed") return "Completed";
-  if (value === "cancelled" || value === "canceled") return "Cancelled";
+  if (value === "pending") {
+    return "Pending";
+  }
+
+  if (value === "preparing") {
+    return "Preparing";
+  }
+
+  if (
+    value === "ready" ||
+    value === "ready for pickup" ||
+    value === "ready_for_pickup"
+  ) {
+    return "Ready for Pickup";
+  }
+
+  if (value === "completed" || value === "complete") {
+    return "Completed";
+  }
+
+  if (
+    value === "cancelled" ||
+    value === "canceled" ||
+    value === "cancel"
+  ) {
+    return "Cancelled";
+  }
 
   return "Pending";
 };
 
 const normalizeOrders = (raw: unknown): Order[] => {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
 
   return raw
     .map((item: any, index): Order | null => {
@@ -116,38 +134,50 @@ const normalizeOrders = (raw: unknown): Order[] => {
         return null;
       }
 
-      const rawItems =
-        Array.isArray(item.items)
-          ? item.items
-          : Array.isArray(item.orderItems)
-          ? item.orderItems
-          : [];
+      // =================================================
+      // ITEMS
+      // =================================================
+
+      const rawItems = Array.isArray(item.items)
+        ? item.items
+        : Array.isArray(item.orderItems)
+        ? item.orderItems
+        : [];
 
       const normalizedItems: OrderItem[] = rawItems.map(
         (product: any, productIndex: number) => ({
           id: String(
-            product?.id ??
+            product?._id ??
+              product?.id ??
               product?.productId ??
               `item-${productIndex}`
           ),
+
           name:
             product?.name ??
             product?.productName ??
+            product?.product?.name ??
             "Campus Item",
+
           quantity: Number(
             product?.quantity ??
               product?.qty ??
               1
           ),
+
           price: Number(
             product?.price ??
               product?.unitPrice ??
+              product?.product?.price ??
               0
           ),
+
           image:
             product?.image ??
             product?.imageUrl ??
+            product?.product?.image ??
             undefined,
+
           variant:
             product?.variant ??
             product?.size ??
@@ -155,62 +185,106 @@ const normalizeOrders = (raw: unknown): Order[] => {
         })
       );
 
+      // =================================================
+      // CREATED DATE
+      // =================================================
+
       const createdAt =
         item.createdAt ??
         item.placedAt ??
         item.created_at ??
-        new Date().toISOString();
+        undefined;
 
-      const parsedDate = new Date(createdAt);
+      const parsedDate = createdAt
+        ? new Date(createdAt)
+        : new Date();
+
+      const validDate = !Number.isNaN(
+        parsedDate.getTime()
+      );
 
       const date =
         item.date ??
-        (Number.isNaN(parsedDate.getTime())
-          ? "Recently placed"
-          : parsedDate.toLocaleDateString("en-PH", {
+        (validDate
+          ? parsedDate.toLocaleDateString("en-PH", {
               month: "short",
               day: "numeric",
               year: "numeric",
-            }));
+            })
+          : "Recently placed");
 
       const time =
         item.time ??
-        (Number.isNaN(parsedDate.getTime())
-          ? ""
-          : parsedDate.toLocaleTimeString("en-PH", {
+        (validDate
+          ? parsedDate.toLocaleTimeString("en-PH", {
               hour: "numeric",
               minute: "2-digit",
-            }));
+            })
+          : "");
+
+      // =================================================
+      // ORDER ID
+      // =================================================
+
+      const orderId = String(
+        item._id ??
+          item.id ??
+          item.orderId ??
+          `ORD-${Date.now()}-${index}`
+      );
+
+      // =================================================
+      // STORE NAME
+      // =================================================
+
+      const store =
+        item.store?.name ??
+        item.storeName ??
+        item.store ??
+        item.seller?.storeName ??
+        item.sellerName ??
+        "Campus Store";
+
+      // =================================================
+      // TOTAL
+      // =================================================
+
+      const total = Number(
+        item.total ??
+          item.grandTotal ??
+          item.amount ??
+          item.totalAmount ??
+          0
+      );
 
       return {
-        id: String(
-          item.id ??
-            item.orderId ??
-            `ORD-${Date.now()}-${index}`
-        ),
-        store:
-          item.store ??
-          item.storeName ??
-          item.sellerName ??
-          "Campus Store",
+        id: orderId,
+
+        store: String(store),
+
         items: normalizedItems,
-        total: Number(
-          item.total ??
-            item.grandTotal ??
-            item.amount ??
-            0
-        ),
+
+        total,
+
+        // IMPORTANT:
+        // Always use the latest backend status.
         status: normalizeStatus(item.status),
+
         date,
+
         time,
+
         createdAt,
+
         pickupMethod:
           item.pickupMethod ??
           item.deliveryMethod ??
           "Campus Pickup",
+
         paymentMethod:
           item.paymentMethod ??
           "Cash on Pickup",
+
         notes: item.notes ?? "",
       };
     })
@@ -228,7 +302,8 @@ const getStatusConfig = (status: OrderStatus) => {
         icon: "time-outline" as const,
         color: WARNING,
         background: SOFT_YELLOW,
-        description: "Waiting for the store to confirm your order.",
+        description:
+          "Waiting for the store to confirm your order.",
       };
 
     case "Preparing":
@@ -236,7 +311,8 @@ const getStatusConfig = (status: OrderStatus) => {
         icon: "restaurant-outline" as const,
         color: WARNING,
         background: SOFT_YELLOW,
-        description: "The store is preparing your order.",
+        description:
+          "The store is preparing your order.",
       };
 
     case "Ready for Pickup":
@@ -244,7 +320,8 @@ const getStatusConfig = (status: OrderStatus) => {
         icon: "checkmark-circle-outline" as const,
         color: SUCCESS,
         background: SOFT_GREEN,
-        description: "Your order is ready for pickup.",
+        description:
+          "Your order is ready for pickup.",
       };
 
     case "Completed":
@@ -252,7 +329,8 @@ const getStatusConfig = (status: OrderStatus) => {
         icon: "checkmark-done-outline" as const,
         color: SUCCESS,
         background: SOFT_GREEN,
-        description: "This order has been completed.",
+        description:
+          "This order has been completed.",
       };
 
     case "Cancelled":
@@ -260,7 +338,8 @@ const getStatusConfig = (status: OrderStatus) => {
         icon: "close-circle-outline" as const,
         color: DANGER,
         background: SOFT_RED,
-        description: "This order was cancelled.",
+        description:
+          "This order was cancelled.",
       };
 
     default:
@@ -278,7 +357,18 @@ const getStatusConfig = (status: OrderStatus) => {
 // =====================================================
 
 export default function OrdersScreen() {
+  // ===================================================
+  // AUTH
+  // ===================================================
+
+  const { token } = useAuth();
+
+  // ===================================================
+  // STATE
+  // ===================================================
+
   const [orders, setOrders] = useState<Order[]>([]);
+
   const [activeFilter, setActiveFilter] = useState<
     "All" | "Active" | "Completed"
   >("All");
@@ -287,54 +377,105 @@ export default function OrdersScreen() {
     useState<Order | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState<string | null>(null);
 
   // ===================================================
-  // LOAD ORDERS
+  // LOAD ORDERS FROM BACKEND
   // ===================================================
 
-  const loadOrders = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem(
-        ORDERS_STORAGE_KEY
-      );
-
-      if (!stored) {
+  const loadOrders = useCallback(
+    async (showLoader = true) => {
+      if (!token) {
         setOrders([]);
+        setLoading(false);
         return;
       }
 
-      const parsed = JSON.parse(stored);
-      const normalized = normalizeOrders(parsed);
+      try {
+        if (showLoader) {
+          setLoading(true);
+        }
 
-      normalized.sort((a, b) => {
-        const aTime = new Date(
-          a.createdAt || 0
-        ).getTime();
+        setErrorMessage(null);
 
-        const bTime = new Date(
-          b.createdAt || 0
-        ).getTime();
+        console.log(
+          "GETTING CLIENT ORDERS FROM BACKEND..."
+        );
 
-        return bTime - aTime;
-      });
+        const response = await getMyOrders(token);
 
-      setOrders(normalized);
-    } catch (error) {
-      console.error("Failed to load orders:", error);
-      setOrders([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        console.log(
+          "CLIENT ORDERS RESPONSE:",
+          response
+        );
+
+        const normalized = normalizeOrders(
+          response
+        );
+
+        normalized.sort((a, b) => {
+          const aTime = new Date(
+            a.createdAt || 0
+          ).getTime();
+
+          const bTime = new Date(
+            b.createdAt || 0
+          ).getTime();
+
+          return bTime - aTime;
+        });
+
+        setOrders(normalized);
+
+        // =================================================
+        // UPDATE SELECTED ORDER
+        // IMPORTANT:
+        // If seller changed status while modal is open,
+        // update modal using latest backend data.
+        // =================================================
+
+        setSelectedOrder((currentSelected) => {
+          if (!currentSelected) {
+            return null;
+          }
+
+          const updatedOrder = normalized.find(
+            (order) =>
+              order.id === currentSelected.id
+          );
+
+          return updatedOrder ?? currentSelected;
+        });
+      } catch (error) {
+        console.error(
+          "LOAD CLIENT ORDERS ERROR:",
+          error
+        );
+
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Unable to load your orders."
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [token]
+  );
 
   // ===================================================
-  // REFRESH WHEN SCREEN BECOMES ACTIVE
+  // LOAD WHEN SCREEN OPENS / BECOMES ACTIVE
   // ===================================================
 
   useFocusEffect(
     useCallback(() => {
-      loadOrders();
+      loadOrders(true);
     }, [loadOrders])
   );
 
@@ -345,7 +486,7 @@ export default function OrdersScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
 
-    await loadOrders();
+    await loadOrders(false);
 
     setRefreshing(false);
   };
@@ -369,7 +510,8 @@ export default function OrdersScreen() {
     }
 
     return orders.filter(
-      (order) => order.status === "Completed"
+      (order) =>
+        order.status === "Completed"
     );
   }, [orders, activeFilter]);
 
@@ -391,91 +533,19 @@ export default function OrdersScreen() {
   const completedCount = useMemo(
     () =>
       orders.filter(
-        (order) => order.status === "Completed"
+        (order) =>
+          order.status === "Completed"
       ).length,
     [orders]
   );
 
   // ===================================================
-  // CANCEL ORDER
-  // ===================================================
-
-  const canCancelOrder = (order: Order) => {
-    return (
-      order.status === "Pending" ||
-      order.status === "Preparing"
-    );
-  };
-
-  const cancelOrder = (order: Order) => {
-    if (!canCancelOrder(order)) {
-      Alert.alert(
-        "Order Cannot Be Cancelled",
-        "This order can no longer be cancelled."
-      );
-      return;
-    }
-
-    Alert.alert(
-      "Cancel Order",
-      `Are you sure you want to cancel ${order.id}?`,
-      [
-        {
-          text: "Keep Order",
-          style: "cancel",
-        },
-        {
-          text: "Cancel Order",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const updatedOrders = orders.map(
-                (currentOrder) =>
-                  currentOrder.id === order.id
-                    ? {
-                        ...currentOrder,
-                        status: "Cancelled" as OrderStatus,
-                      }
-                    : currentOrder
-              );
-
-              await AsyncStorage.setItem(
-                ORDERS_STORAGE_KEY,
-                JSON.stringify(updatedOrders)
-              );
-
-              setOrders(updatedOrders);
-
-              setSelectedOrder((current) =>
-                current?.id === order.id
-                  ? {
-                      ...current,
-                      status: "Cancelled",
-                    }
-                  : current
-              );
-
-              Alert.alert(
-                "Order Cancelled",
-                "Your order has been cancelled."
-              );
-            } catch {
-              Alert.alert(
-                "Something went wrong",
-                "We couldn't update your order. Please try again."
-              );
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // ===================================================
   // STATUS TIMELINE
   // ===================================================
 
-  const renderTimeline = (status: OrderStatus) => {
+  const renderTimeline = (
+    status: OrderStatus
+  ) => {
     const steps: {
       key: OrderStatus;
       title: string;
@@ -506,7 +576,10 @@ export default function OrdersScreen() {
     const statusIndex =
       status === "Cancelled"
         ? -1
-        : steps.findIndex((step) => step.key === status);
+        : steps.findIndex(
+            (step) =>
+              step.key === status
+          );
 
     return (
       <View style={styles.timeline}>
@@ -522,7 +595,9 @@ export default function OrdersScreen() {
               key={step.key}
               style={styles.timelineRow}
             >
-              <View style={styles.timelineLeft}>
+              <View
+                style={styles.timelineLeft}
+              >
                 <View
                   style={[
                     styles.timelineDot,
@@ -547,18 +622,24 @@ export default function OrdersScreen() {
                   />
                 </View>
 
-                {index < steps.length - 1 && (
+                {index <
+                  steps.length - 1 && (
                   <View
                     style={[
                       styles.timelineLine,
-                      statusIndex > index &&
+                      statusIndex >
+                        index &&
                         styles.timelineLineCompleted,
                     ]}
                   />
                 )}
               </View>
 
-              <View style={styles.timelineContent}>
+              <View
+                style={
+                  styles.timelineContent
+                }
+              >
                 <Text
                   style={[
                     styles.timelineTitle,
@@ -570,7 +651,11 @@ export default function OrdersScreen() {
                 </Text>
 
                 {isCurrent && (
-                  <Text style={styles.timelineCurrent}>
+                  <Text
+                    style={
+                      styles.timelineCurrent
+                    }
+                  >
                     Current status
                   </Text>
                 )}
@@ -580,8 +665,16 @@ export default function OrdersScreen() {
         })}
 
         {status === "Cancelled" && (
-          <View style={styles.cancelledTimeline}>
-            <View style={styles.cancelledDot}>
+          <View
+            style={
+              styles.cancelledTimeline
+            }
+          >
+            <View
+              style={
+                styles.cancelledDot
+              }
+            >
               <Ionicons
                 name="close"
                 size={15}
@@ -590,12 +683,21 @@ export default function OrdersScreen() {
             </View>
 
             <View>
-              <Text style={styles.cancelledTitle}>
+              <Text
+                style={
+                  styles.cancelledTitle
+                }
+              >
                 Order Cancelled
               </Text>
 
-              <Text style={styles.cancelledText}>
-                This order is no longer active.
+              <Text
+                style={
+                  styles.cancelledText
+                }
+              >
+                This order is no longer
+                active.
               </Text>
             </View>
           </View>
@@ -608,20 +710,32 @@ export default function OrdersScreen() {
   // ORDER CARD
   // ===================================================
 
-  const renderOrderCard = (order: Order) => {
-    const status = getStatusConfig(order.status);
-    const itemCount = getItemCount(order.items);
+  const renderOrderCard = (
+    order: Order
+  ) => {
+    const status =
+      getStatusConfig(order.status);
+
+    const itemCount =
+      getItemCount(order.items);
 
     return (
       <Pressable
         key={order.id}
-        onPress={() => setSelectedOrder(order)}
+        onPress={() =>
+          setSelectedOrder(order)
+        }
         style={({ pressed }) => [
           styles.orderCard,
-          pressed && styles.orderCardPressed,
+          pressed &&
+            styles.orderCardPressed,
         ]}
       >
-        <View style={styles.orderCardHeader}>
+        <View
+          style={
+            styles.orderCardHeader
+          }
+        >
           <View style={styles.storeIcon}>
             <Ionicons
               name="storefront-outline"
@@ -630,7 +744,9 @@ export default function OrdersScreen() {
             />
           </View>
 
-          <View style={styles.orderMainInfo}>
+          <View
+            style={styles.orderMainInfo}
+          >
             <Text
               style={styles.storeName}
               numberOfLines={1}
@@ -638,7 +754,9 @@ export default function OrdersScreen() {
               {order.store}
             </Text>
 
-            <Text style={styles.orderId}>
+            <Text
+              style={styles.orderId}
+            >
               {order.id}
             </Text>
           </View>
@@ -661,7 +779,10 @@ export default function OrdersScreen() {
             <Text
               style={[
                 styles.statusText,
-                { color: status.color },
+                {
+                  color:
+                    status.color,
+                },
               ]}
             >
               {order.status}
@@ -669,62 +790,94 @@ export default function OrdersScreen() {
           </View>
         </View>
 
-        <View style={styles.cardDivider} />
+        <View
+          style={styles.cardDivider}
+        />
 
-        <View style={styles.orderMeta}>
-          <View style={styles.metaItem}>
+        <View
+          style={styles.orderMeta}
+        >
+          <View
+            style={styles.metaItem}
+          >
             <Ionicons
               name="cube-outline"
               size={15}
               color={MUTED}
             />
 
-            <Text style={styles.metaText}>
+            <Text
+              style={styles.metaText}
+            >
               {itemCount}{" "}
-              {itemCount === 1 ? "item" : "items"}
+              {itemCount === 1
+                ? "item"
+                : "items"}
             </Text>
           </View>
 
-          <View style={styles.metaItem}>
+          <View
+            style={styles.metaItem}
+          >
             <Ionicons
               name="calendar-outline"
               size={15}
               color={MUTED}
             />
 
-            <Text style={styles.metaText}>
+            <Text
+              style={styles.metaText}
+            >
               {order.date}
             </Text>
           </View>
 
           {!!order.time && (
-            <View style={styles.metaItem}>
+            <View
+              style={styles.metaItem}
+            >
               <Ionicons
                 name="time-outline"
                 size={15}
                 color={MUTED}
               />
 
-              <Text style={styles.metaText}>
+              <Text
+                style={styles.metaText}
+              >
                 {order.time}
               </Text>
             </View>
           )}
         </View>
 
-        <View style={styles.cardBottom}>
+        <View
+          style={styles.cardBottom}
+        >
           <View>
-            <Text style={styles.totalLabel}>
+            <Text
+              style={styles.totalLabel}
+            >
               Total
             </Text>
 
-            <Text style={styles.totalAmount}>
-              {formatCurrency(order.total)}
+            <Text
+              style={styles.totalAmount}
+            >
+              {formatCurrency(
+                order.total
+              )}
             </Text>
           </View>
 
-          <View style={styles.detailsButton}>
-            <Text style={styles.detailsButtonText}>
+          <View
+            style={styles.detailsButton}
+          >
+            <Text
+              style={
+                styles.detailsButtonText
+              }
+            >
               View Details
             </Text>
 
@@ -745,24 +898,29 @@ export default function OrdersScreen() {
 
   const renderEmptyState = () => {
     let title = "No Orders Yet";
+
     let description =
       "Orders you place from campus stores will appear here.";
 
     if (activeFilter === "Active") {
       title = "No Active Orders";
+
       description =
         "You don't have any orders currently being processed.";
     }
 
     if (activeFilter === "Completed") {
       title = "No Completed Orders";
+
       description =
         "Your completed campus orders will appear here.";
     }
 
     return (
       <View style={styles.emptyCard}>
-        <View style={styles.emptyIcon}>
+        <View
+          style={styles.emptyIcon}
+        >
           <Ionicons
             name="receipt-outline"
             size={42}
@@ -770,24 +928,28 @@ export default function OrdersScreen() {
           />
         </View>
 
-        <Text style={styles.emptyTitle}>
+        <Text
+          style={styles.emptyTitle}
+        >
           {title}
         </Text>
 
-        <Text style={styles.emptyDescription}>
+        <Text
+          style={
+            styles.emptyDescription
+          }
+        >
           {description}
         </Text>
 
         <Pressable
-          onPress={() => {
-            // Keep navigation simple and compatible
-            // with the existing client tab structure.
-            const { router } = require("expo-router");
-            router.push("/explore");
-          }}
+          onPress={() =>
+            router.push("/explore")
+          }
           style={({ pressed }) => [
             styles.shopButton,
-            pressed && styles.shopButtonPressed,
+            pressed &&
+              styles.shopButtonPressed,
           ]}
         >
           <Ionicons
@@ -796,7 +958,9 @@ export default function OrdersScreen() {
             color={WHITE}
           />
 
-          <Text style={styles.shopButtonText}>
+          <Text
+            style={styles.shopButtonText}
+          >
             Browse Campus Stores
           </Text>
         </Pressable>
@@ -809,11 +973,14 @@ export default function OrdersScreen() {
   // ===================================================
 
   const renderOrderModal = () => {
-    if (!selectedOrder) return null;
+    if (!selectedOrder) {
+      return null;
+    }
 
-    const status = getStatusConfig(
-      selectedOrder.status
-    );
+    const status =
+      getStatusConfig(
+        selectedOrder.status
+      );
 
     return (
       <Modal
@@ -824,17 +991,33 @@ export default function OrdersScreen() {
           setSelectedOrder(null)
         }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHandle} />
+        <View
+          style={styles.modalOverlay}
+        >
+          <View
+            style={
+              styles.modalContainer
+            }
+          >
+            <View
+              style={styles.modalHandle}
+            />
 
-            <View style={styles.modalHeader}>
+            <View
+              style={styles.modalHeader}
+            >
               <View>
-                <Text style={styles.modalTitle}>
+                <Text
+                  style={styles.modalTitle}
+                >
                   Order Details
                 </Text>
 
-                <Text style={styles.modalOrderId}>
+                <Text
+                  style={
+                    styles.modalOrderId
+                  }
+                >
                   {selectedOrder.id}
                 </Text>
               </View>
@@ -843,7 +1026,9 @@ export default function OrdersScreen() {
                 onPress={() =>
                   setSelectedOrder(null)
                 }
-                style={styles.closeButton}
+                style={
+                  styles.closeButton
+                }
               >
                 <Ionicons
                   name="close"
@@ -854,12 +1039,15 @@ export default function OrdersScreen() {
             </View>
 
             <ScrollView
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={
+                false
+              }
               contentContainerStyle={
                 styles.modalScrollContent
               }
             >
               {/* STATUS */}
+
               <View
                 style={[
                   styles.modalStatusCard,
@@ -870,13 +1058,9 @@ export default function OrdersScreen() {
                 ]}
               >
                 <View
-                  style={[
-                    styles.modalStatusIcon,
-                    {
-                      backgroundColor:
-                        WHITE,
-                    },
-                  ]}
+                  style={
+                    styles.modalStatusIcon
+                  }
                 >
                   <Ionicons
                     name={status.icon}
@@ -885,32 +1069,58 @@ export default function OrdersScreen() {
                   />
                 </View>
 
-                <View style={styles.modalStatusInfo}>
+                <View
+                  style={
+                    styles.modalStatusInfo
+                  }
+                >
                   <Text
                     style={[
                       styles.modalStatusTitle,
                       {
-                        color: status.color,
+                        color:
+                          status.color,
                       },
                     ]}
                   >
                     {selectedOrder.status}
                   </Text>
 
-                  <Text style={styles.modalStatusDescription}>
+                  <Text
+                    style={
+                      styles.modalStatusDescription
+                    }
+                  >
                     {status.description}
                   </Text>
                 </View>
               </View>
 
               {/* STORE */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>
+
+              <View
+                style={
+                  styles.detailSection
+                }
+              >
+                <Text
+                  style={
+                    styles.detailSectionTitle
+                  }
+                >
                   Store
                 </Text>
 
-                <View style={styles.storeDetailRow}>
-                  <View style={styles.storeDetailIcon}>
+                <View
+                  style={
+                    styles.storeDetailRow
+                  }
+                >
+                  <View
+                    style={
+                      styles.storeDetailIcon
+                    }
+                  >
                     <Ionicons
                       name="storefront-outline"
                       size={20}
@@ -918,12 +1128,22 @@ export default function OrdersScreen() {
                     />
                   </View>
 
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.detailStoreName}>
+                  <View
+                    style={{ flex: 1 }}
+                  >
+                    <Text
+                      style={
+                        styles.detailStoreName
+                      }
+                    >
                       {selectedOrder.store}
                     </Text>
 
-                    <Text style={styles.detailMuted}>
+                    <Text
+                      style={
+                        styles.detailMuted
+                      }
+                    >
                       {selectedOrder.date}
                       {selectedOrder.time
                         ? ` • ${selectedOrder.time}`
@@ -934,8 +1154,17 @@ export default function OrdersScreen() {
               </View>
 
               {/* TIMELINE */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>
+
+              <View
+                style={
+                  styles.detailSection
+                }
+              >
+                <Text
+                  style={
+                    styles.detailSectionTitle
+                  }
+                >
                   Order Status
                 </Text>
 
@@ -945,15 +1174,30 @@ export default function OrdersScreen() {
               </View>
 
               {/* ITEMS */}
-              <View style={styles.detailSection}>
-                <View style={styles.sectionTitleRow}>
+
+              <View
+                style={
+                  styles.detailSection
+                }
+              >
+                <View
+                  style={
+                    styles.sectionTitleRow
+                  }
+                >
                   <Text
-                    style={styles.detailSectionTitle}
+                    style={
+                      styles.detailSectionTitle
+                    }
                   >
                     Items
                   </Text>
 
-                  <Text style={styles.itemCountLabel}>
+                  <Text
+                    style={
+                      styles.itemCountLabel
+                    }
+                  >
                     {getItemCount(
                       selectedOrder.items
                     )}{" "}
@@ -965,8 +1209,11 @@ export default function OrdersScreen() {
                   </Text>
                 </View>
 
-                <View style={styles.itemsCard}>
-                  {selectedOrder.items.length > 0 ? (
+                <View
+                  style={styles.itemsCard}
+                >
+                  {selectedOrder.items
+                    .length > 0 ? (
                     selectedOrder.items.map(
                       (item, index) => (
                         <View
@@ -974,13 +1221,18 @@ export default function OrdersScreen() {
                           style={[
                             styles.orderItemRow,
                             index <
-                              selectedOrder.items
+                              selectedOrder
+                                .items
                                 .length -
                                 1 &&
                               styles.orderItemBorder,
                           ]}
                         >
-                          <View style={styles.quantityBox}>
+                          <View
+                            style={
+                              styles.quantityBox
+                            }
+                          >
                             <Text
                               style={
                                 styles.quantityText
@@ -1059,15 +1311,30 @@ export default function OrdersScreen() {
               </View>
 
               {/* ORDER INFORMATION */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>
+
+              <View
+                style={
+                  styles.detailSection
+                }
+              >
+                <Text
+                  style={
+                    styles.detailSectionTitle
+                  }
+                >
                   Order Information
                 </Text>
 
-                <View style={styles.infoCard}>
-                  <View style={styles.infoRow}>
+                <View
+                  style={styles.infoCard}
+                >
+                  <View
+                    style={styles.infoRow}
+                  >
                     <View
-                      style={styles.infoIcon}
+                      style={
+                        styles.infoIcon
+                      }
                     >
                       <Ionicons
                         name="bag-handle-outline"
@@ -1076,15 +1343,23 @@ export default function OrdersScreen() {
                       />
                     </View>
 
-                    <View style={styles.infoText}>
+                    <View
+                      style={
+                        styles.infoText
+                      }
+                    >
                       <Text
-                        style={styles.infoLabel}
+                        style={
+                          styles.infoLabel
+                        }
                       >
                         Pickup Method
                       </Text>
 
                       <Text
-                        style={styles.infoValue}
+                        style={
+                          styles.infoValue
+                        }
                       >
                         {selectedOrder.pickupMethod ||
                           "Campus Pickup"}
@@ -1092,11 +1367,19 @@ export default function OrdersScreen() {
                     </View>
                   </View>
 
-                  <View style={styles.infoDivider} />
+                  <View
+                    style={
+                      styles.infoDivider
+                    }
+                  />
 
-                  <View style={styles.infoRow}>
+                  <View
+                    style={styles.infoRow}
+                  >
                     <View
-                      style={styles.infoIcon}
+                      style={
+                        styles.infoIcon
+                      }
                     >
                       <Ionicons
                         name="card-outline"
@@ -1105,15 +1388,23 @@ export default function OrdersScreen() {
                       />
                     </View>
 
-                    <View style={styles.infoText}>
+                    <View
+                      style={
+                        styles.infoText
+                      }
+                    >
                       <Text
-                        style={styles.infoLabel}
+                        style={
+                          styles.infoLabel
+                        }
                       >
                         Payment Method
                       </Text>
 
                       <Text
-                        style={styles.infoValue}
+                        style={
+                          styles.infoValue
+                        }
                       >
                         {selectedOrder.paymentMethod ||
                           "Cash on Pickup"}
@@ -1129,9 +1420,13 @@ export default function OrdersScreen() {
                         }
                       />
 
-                      <View style={styles.infoRow}>
+                      <View
+                        style={styles.infoRow}
+                      >
                         <View
-                          style={styles.infoIcon}
+                          style={
+                            styles.infoIcon
+                          }
                         >
                           <Ionicons
                             name="chatbubble-outline"
@@ -1141,7 +1436,9 @@ export default function OrdersScreen() {
                         </View>
 
                         <View
-                          style={styles.infoText}
+                          style={
+                            styles.infoText
+                          }
                         >
                           <Text
                             style={
@@ -1156,7 +1453,9 @@ export default function OrdersScreen() {
                               styles.infoValue
                             }
                           >
-                            {selectedOrder.notes}
+                            {
+                              selectedOrder.notes
+                            }
                           </Text>
                         </View>
                       </View>
@@ -1166,14 +1465,23 @@ export default function OrdersScreen() {
               </View>
 
               {/* TOTAL */}
-              <View style={styles.totalCard}>
+
+              <View
+                style={styles.totalCard}
+              >
                 <View>
-                  <Text style={styles.totalCardLabel}>
+                  <Text
+                    style={
+                      styles.totalCardLabel
+                    }
+                  >
                     Order Total
                   </Text>
 
                   <Text
-                    style={styles.totalCardAmount}
+                    style={
+                      styles.totalCardAmount
+                    }
                   >
                     {formatCurrency(
                       selectedOrder.total
@@ -1181,7 +1489,9 @@ export default function OrdersScreen() {
                   </Text>
                 </View>
 
-                <View style={styles.totalCheck}>
+                <View
+                  style={styles.totalCheck}
+                >
                   <Ionicons
                     name="receipt-outline"
                     size={20}
@@ -1190,33 +1500,9 @@ export default function OrdersScreen() {
                 </View>
               </View>
 
-              {/* CANCEL */}
-              {canCancelOrder(selectedOrder) && (
-                <Pressable
-                  onPress={() =>
-                    cancelOrder(selectedOrder)
-                  }
-                  style={({ pressed }) => [
-                    styles.cancelButton,
-                    pressed &&
-                      styles.cancelButtonPressed,
-                  ]}
-                >
-                  <Ionicons
-                    name="close-circle-outline"
-                    size={18}
-                    color={DANGER}
-                  />
-
-                  <Text
-                    style={styles.cancelButtonText}
-                  >
-                    Cancel Order
-                  </Text>
-                </Pressable>
-              )}
-
-              <View style={{ height: 20 }} />
+              <View
+                style={{ height: 20 }}
+              />
             </ScrollView>
           </View>
         </View>
@@ -1232,10 +1518,21 @@ export default function OrdersScreen() {
     return (
       <SafeAreaView
         style={styles.safeArea}
-        edges={["top", "left", "right", "bottom"]}
+        edges={[
+          "top",
+          "left",
+          "right",
+          "bottom",
+        ]}
       >
-        <View style={styles.loadingContainer}>
-          <View style={styles.loadingIcon}>
+        <View
+          style={
+            styles.loadingContainer
+          }
+        >
+          <View
+            style={styles.loadingIcon}
+          >
             <Ionicons
               name="receipt-outline"
               size={28}
@@ -1249,7 +1546,9 @@ export default function OrdersScreen() {
             style={{ marginTop: 18 }}
           />
 
-          <Text style={styles.loadingText}>
+          <Text
+            style={styles.loadingText}
+          >
             Loading your orders...
           </Text>
         </View>
@@ -1264,7 +1563,12 @@ export default function OrdersScreen() {
   return (
     <SafeAreaView
       style={styles.safeArea}
-      edges={["top", "left", "right", "bottom"]}
+      edges={[
+        "top",
+        "left",
+        "right",
+        "bottom",
+      ]}
     >
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -1276,32 +1580,90 @@ export default function OrdersScreen() {
             colors={[CARDINAL]}
           />
         }
-        contentContainerStyle={styles.container}
+        contentContainerStyle={
+          styles.container
+        }
       >
-        {/* =================================================
-            HEADER
-        ================================================= */}
+        {/* HEADER */}
 
         <View style={styles.header}>
-          <View style={styles.headerTextContainer}>
+          <View
+            style={
+              styles.headerTextContainer
+            }
+          >
             <Text style={styles.title}>
               My Orders
             </Text>
 
-            <Text style={styles.subtitle}>
-              Track your campus orders and view
-              their latest status.
+            <Text
+              style={styles.subtitle}
+            >
+              Track your campus orders and
+              view their latest status.
             </Text>
           </View>
         </View>
 
-        {/* =================================================
-            SUMMARY
-        ================================================= */}
+        {/* ERROR */}
 
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryItem}>
-            <View style={styles.summaryIcon}>
+        {errorMessage && (
+          <View
+            style={styles.errorCard}
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={20}
+              color={DANGER}
+            />
+
+            <View
+              style={{ flex: 1 }}
+            >
+              <Text
+                style={
+                  styles.errorTitle
+                }
+              >
+                Unable to load orders
+              </Text>
+
+              <Text
+                style={
+                  styles.errorText
+                }
+              >
+                {errorMessage}
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() =>
+                loadOrders(true)
+              }
+            >
+              <Text
+                style={
+                  styles.retryText
+                }
+              >
+                Retry
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* SUMMARY */}
+
+        <View
+          style={styles.summaryCard}
+        >
+          <View
+            style={styles.summaryItem}
+          >
+            <View
+              style={styles.summaryIcon}
+            >
               <Ionicons
                 name="layers-outline"
                 size={19}
@@ -1310,19 +1672,31 @@ export default function OrdersScreen() {
             </View>
 
             <View>
-              <Text style={styles.summaryValue}>
+              <Text
+                style={
+                  styles.summaryValue
+                }
+              >
                 {orders.length}
               </Text>
 
-              <Text style={styles.summaryLabel}>
+              <Text
+                style={
+                  styles.summaryLabel
+                }
+              >
                 Total Orders
               </Text>
             </View>
           </View>
 
-          <View style={styles.summaryDivider} />
+          <View
+            style={styles.summaryDivider}
+          />
 
-          <View style={styles.summaryItem}>
+          <View
+            style={styles.summaryItem}
+          >
             <View
               style={[
                 styles.summaryIcon,
@@ -1340,19 +1714,31 @@ export default function OrdersScreen() {
             </View>
 
             <View>
-              <Text style={styles.summaryValue}>
+              <Text
+                style={
+                  styles.summaryValue
+                }
+              >
                 {activeCount}
               </Text>
 
-              <Text style={styles.summaryLabel}>
+              <Text
+                style={
+                  styles.summaryLabel
+                }
+              >
                 Active
               </Text>
             </View>
           </View>
 
-          <View style={styles.summaryDivider} />
+          <View
+            style={styles.summaryDivider}
+          />
 
-          <View style={styles.summaryItem}>
+          <View
+            style={styles.summaryItem}
+          >
             <View
               style={[
                 styles.summaryIcon,
@@ -1370,24 +1756,36 @@ export default function OrdersScreen() {
             </View>
 
             <View>
-              <Text style={styles.summaryValue}>
+              <Text
+                style={
+                  styles.summaryValue
+                }
+              >
                 {completedCount}
               </Text>
 
-              <Text style={styles.summaryLabel}>
+              <Text
+                style={
+                  styles.summaryLabel
+                }
+              >
                 Completed
               </Text>
             </View>
           </View>
         </View>
 
-        {/* =================================================
-            FILTERS
-        ================================================= */}
+        {/* FILTERS */}
 
-        <View style={styles.filterContainer}>
+        <View
+          style={styles.filterContainer}
+        >
           {(
-            ["All", "Active", "Completed"] as const
+            [
+              "All",
+              "Active",
+              "Completed",
+            ] as const
           ).map((filter) => {
             const isActive =
               activeFilter === filter;
@@ -1396,7 +1794,9 @@ export default function OrdersScreen() {
               <Pressable
                 key={filter}
                 onPress={() =>
-                  setActiveFilter(filter)
+                  setActiveFilter(
+                    filter
+                  )
                 }
                 style={({ pressed }) => [
                   styles.filterButton,
@@ -1420,23 +1820,33 @@ export default function OrdersScreen() {
           })}
         </View>
 
-        {/* =================================================
-            SECTION
-        ================================================= */}
+        {/* SECTION */}
 
-        <View style={styles.sectionHeader}>
+        <View
+          style={styles.sectionHeader}
+        >
           <View>
-            <Text style={styles.sectionTitle}>
+            <Text
+              style={
+                styles.sectionTitle
+              }
+            >
               {activeFilter === "All"
                 ? "All Orders"
                 : `${activeFilter} Orders`}
             </Text>
 
-            <Text style={styles.sectionSubtitle}>
-              {filteredOrders.length === 0
+            <Text
+              style={
+                styles.sectionSubtitle
+              }
+            >
+              {filteredOrders.length ===
+              0
                 ? "Nothing to show"
                 : `${filteredOrders.length} ${
-                    filteredOrders.length === 1
+                    filteredOrders.length ===
+                    1
                       ? "order"
                       : "orders"
                   }`}
@@ -1450,12 +1860,12 @@ export default function OrdersScreen() {
           />
         </View>
 
-        {/* =================================================
-            ORDERS
-        ================================================= */}
+        {/* ORDERS */}
 
         {filteredOrders.length > 0 ? (
-          <View style={styles.ordersList}>
+          <View
+            style={styles.ordersList}
+          >
             {filteredOrders.map(
               renderOrderCard
             )}
@@ -1464,7 +1874,9 @@ export default function OrdersScreen() {
           renderEmptyState()
         )}
 
-        <View style={{ height: 30 }} />
+        <View
+          style={{ height: 30 }}
+        />
       </ScrollView>
 
       {renderOrderModal()}
@@ -1488,9 +1900,7 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
 
-  // ===================================================
   // HEADER
-  // ===================================================
 
   header: {
     paddingTop: 3,
@@ -1515,9 +1925,39 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  // ===================================================
+  // ERROR
+
+  errorCard: {
+    marginTop: 15,
+    padding: 13,
+    borderRadius: 15,
+    backgroundColor: SOFT_RED,
+    borderWidth: 1,
+    borderColor: "#F2D0D6",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+
+  errorTitle: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: DANGER,
+  },
+
+  errorText: {
+    marginTop: 2,
+    fontSize: 9.5,
+    color: MUTED,
+  },
+
+  retryText: {
+    fontSize: 10,
+    color: CARDINAL,
+    fontWeight: "900",
+  },
+
   // SUMMARY
-  // ===================================================
 
   summaryCard: {
     marginTop: 22,
@@ -1568,9 +2008,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
 
-  // ===================================================
   // FILTER
-  // ===================================================
 
   filterContainer: {
     marginTop: 18,
@@ -1608,9 +2046,7 @@ const styles = StyleSheet.create({
     color: WHITE,
   },
 
-  // ===================================================
   // SECTION
-  // ===================================================
 
   sectionHeader: {
     marginTop: 23,
@@ -1633,9 +2069,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ===================================================
   // ORDERS
-  // ===================================================
 
   ordersList: {
     gap: 12,
@@ -1772,9 +2206,7 @@ const styles = StyleSheet.create({
     color: CARDINAL,
   },
 
-  // ===================================================
   // EMPTY
-  // ===================================================
 
   emptyCard: {
     minHeight: 430,
@@ -1847,9 +2279,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  // ===================================================
   // LOADING
-  // ===================================================
 
   loadingContainer: {
     flex: 1,
@@ -1874,9 +2304,7 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  // ===================================================
   // MODAL
-  // ===================================================
 
   modalOverlay: {
     flex: 1,
@@ -1941,9 +2369,7 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
 
-  // ===================================================
   // MODAL STATUS
-  // ===================================================
 
   modalStatusCard: {
     padding: 14,
@@ -1956,6 +2382,7 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 14,
+    backgroundColor: WHITE,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1977,9 +2404,7 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  // ===================================================
-  // DETAIL SECTIONS
-  // ===================================================
+  // DETAIL
 
   detailSection: {
     marginTop: 20,
@@ -2004,9 +2429,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // ===================================================
   // STORE
-  // ===================================================
 
   storeDetailRow: {
     padding: 14,
@@ -2040,9 +2463,7 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  // ===================================================
   // TIMELINE
-  // ===================================================
 
   timeline: {
     padding: 14,
@@ -2150,9 +2571,7 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  // ===================================================
   // ITEMS
-  // ===================================================
 
   itemsCard: {
     borderRadius: 17,
@@ -2231,9 +2650,7 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  // ===================================================
   // INFORMATION
-  // ===================================================
 
   infoCard: {
     paddingHorizontal: 14,
@@ -2281,9 +2698,7 @@ const styles = StyleSheet.create({
     backgroundColor: BORDER,
   },
 
-  // ===================================================
   // TOTAL
-  // ===================================================
 
   totalCard: {
     marginTop: 20,
@@ -2317,32 +2732,5 @@ const styles = StyleSheet.create({
     backgroundColor: SOFT_RED,
     alignItems: "center",
     justifyContent: "center",
-  },
-
-  // ===================================================
-  // CANCEL
-  // ===================================================
-
-  cancelButton: {
-    marginTop: 12,
-    minHeight: 46,
-    borderRadius: 13,
-    backgroundColor: "#FFF5F5",
-    borderWidth: 1,
-    borderColor: "#F2CCCC",
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 7,
-  },
-
-  cancelButtonPressed: {
-    opacity: 0.7,
-  },
-
-  cancelButtonText: {
-    fontSize: 11.5,
-    color: DANGER,
-    fontWeight: "900",
   },
 });

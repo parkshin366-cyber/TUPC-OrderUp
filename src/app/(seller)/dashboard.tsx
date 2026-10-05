@@ -1,6 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +13,23 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
+import {
+  getMyProducts,
+  getMyStore,
+  getSellerOrders,
+  Order,
+  OrderStatus,
+  Product,
+  Store,
+} from "../../services/api";
+import {
+  computeDashboard,
+  describeChange,
+  describeItems,
+  formatChange,
+  formatOrderCode,
+  getCustomerName,
+} from "../../app/../services/sellerAnalytics";
 
 // =====================================================
 // COLORS
@@ -20,6 +41,18 @@ const TEXT = "#171717";
 const MUTED = "#737373";
 const BG = "#F7F7F8";
 const BORDER = "#E7E7E8";
+const GREEN = "#35A56A";
+const RED = "#B91C1C";
+
+// =====================================================
+// HELPERS
+// =====================================================
+
+const formatPeso = (value: number) =>
+  `₱${value.toLocaleString("en-PH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
 
 // =====================================================
 // TYPES
@@ -38,7 +71,7 @@ type OrderRowProps = {
   customer: string;
   item: string;
   amount: string;
-  status: "Preparing" | "Ready" | "Completed";
+  status: OrderStatus;
 };
 
 // =====================================================
@@ -107,6 +140,11 @@ function OrderRow({
   let statusTextStyle =
     styles.statusPreparingText;
 
+  if (status === "Pending") {
+    statusStyle = styles.statusPending;
+    statusTextStyle = styles.statusPendingText;
+  }
+
   if (status === "Ready") {
     statusStyle = styles.statusReady;
     statusTextStyle = styles.statusReadyText;
@@ -116,6 +154,12 @@ function OrderRow({
     statusStyle = styles.statusCompleted;
     statusTextStyle =
       styles.statusCompletedText;
+  }
+
+  if (status === "Cancelled") {
+    statusStyle = styles.statusCancelled;
+    statusTextStyle =
+      styles.statusCancelledText;
   }
 
   return (
@@ -138,7 +182,10 @@ function OrderRow({
             {customer}
           </Text>
 
-          <Text style={styles.orderItem}>
+          <Text
+            style={styles.orderItem}
+            numberOfLines={1}
+          >
             {item}
           </Text>
         </View>
@@ -174,7 +221,96 @@ function OrderRow({
 // =====================================================
 
 export default function SellerDashboard() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [store, setStore] = useState<Store | null>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // ===================================================
+  // LOAD DATA
+  // ===================================================
+
+  const loadData = useCallback(async () => {
+    if (!token) {
+      setOrders([]);
+      setProducts([]);
+      setStore(null);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    try {
+      // Orders are required. Products and store only fill in
+      // extra details, so the dashboard still works without them.
+      const [ordersResult, productsResult, storeResult] =
+        await Promise.allSettled([
+          getSellerOrders(token),
+          getMyProducts(token),
+          getMyStore(token),
+        ]);
+
+      if (ordersResult.status === "rejected") {
+        throw ordersResult.reason;
+      }
+
+      setOrders(ordersResult.value);
+
+      setProducts(
+        productsResult.status === "fulfilled"
+          ? productsResult.value
+          : []
+      );
+
+      setStore(
+        storeResult.status === "fulfilled"
+          ? storeResult.value
+          : null
+      );
+    } catch (error) {
+      console.error(
+        "LOAD DASHBOARD ERROR:",
+        error
+      );
+
+      Alert.alert(
+        "Unable to Load Dashboard",
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while loading your dashboard."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [token]);
+
+  // Reload whenever the tab is opened so numbers stay current.
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData();
+  }, [loadData]);
+
+  // ===================================================
+  // NUMBERS
+  // ===================================================
+
+  const summary = useMemo(
+    () => computeDashboard(orders, products),
+    [orders, products]
+  );
+
+  const weekMax = Math.max(...summary.week.chart, 0);
 
   // ===================================================
   // NAVIGATION
@@ -206,9 +342,57 @@ export default function SellerDashboard() {
   };
 
   const storeName =
+    store?.name?.trim() ||
     userData?.storeName?.trim() ||
     userData?.store?.name?.trim() ||
     "My Store";
+
+  const storeIsOpen = store ? store.isOpen !== false : null;
+
+  const storeStatusText =
+    storeIsOpen === null
+      ? "Store not set up yet"
+      : storeIsOpen
+      ? "Store is currently open"
+      : "Store is currently closed";
+
+  const storeStatusColor =
+    storeIsOpen === null
+      ? MUTED
+      : storeIsOpen
+      ? GREEN
+      : RED;
+
+  // ===================================================
+  // WEEKLY GROWTH
+  // ===================================================
+
+  const weekPercent = summary.week.changePercent;
+  const weekDown = weekPercent !== null && weekPercent < 0;
+
+  // ===================================================
+  // LOADING
+  // ===================================================
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={["top"]}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator
+            size="large"
+            color={CARDINAL}
+          />
+
+          <Text style={styles.loadingText}>
+            Loading dashboard...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // ===================================================
   // UI
@@ -222,6 +406,13 @@ export default function SellerDashboard() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={CARDINAL}
+          />
+        }
       >
         {/* =================================================
             HEADER
@@ -320,10 +511,18 @@ export default function SellerDashboard() {
               </Text>
 
               <View style={styles.onlineRow}>
-                <View style={styles.onlineDot} />
+                <View
+                  style={[
+                    styles.onlineDot,
+                    {
+                      backgroundColor:
+                        storeStatusColor,
+                    },
+                  ]}
+                />
 
                 <Text style={styles.onlineText}>
-                  Store is currently open
+                  {storeStatusText}
                 </Text>
               </View>
             </View>
@@ -359,32 +558,44 @@ export default function SellerDashboard() {
           <StatCard
             icon="cash-outline"
             label="Today's Sales"
-            value="₱4,850"
-            detail="+12.5% from yesterday"
+            value={formatPeso(summary.today.total)}
+            detail={describeChange(
+              summary.today.changePercent,
+              summary.today.total,
+              "yesterday"
+            )}
             iconColor={CARDINAL}
           />
 
           <StatCard
             icon="receipt-outline"
             label="Orders Today"
-            value="28"
-            detail="6 currently active"
+            value={String(summary.ordersToday)}
+            detail={`${summary.inProgress} in progress`}
             iconColor={GOLD}
           />
 
           <StatCard
             icon="fast-food-outline"
             label="Products"
-            value="42"
-            detail="4 need attention"
+            value={String(summary.productCount)}
+            detail={
+              summary.attentionCount > 0
+                ? `${summary.attentionCount} need attention`
+                : "Everything looks good"
+            }
             iconColor="#5B7C99"
           />
 
           <StatCard
             icon="alert-circle-outline"
             label="Low Stock"
-            value="4"
-            detail="Items below threshold"
+            value={String(summary.lowStockCount)}
+            detail={
+              summary.lowStockCount > 0
+                ? "Items running low"
+                : "Stock levels look good"
+            }
             iconColor="#C47A22"
           />
         </View>
@@ -516,45 +727,38 @@ export default function SellerDashboard() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.ordersCard}>
-          <OrderRow
-            order="#ORD-1028"
-            customer="Juan Dela Cruz"
-            item="Chicken Rice Meal × 2"
-            amount="₱240"
-            status="Preparing"
-          />
+        {summary.recent.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>
+              No orders yet
+            </Text>
 
-          <View style={styles.divider} />
+            <Text style={styles.emptyText}>
+              New customer orders will show up
+              here.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.ordersCard}>
+            {summary.recent.map((order, index) => (
+              <View key={order._id}>
+                {index > 0 && (
+                  <View style={styles.divider} />
+                )}
 
-          <OrderRow
-            order="#ORD-1027"
-            customer="Maria Santos"
-            item="Iced Coffee × 1"
-            amount="₱95"
-            status="Ready"
-          />
-
-          <View style={styles.divider} />
-
-          <OrderRow
-            order="#ORD-1026"
-            customer="Kevin Ramos"
-            item="Burger Meal × 1"
-            amount="₱175"
-            status="Completed"
-          />
-
-          <View style={styles.divider} />
-
-          <OrderRow
-            order="#ORD-1025"
-            customer="Angela Reyes"
-            item="Fries + Iced Tea"
-            amount="₱130"
-            status="Completed"
-          />
-        </View>
+                <OrderRow
+                  order={formatOrderCode(order)}
+                  customer={getCustomerName(order)}
+                  item={describeItems(order)}
+                  amount={formatPeso(
+                    Number(order.total) || 0
+                  )}
+                  status={order.status}
+                />
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* =================================================
             STORE PERFORMANCE
@@ -578,26 +782,36 @@ export default function SellerDashboard() {
               <Text
                 style={styles.performanceValue}
               >
-                ₱28,640
+                {formatPeso(summary.week.total)}
               </Text>
             </View>
 
             <View style={styles.growthBadge}>
-              <Ionicons
-                name="trending-up"
-                size={15}
-                color={CARDINAL}
-              />
+              {weekPercent !== null && (
+                <Ionicons
+                  name={
+                    weekDown
+                      ? "trending-down"
+                      : "trending-up"
+                  }
+                  size={15}
+                  color={CARDINAL}
+                  style={styles.growthIcon}
+                />
+              )}
 
               <Text style={styles.growthText}>
-                18.4%
+                {formatChange(
+                  weekPercent,
+                  summary.week.total
+                )}
               </Text>
             </View>
           </View>
 
           <View style={styles.chart}>
-            {[35, 55, 42, 70, 58, 82, 68].map(
-              (height, index) => (
+            {summary.week.chart.map(
+              (value, index) => (
                 <View
                   key={index}
                   style={styles.chartColumn}
@@ -606,9 +820,13 @@ export default function SellerDashboard() {
                     style={[
                       styles.chartBar,
                       {
-                        height,
+                        height:
+                          weekMax > 0
+                            ? (value / weekMax) * 90
+                            : 0,
                         opacity:
-                          index === 6
+                          index ===
+                          summary.week.chart.length - 1
                             ? 1
                             : 0.55,
                       },
@@ -618,11 +836,7 @@ export default function SellerDashboard() {
                   <Text
                     style={styles.chartLabel}
                   >
-                    {
-                      ["M", "T", "W", "T", "F", "S", "S"][
-                        index
-                      ]
-                    }
+                    {summary.week.labels[index]?.charAt(0)}
                   </Text>
                 </View>
               ),
@@ -639,10 +853,6 @@ export default function SellerDashboard() {
     </SafeAreaView>
   );
 }
-
-// =====================================================
-// STYLES
-// =====================================================
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -1163,5 +1373,63 @@ const styles = StyleSheet.create({
 
   footerSpace: {
     height: 15,
+  },
+
+  statusPending: {
+    backgroundColor: "#FFF3E3",
+  },
+
+  statusPendingText: {
+    color: "#A86616",
+  },
+
+  statusCancelled: {
+    backgroundColor: "#FDECEC",
+  },
+
+  statusCancelledText: {
+    color: "#B42318",
+  },
+
+  growthIcon: {
+    marginRight: 0,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: MUTED,
+    fontWeight: "600",
+  },
+
+  emptyCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingVertical: 26,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    marginBottom: 25,
+  },
+
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: TEXT,
+  },
+
+  emptyText: {
+    marginTop: 5,
+    fontSize: 11,
+    lineHeight: 16,
+    color: MUTED,
+    textAlign: "center",
   },
 });

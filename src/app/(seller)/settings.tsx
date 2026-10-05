@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -15,6 +16,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
+import {
+  getMyStore,
+  saveMyStore,
+  type Store,
+} from "../../services/api";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -32,29 +38,55 @@ export default function SellerSettings() {
   // AUTH
   // =====================================================
 
-  const { logout } = useAuth();
+  const { token, logout } = useAuth();
 
   // =====================================================
-  // SETTINGS STATE
+  // STORE
   // =====================================================
 
-  const [notifications, setNotifications] = useState(true);
-  const [orderAlerts, setOrderAlerts] = useState(true);
-  const [soundAlerts, setSoundAlerts] = useState(true);
-  const [biometric, setBiometric] = useState(false);
-  const [onlineStatus, setOnlineStatus] = useState(true);
-  const [autoAccept, setAutoAccept] = useState(false);
+  const [store, setStore] = useState<Store | null>(null);
+
+  const [loadingStore, setLoadingStore] =
+    useState(true);
+
+  const [savingStore, setSavingStore] =
+    useState(false);
+
+  const [storeName, setStoreName] = useState("");
+  const [description, setDescription] =
+    useState("");
+  const [location, setLocation] =
+    useState("");
+  const [openTime, setOpenTime] =
+    useState("7:00 AM");
+  const [closeTime, setCloseTime] =
+    useState("6:00 PM");
+  const [isOpen, setIsOpen] = useState(true);
+  const [pickupEnabled, setPickupEnabled] =
+    useState(true);
 
   // =====================================================
-  // PASSWORD STATE
+  // MODALS
   // =====================================================
+
+  const [storeModalVisible, setStoreModalVisible] =
+    useState(false);
 
   const [passwordModalVisible, setPasswordModalVisible] =
     useState(false);
 
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  // =====================================================
+  // PASSWORD UI
+  // =====================================================
+
+  const [currentPassword, setCurrentPassword] =
+    useState("");
+
+  const [newPassword, setNewPassword] =
+    useState("");
+
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
 
   const [showCurrentPassword, setShowCurrentPassword] =
     useState(false);
@@ -66,40 +98,244 @@ export default function SellerSettings() {
     useState(false);
 
   // =====================================================
-  // BIOMETRIC
+  // LOAD STORE
   // =====================================================
 
-  const handleBiometricToggle = (value: boolean) => {
-    if (!value) {
-      setBiometric(false);
+  const loadStore = async () => {
+    if (!token) {
+      setLoadingStore(false);
       return;
     }
 
-    Alert.alert(
-      "Enable Biometric Login",
-      "Use your device fingerprint or Face ID to sign in faster and securely.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Enable",
-          onPress: () => {
-            setBiometric(true);
+    try {
+      setLoadingStore(true);
 
-            Alert.alert(
-              "Biometric Enabled",
-              "Biometric login has been enabled for this seller account."
-            );
-          },
-        },
-      ]
-    );
+      const result = await getMyStore(token);
+
+      if (!result) {
+        setStore(null);
+
+        setStoreName("");
+        setDescription("");
+        setLocation("");
+        setOpenTime("7:00 AM");
+        setCloseTime("6:00 PM");
+        setIsOpen(true);
+        setPickupEnabled(true);
+
+        return;
+      }
+
+      setStore(result);
+
+      setStoreName(result.name ?? "");
+      setDescription(result.description ?? "");
+      setLocation(result.location ?? "");
+      setOpenTime(result.openTime ?? "7:00 AM");
+      setCloseTime(result.closeTime ?? "6:00 PM");
+      setIsOpen(result.isOpen ?? true);
+      setPickupEnabled(
+        result.pickupEnabled ?? true
+      );
+    } catch (error) {
+      console.error(
+        "Load seller store error:",
+        error
+      );
+
+      Alert.alert(
+        "Unable to Load Store",
+        error instanceof Error
+          ? error.message
+          : "Unable to load your store information."
+      );
+    } finally {
+      setLoadingStore(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStore();
+  }, [token]);
+
+  // =====================================================
+  // SAVE STORE
+  // =====================================================
+
+  const handleSaveStore = async () => {
+    if (!token) {
+      Alert.alert(
+        "Authentication Required",
+        "Please log in again."
+      );
+      return;
+    }
+
+    if (!storeName.trim()) {
+      Alert.alert(
+        "Store Name Required",
+        "Please enter your store name."
+      );
+      return;
+    }
+
+    try {
+      setSavingStore(true);
+
+      const savedStore = await saveMyStore(
+        token,
+        {
+          name: storeName.trim(),
+          description: description.trim(),
+          location: location.trim(),
+          openTime: openTime.trim(),
+          closeTime: closeTime.trim(),
+          isOpen,
+          pickupEnabled,
+        }
+      );
+
+      setStore(savedStore);
+
+      setStoreName(savedStore.name);
+      setDescription(
+        savedStore.description ?? ""
+      );
+      setLocation(savedStore.location ?? "");
+      setOpenTime(
+        savedStore.openTime ?? "7:00 AM"
+      );
+      setCloseTime(
+        savedStore.closeTime ?? "6:00 PM"
+      );
+      setIsOpen(savedStore.isOpen);
+      setPickupEnabled(
+        savedStore.pickupEnabled
+      );
+
+      setStoreModalVisible(false);
+
+      Alert.alert(
+        "Store Updated",
+        "Your store settings have been saved to the database."
+      );
+    } catch (error) {
+      console.error(
+        "Save seller store error:",
+        error
+      );
+
+      Alert.alert(
+        "Save Failed",
+        error instanceof Error
+          ? error.message
+          : "Unable to save your store settings."
+      );
+    } finally {
+      setSavingStore(false);
+    }
   };
 
   // =====================================================
-  // CHANGE PASSWORD
+  // STORE ONLINE / OFFLINE
+  // =====================================================
+
+  const handleStoreStatus = async (
+    value: boolean
+  ) => {
+    if (!token) {
+      return;
+    }
+
+    // Update UI immediately.
+    setIsOpen(value);
+
+    try {
+      const savedStore = await saveMyStore(
+        token,
+        {
+          name: storeName.trim(),
+          description,
+          location,
+          openTime,
+          closeTime,
+          isOpen: value,
+          pickupEnabled,
+        }
+      );
+
+      setStore(savedStore);
+
+      setIsOpen(savedStore.isOpen);
+    } catch (error) {
+      // Revert if backend save fails.
+      setIsOpen(!value);
+
+      console.error(
+        "Update store status error:",
+        error
+      );
+
+      Alert.alert(
+        "Update Failed",
+        error instanceof Error
+          ? error.message
+          : "Unable to update store status."
+      );
+    }
+  };
+
+  // =====================================================
+  // PICKUP
+  // =====================================================
+
+  const handlePickupToggle = async (
+    value: boolean
+  ) => {
+    if (!token) {
+      return;
+    }
+
+    setPickupEnabled(value);
+
+    try {
+      const savedStore = await saveMyStore(
+        token,
+        {
+          name: storeName.trim(),
+          description,
+          location,
+          openTime,
+          closeTime,
+          isOpen,
+          pickupEnabled: value,
+        }
+      );
+
+      setStore(savedStore);
+
+      setPickupEnabled(
+        savedStore.pickupEnabled
+      );
+    } catch (error) {
+      setPickupEnabled(!value);
+
+      console.error(
+        "Update pickup setting error:",
+        error
+      );
+
+      Alert.alert(
+        "Update Failed",
+        error instanceof Error
+          ? error.message
+          : "Unable to update pickup setting."
+      );
+    }
+  };
+
+  // =====================================================
+  // PASSWORD
   // =====================================================
 
   const handleSavePassword = () => {
@@ -135,25 +371,21 @@ export default function SellerSettings() {
       return;
     }
 
-    setPasswordModalVisible(false);
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setShowCurrentPassword(false);
-    setShowNewPassword(false);
-    setShowConfirmPassword(false);
+    /*
+     * IMPORTANT:
+     * We are not pretending this changed the database.
+     * Password API is not included in the current backend
+     * code we have connected.
+     */
 
     Alert.alert(
-      "Password Updated",
-      "Your seller account password has been updated successfully."
+      "Not Connected Yet",
+      "Password change needs a backend password endpoint before it can safely update MongoDB."
     );
   };
 
   // =====================================================
   // LOGOUT
-  //
-  // Clears AuthContext + SecureStore session,
-  // then returns to src/app/index.tsx.
   // =====================================================
 
   const handleLogout = () => {
@@ -170,23 +402,7 @@ export default function SellerSettings() {
           style: "destructive",
           onPress: async () => {
             try {
-              // -------------------------------------------
-              // CLEAR AUTH SESSION
-              //
-              // This should clear:
-              // - React auth state
-              // - stored token
-              // - stored user
-              // - Remember Me flag
-              // -------------------------------------------
-
               await logout();
-
-              // -------------------------------------------
-              // RETURN TO THE ACTUAL LOGIN SCREEN
-              //
-              // src/app/index.tsx
-              // -------------------------------------------
 
               router.replace("/");
             } catch (error) {
@@ -197,7 +413,7 @@ export default function SellerSettings() {
 
               Alert.alert(
                 "Logout Failed",
-                "Unable to sign out right now. Please try again."
+                "Unable to sign out right now."
               );
             }
           },
@@ -207,33 +423,32 @@ export default function SellerSettings() {
   };
 
   // =====================================================
-  // DEACTIVATE ACCOUNT
+  // LOADING
   // =====================================================
 
-  const handleDeactivate = () => {
-    Alert.alert(
-      "Deactivate Seller Account",
-      "Your store will no longer be visible to customers while your account is deactivated.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Deactivate",
-          style: "destructive",
-          onPress: () => {
-            setOnlineStatus(false);
+  if (loadingStore) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={["top"]}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator
+            size="large"
+            color={CARDINAL}
+          />
 
-            Alert.alert(
-              "Account Deactivated",
-              "Your seller account has been marked for deactivation."
-            );
-          },
-        },
-      ]
+          <Text style={styles.loadingText}>
+            Loading your store...
+          </Text>
+        </View>
+      </SafeAreaView>
     );
-  };
+  }
+
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
     <SafeAreaView
@@ -267,37 +482,66 @@ export default function SellerSettings() {
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={
+            styles.scrollContent
+          }
         >
           {/* =====================================================
-              ACCOUNT CARD
+              STORE CARD
           ===================================================== */}
 
           <View style={styles.accountCard}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                JS
-              </Text>
+              <Ionicons
+                name="storefront"
+                size={25}
+                color={WHITE}
+              />
             </View>
 
             <View style={styles.accountInfo}>
-              <Text style={styles.accountName}>
-                Juan's Food Hub
+              <Text
+                style={styles.accountName}
+                numberOfLines={1}
+              >
+                {store?.name ||
+                  "Store Not Created"}
               </Text>
 
-              <Text style={styles.accountUsername}>
-                @juansfoodhub
+              <Text
+                style={styles.accountUsername}
+                numberOfLines={2}
+              >
+                {store?.location ||
+                  "No store location yet"}
               </Text>
 
               <View style={styles.verifiedRow}>
                 <Ionicons
-                  name="checkmark-circle"
+                  name={
+                    store
+                      ? "checkmark-circle"
+                      : "alert-circle"
+                  }
                   size={15}
-                  color={GREEN}
+                  color={
+                    store ? GREEN : RED
+                  }
                 />
 
-                <Text style={styles.verifiedText}>
-                  Verified Seller
+                <Text
+                  style={[
+                    styles.verifiedText,
+                    {
+                      color: store
+                        ? GREEN
+                        : RED,
+                    },
+                  ]}
+                >
+                  {store
+                    ? "Store Connected"
+                    : "Store Not Created"}
                 </Text>
               </View>
             </View>
@@ -305,10 +549,7 @@ export default function SellerSettings() {
             <Pressable
               style={styles.editButton}
               onPress={() =>
-                Alert.alert(
-                  "Edit Profile",
-                  "Seller profile editing will be connected to the backend later."
-                )
+                setStoreModalVisible(true)
               }
             >
               <Ionicons
@@ -335,20 +576,26 @@ export default function SellerSettings() {
               iconColor={GREEN}
               title="Store Online"
               description={
-                onlineStatus
+                isOpen
                   ? "Customers can currently view and order from your store."
                   : "Your store is currently offline."
               }
               right={
                 <Switch
-                  value={onlineStatus}
-                  onValueChange={setOnlineStatus}
+                  value={isOpen}
+                  onValueChange={
+                    handleStoreStatus
+                  }
+                  disabled={
+                    savingStore ||
+                    !store
+                  }
                   trackColor={{
                     false: "#D6D6D6",
                     true: "#D98A98",
                   }}
                   thumbColor={
-                    onlineStatus
+                    isOpen
                       ? CARDINAL
                       : "#F4F4F4"
                   }
@@ -359,216 +606,35 @@ export default function SellerSettings() {
             <Divider />
 
             <SettingRow
-              icon="flash-outline"
+              icon="bag-handle-outline"
               iconBackground="#FFF6E4"
               iconColor="#B57A00"
-              title="Auto Accept Orders"
-              description="Automatically accept incoming orders."
+              title="Pickup Available"
+              description={
+                pickupEnabled
+                  ? "Customers can choose pickup for their orders."
+                  : "Pickup is currently disabled."
+              }
               right={
                 <Switch
-                  value={autoAccept}
-                  onValueChange={setAutoAccept}
+                  value={pickupEnabled}
+                  onValueChange={
+                    handlePickupToggle
+                  }
+                  disabled={
+                    savingStore ||
+                    !store
+                  }
                   trackColor={{
                     false: "#D6D6D6",
                     true: "#D98A98",
                   }}
                   thumbColor={
-                    autoAccept
+                    pickupEnabled
                       ? CARDINAL
                       : "#F4F4F4"
                   }
                 />
-              }
-            />
-          </View>
-
-          {/* =====================================================
-              ACCOUNT
-          ===================================================== */}
-
-          <SectionTitle
-            icon="person-outline"
-            title="Account"
-          />
-
-          <View style={styles.card}>
-            <ActionRow
-              icon="person-circle-outline"
-              title="Account Information"
-              description="Name, username, email and contact details"
-              onPress={() =>
-                Alert.alert(
-                  "Account Information",
-                  "Seller account information will be editable here."
-                )
-              }
-            />
-
-            <Divider />
-
-            <ActionRow
-              icon="lock-closed-outline"
-              title="Change Password"
-              description="Update your seller account password"
-              onPress={() =>
-                setPasswordModalVisible(true)
-              }
-            />
-
-            <Divider />
-
-            <ActionRow
-              icon="shield-checkmark-outline"
-              title="Security"
-              description="Manage account security and verification"
-              onPress={() =>
-                Alert.alert(
-                  "Security",
-                  "Additional seller security controls will be connected here."
-                )
-              }
-            />
-          </View>
-
-          {/* =====================================================
-              NOTIFICATIONS
-          ===================================================== */}
-
-          <SectionTitle
-            icon="notifications-outline"
-            title="Notifications"
-          />
-
-          <View style={styles.card}>
-            <SettingRow
-              icon="notifications-outline"
-              iconBackground="#FBECEE"
-              iconColor={CARDINAL}
-              title="Push Notifications"
-              description="Receive important seller notifications."
-              right={
-                <Switch
-                  value={notifications}
-                  onValueChange={setNotifications}
-                  trackColor={{
-                    false: "#D6D6D6",
-                    true: "#D98A98",
-                  }}
-                  thumbColor={
-                    notifications
-                      ? CARDINAL
-                      : "#F4F4F4"
-                  }
-                />
-              }
-            />
-
-            <Divider />
-
-            <SettingRow
-              icon="receipt-outline"
-              iconBackground="#F3EDF7"
-              iconColor="#72558A"
-              title="Order Alerts"
-              description="Get notified when customers place orders."
-              right={
-                <Switch
-                  value={orderAlerts}
-                  onValueChange={setOrderAlerts}
-                  trackColor={{
-                    false: "#D6D6D6",
-                    true: "#D98A98",
-                  }}
-                  thumbColor={
-                    orderAlerts
-                      ? CARDINAL
-                      : "#F4F4F4"
-                  }
-                />
-              }
-            />
-
-            <Divider />
-
-            <SettingRow
-              icon="volume-high-outline"
-              iconBackground="#EEF4FB"
-              iconColor="#386A9F"
-              title="Sound Alerts"
-              description="Play a sound for new order notifications."
-              right={
-                <Switch
-                  value={soundAlerts}
-                  onValueChange={setSoundAlerts}
-                  trackColor={{
-                    false: "#D6D6D6",
-                    true: "#D98A98",
-                  }}
-                  thumbColor={
-                    soundAlerts
-                      ? CARDINAL
-                      : "#F4F4F4"
-                  }
-                />
-              }
-            />
-          </View>
-
-          {/* =====================================================
-              LOGIN & SECURITY
-          ===================================================== */}
-
-          <SectionTitle
-            icon="finger-print-outline"
-            title="Login & Security"
-          />
-
-          <View style={styles.card}>
-            <SettingRow
-              icon="finger-print-outline"
-              iconBackground="#FBECEE"
-              iconColor={CARDINAL}
-              title="Biometric Login"
-              description="Use fingerprint or Face ID for faster login."
-              right={
-                <Switch
-                  value={biometric}
-                  onValueChange={handleBiometricToggle}
-                  trackColor={{
-                    false: "#D6D6D6",
-                    true: "#D98A98",
-                  }}
-                  thumbColor={
-                    biometric
-                      ? CARDINAL
-                      : "#F4F4F4"
-                  }
-                />
-              }
-            />
-
-            <Divider />
-
-            <ActionRow
-              icon="key-outline"
-              title="Password & Authentication"
-              description="Manage your password and authentication methods"
-              onPress={() =>
-                setPasswordModalVisible(true)
-              }
-            />
-
-            <Divider />
-
-            <ActionRow
-              icon="phone-portrait-outline"
-              title="Trusted Devices"
-              description="View devices currently signed in to your account"
-              onPress={() =>
-                Alert.alert(
-                  "Trusted Devices",
-                  "Device management will be connected to the backend later."
-                )
               }
             />
           </View>
@@ -586,11 +652,13 @@ export default function SellerSettings() {
             <ActionRow
               icon="storefront-outline"
               title="Store Settings"
-              description="Manage your store information and appearance"
+              description={
+                store
+                  ? "Manage your store name, location, schedule and pickup."
+                  : "Create and configure your store."
+              }
               onPress={() =>
-                router.push(
-                  "/(seller)/store"
-                )
+                setStoreModalVisible(true)
               }
             />
 
@@ -617,6 +685,40 @@ export default function SellerSettings() {
                 router.push(
                   "/(seller)/products"
                 )
+              }
+            />
+          </View>
+
+          {/* =====================================================
+              ACCOUNT
+          ===================================================== */}
+
+          <SectionTitle
+            icon="person-outline"
+            title="Account"
+          />
+
+          <View style={styles.card}>
+            <ActionRow
+              icon="person-circle-outline"
+              title="Account Information"
+              description="Manage your seller account information"
+              onPress={() =>
+                Alert.alert(
+                  "Account Information",
+                  "Your seller account is managed through the account system."
+                )
+              }
+            />
+
+            <Divider />
+
+            <ActionRow
+              icon="lock-closed-outline"
+              title="Change Password"
+              description="Update your seller account password"
+              onPress={() =>
+                setPasswordModalVisible(true)
               }
             />
           </View>
@@ -673,57 +775,15 @@ export default function SellerSettings() {
           </View>
 
           {/* =====================================================
-              DANGER ZONE
+              LOGOUT
           ===================================================== */}
 
           <SectionTitle
-            icon="warning-outline"
-            title="Account"
+            icon="log-out-outline"
+            title="Session"
           />
 
           <View style={styles.dangerCard}>
-            {/* DEACTIVATE */}
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.dangerRow,
-                pressed && styles.pressed,
-              ]}
-              onPress={handleDeactivate}
-            >
-              <View style={styles.dangerIcon}>
-                <Ionicons
-                  name="pause-circle-outline"
-                  size={21}
-                  color={RED}
-                />
-              </View>
-
-              <View
-                style={styles.dangerTextContainer}
-              >
-                <Text style={styles.dangerTitle}>
-                  Deactivate Seller Account
-                </Text>
-
-                <Text
-                  style={styles.dangerDescription}
-                >
-                  Temporarily disable your seller account and store.
-                </Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={19}
-                color="#B9B9B9"
-              />
-            </Pressable>
-
-            <View style={styles.dangerDivider} />
-
-            {/* LOGOUT */}
-
             <Pressable
               style={({ pressed }) => [
                 styles.dangerRow,
@@ -790,7 +850,192 @@ export default function SellerSettings() {
       </View>
 
       {/* =====================================================
-          CHANGE PASSWORD MODAL
+          STORE SETTINGS MODAL
+      ===================================================== */}
+
+      <Modal
+        visible={storeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() =>
+          setStoreModalVisible(false)
+        }
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() =>
+              setStoreModalVisible(false)
+            }
+          />
+
+          <View style={styles.storeModalContainer}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalEyebrow}>
+                  STORE MANAGEMENT
+                </Text>
+
+                <Text style={styles.modalTitle}>
+                  Store Settings
+                </Text>
+              </View>
+
+              <Pressable
+                style={styles.closeButton}
+                onPress={() =>
+                  setStoreModalVisible(false)
+                }
+              >
+                <Ionicons
+                  name="close"
+                  size={22}
+                  color={TEXT}
+                />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <InputField
+                label="Store Name"
+                value={storeName}
+                onChangeText={setStoreName}
+                placeholder="Enter store name"
+              />
+
+              <InputField
+                label="Description"
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Describe your store"
+                multiline
+              />
+
+              <InputField
+                label="Location"
+                value={location}
+                onChangeText={setLocation}
+                placeholder="Enter store location"
+              />
+
+              <View style={styles.timeRow}>
+                <View style={styles.timeField}>
+                  <InputField
+                    label="Opening Time"
+                    value={openTime}
+                    onChangeText={setOpenTime}
+                    placeholder="7:00 AM"
+                  />
+                </View>
+
+                <View
+                  style={styles.timeFieldSpacing}
+                />
+
+                <View style={styles.timeField}>
+                  <InputField
+                    label="Closing Time"
+                    value={closeTime}
+                    onChangeText={setCloseTime}
+                    placeholder="6:00 PM"
+                  />
+                </View>
+              </View>
+
+              <SettingRow
+                icon="radio-outline"
+                iconBackground="#EAF7F0"
+                iconColor={GREEN}
+                title="Store Online"
+                description={
+                  isOpen
+                    ? "Customers can order from your store."
+                    : "Customers cannot order while offline."
+                }
+                right={
+                  <Switch
+                    value={isOpen}
+                    onValueChange={setIsOpen}
+                    trackColor={{
+                      false: "#D6D6D6",
+                      true: "#D98A98",
+                    }}
+                    thumbColor={
+                      isOpen
+                        ? CARDINAL
+                        : "#F4F4F4"
+                    }
+                  />
+                }
+              />
+
+              <SettingRow
+                icon="bag-handle-outline"
+                iconBackground="#FFF6E4"
+                iconColor="#B57A00"
+                title="Pickup Available"
+                description="Allow customers to choose pickup."
+                right={
+                  <Switch
+                    value={pickupEnabled}
+                    onValueChange={
+                      setPickupEnabled
+                    }
+                    trackColor={{
+                      false: "#D6D6D6",
+                      true: "#D98A98",
+                    }}
+                    thumbColor={
+                      pickupEnabled
+                        ? CARDINAL
+                        : "#F4F4F4"
+                    }
+                  />
+                }
+              />
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.saveButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleSaveStore}
+                disabled={savingStore}
+              >
+                {savingStore ? (
+                  <ActivityIndicator
+                    color={WHITE}
+                  />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="save-outline"
+                      size={18}
+                      color={WHITE}
+                    />
+
+                    <Text
+                      style={
+                        styles.saveButtonText
+                      }
+                    >
+                      Save Store Settings
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* =====================================================
+          PASSWORD MODAL
       ===================================================== */}
 
       <Modal
@@ -837,14 +1082,19 @@ export default function SellerSettings() {
               </Pressable>
             </View>
 
-            <Text style={styles.modalDescription}>
-              Create a strong password with at least 8 characters.
+            <Text
+              style={styles.modalDescription}
+            >
+              Password change requires the backend
+              password endpoint.
             </Text>
 
             <PasswordField
               label="Current Password"
               value={currentPassword}
-              onChangeText={setCurrentPassword}
+              onChangeText={
+                setCurrentPassword
+              }
               secure={!showCurrentPassword}
               onToggle={() =>
                 setShowCurrentPassword(
@@ -872,7 +1122,9 @@ export default function SellerSettings() {
             <PasswordField
               label="Confirm New Password"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={
+                setConfirmPassword
+              }
               secure={!showConfirmPassword}
               onToggle={() =>
                 setShowConfirmPassword(
@@ -883,51 +1135,25 @@ export default function SellerSettings() {
               show={showConfirmPassword}
             />
 
-            <View style={styles.passwordHint}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.saveButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={handleSavePassword}
+            >
               <Ionicons
-                name="information-circle-outline"
-                size={17}
-                color={CARDINAL}
+                name="lock-closed-outline"
+                size={18}
+                color={WHITE}
               />
 
-              <Text style={styles.passwordHintText}>
-                Use a password that you do not use on other accounts.
+              <Text
+                style={styles.saveButtonText}
+              >
+                Update Password
               </Text>
-            </View>
-
-            <View style={styles.modalActions}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.cancelButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() =>
-                  setPasswordModalVisible(false)
-                }
-              >
-                <Text style={styles.cancelButtonText}>
-                  Cancel
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.updateButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleSavePassword}
-              >
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={18}
-                  color={WHITE}
-                />
-
-                <Text style={styles.updateButtonText}>
-                  Update Password
-                </Text>
-              </Pressable>
-            </View>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -935,9 +1161,9 @@ export default function SellerSettings() {
   );
 }
 
-/* =====================================================
-   SECTION TITLE
-===================================================== */
+// =====================================================
+// SECTION TITLE
+// =====================================================
 
 function SectionTitle({
   icon,
@@ -961,9 +1187,9 @@ function SectionTitle({
   );
 }
 
-/* =====================================================
-   SETTING ROW
-===================================================== */
+// =====================================================
+// SETTING ROW
+// =====================================================
 
 function SettingRow({
   icon,
@@ -986,7 +1212,8 @@ function SettingRow({
         style={[
           styles.settingIcon,
           {
-            backgroundColor: iconBackground,
+            backgroundColor:
+              iconBackground,
           },
         ]}
       >
@@ -1002,7 +1229,9 @@ function SettingRow({
           {title}
         </Text>
 
-        <Text style={styles.settingDescription}>
+        <Text
+          style={styles.settingDescription}
+        >
           {description}
         </Text>
       </View>
@@ -1014,9 +1243,9 @@ function SettingRow({
   );
 }
 
-/* =====================================================
-   ACTION ROW
-===================================================== */
+// =====================================================
+// ACTION ROW
+// =====================================================
 
 function ActionRow({
   icon,
@@ -1045,12 +1274,16 @@ function ActionRow({
         />
       </View>
 
-      <View style={styles.actionTextContainer}>
+      <View
+        style={styles.actionTextContainer}
+      >
         <Text style={styles.actionTitle}>
           {title}
         </Text>
 
-        <Text style={styles.actionDescription}>
+        <Text
+          style={styles.actionDescription}
+        >
           {description}
         </Text>
       </View>
@@ -1064,17 +1297,51 @@ function ActionRow({
   );
 }
 
-/* =====================================================
-   DIVIDER
-===================================================== */
+// =====================================================
+// INPUT FIELD
+// =====================================================
 
-function Divider() {
-  return <View style={styles.divider} />;
+function InputField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  multiline?: boolean;
+}) {
+  return (
+    <View style={styles.inputContainer}>
+      <Text style={styles.inputLabel}>
+        {label}
+      </Text>
+
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#A5A5A5"
+        multiline={multiline}
+        textAlignVertical={
+          multiline ? "top" : "center"
+        }
+        style={[
+          styles.textInput,
+          multiline &&
+            styles.multilineInput,
+        ]}
+      />
+    </View>
+  );
 }
 
-/* =====================================================
-   PASSWORD FIELD
-===================================================== */
+// =====================================================
+// PASSWORD FIELD
+// =====================================================
 
 function PasswordField({
   label,
@@ -1135,9 +1402,17 @@ function PasswordField({
   );
 }
 
-/* =====================================================
-   STYLES
-===================================================== */
+// =====================================================
+// DIVIDER
+// =====================================================
+
+function Divider() {
+  return <View style={styles.divider} />;
+}
+
+// =====================================================
+// STYLES
+// =====================================================
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -1148,6 +1423,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: BACKGROUND,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: BACKGROUND,
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: MUTED,
   },
 
   header: {
@@ -1191,8 +1479,6 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
   },
 
-  /* ACCOUNT */
-
   accountCard: {
     backgroundColor: WHITE,
     borderRadius: 20,
@@ -1213,12 +1499,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 3,
     borderColor: "#F4DDE1",
-  },
-
-  avatarText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: WHITE,
   },
 
   accountInfo: {
@@ -1260,8 +1540,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  /* SECTION */
-
   sectionTitleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1274,10 +1552,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: TEXT,
     marginLeft: 7,
-    letterSpacing: 0.1,
   },
-
-  /* CARD */
 
   card: {
     backgroundColor: WHITE,
@@ -1293,8 +1568,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#F0F0F1",
     marginLeft: 68,
   },
-
-  /* SETTING */
 
   settingRow: {
     minHeight: 80,
@@ -1334,8 +1607,6 @@ const styles = StyleSheet.create({
   settingRight: {
     marginLeft: 5,
   },
-
-  /* ACTION */
 
   actionRow: {
     minHeight: 75,
@@ -1377,8 +1648,6 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  /* DANGER */
-
   dangerCard: {
     backgroundColor: WHITE,
     borderRadius: 18,
@@ -1396,15 +1665,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  dangerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: "#FFF0F1",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
   logoutIcon: {
     width: 42,
     height: 42,
@@ -1420,12 +1680,6 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
 
-  dangerTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: RED,
-  },
-
   logoutTitle: {
     fontSize: 14,
     fontWeight: "700",
@@ -1438,14 +1692,6 @@ const styles = StyleSheet.create({
     color: MUTED,
     marginTop: 3,
   },
-
-  dangerDivider: {
-    height: 1,
-    backgroundColor: "#F2E4E6",
-    marginLeft: 68,
-  },
-
-  /* FOOTER */
 
   footer: {
     alignItems: "center",
@@ -1482,8 +1728,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  /* MODAL */
-
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
@@ -1492,6 +1736,16 @@ const styles = StyleSheet.create({
   modalBackdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.48)",
+  },
+
+  storeModalContainer: {
+    backgroundColor: WHITE,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 25,
+    maxHeight: "90%",
   },
 
   modalContainer: {
@@ -1516,6 +1770,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 16,
   },
 
   modalEyebrow: {
@@ -1541,16 +1796,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  modalDescription: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: MUTED,
-    marginTop: 8,
-    marginBottom: 17,
-  },
-
-  passwordFieldContainer: {
-    marginBottom: 13,
+  inputContainer: {
+    marginBottom: 14,
   },
 
   inputLabel: {
@@ -1558,6 +1805,63 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: TEXT,
     marginBottom: 7,
+  },
+
+  textInput: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 14,
+    backgroundColor: "#FAFAFA",
+    paddingHorizontal: 14,
+    fontSize: 13,
+    color: TEXT,
+  },
+
+  multilineInput: {
+    minHeight: 85,
+    paddingTop: 13,
+  },
+
+  timeRow: {
+    flexDirection: "row",
+  },
+
+  timeField: {
+    flex: 1,
+  },
+
+  timeFieldSpacing: {
+    width: 10,
+  },
+
+  saveButton: {
+    minHeight: 49,
+    borderRadius: 14,
+    backgroundColor: CARDINAL,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+
+  saveButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: WHITE,
+  },
+
+  modalDescription: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: MUTED,
+    marginBottom: 17,
+  },
+
+  passwordFieldContainer: {
+    marginBottom: 13,
   },
 
   passwordInputWrapper: {
@@ -1577,61 +1881,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: TEXT,
     marginLeft: 9,
-  },
-
-  passwordHint: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#FBECEE",
-    borderRadius: 12,
-    padding: 11,
-    marginTop: 2,
-    marginBottom: 18,
-  },
-
-  passwordHintText: {
-    flex: 1,
-    fontSize: 10,
-    lineHeight: 15,
-    color: CARDINAL_DARK,
-    marginLeft: 7,
-  },
-
-  modalActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
-
-  cancelButton: {
-    flex: 1,
-    height: 49,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  cancelButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: TEXT,
-  },
-
-  updateButton: {
-    flex: 1.45,
-    height: 49,
-    borderRadius: 14,
-    backgroundColor: CARDINAL,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-  },
-
-  updateButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: WHITE,
   },
 });

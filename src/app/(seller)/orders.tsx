@@ -1,14 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { useAuth } from "../../context/AuthContext";
+import {
+  getSellerOrders,
+  Order,
+  OrderStatus,
+  updateOrderStatus,
+} from "../../services/api";
 
 const CARDINAL = "#A6192E";
 const TEXT = "#171717";
@@ -16,71 +26,9 @@ const MUTED = "#737373";
 const BG = "#F7F7F8";
 const BORDER = "#E7E7E8";
 
-type OrderStatus =
-  | "Pending"
-  | "Preparing"
-  | "Ready"
-  | "Completed";
+type Filter = "All" | OrderStatus;
 
-type Order = {
-  id: string;
-  customer: string;
-  item: string;
-  quantity: number;
-  amount: number;
-  time: string;
-  status: OrderStatus;
-};
-
-const INITIAL_ORDERS: Order[] = [
-  {
-    id: "#ORD-1029",
-    customer: "Joshua Belen",
-    item: "Chicken Rice Meal",
-    quantity: 2,
-    amount: 240,
-    time: "2 mins ago",
-    status: "Pending",
-  },
-  {
-    id: "#ORD-1028",
-    customer: "Juan Dela Cruz",
-    item: "Chicken Rice Meal",
-    quantity: 2,
-    amount: 240,
-    time: "8 mins ago",
-    status: "Preparing",
-  },
-  {
-    id: "#ORD-1027",
-    customer: "Maria Santos",
-    item: "Iced Coffee",
-    quantity: 1,
-    amount: 95,
-    time: "15 mins ago",
-    status: "Ready",
-  },
-  {
-    id: "#ORD-1026",
-    customer: "Kevin Ramos",
-    item: "Burger Meal",
-    quantity: 1,
-    amount: 175,
-    time: "32 mins ago",
-    status: "Completed",
-  },
-  {
-    id: "#ORD-1025",
-    customer: "Angela Reyes",
-    item: "Fries + Iced Tea",
-    quantity: 1,
-    amount: 130,
-    time: "48 mins ago",
-    status: "Completed",
-  },
-];
-
-const FILTERS: Array<"All" | OrderStatus> = [
+const FILTERS: Filter[] = [
   "All",
   "Pending",
   "Preparing",
@@ -92,12 +40,18 @@ function getStatusBackground(status: OrderStatus) {
   switch (status) {
     case "Pending":
       return "#FFF3E3";
+
     case "Preparing":
       return "#F1EAF6";
+
     case "Ready":
       return "#E8F3FA";
+
     case "Completed":
       return "#E9F7EF";
+
+    case "Cancelled":
+      return "#FDECEC";
   }
 }
 
@@ -105,12 +59,36 @@ function getStatusColor(status: OrderStatus) {
   switch (status) {
     case "Pending":
       return "#A86616";
+
     case "Preparing":
       return "#77508C";
+
     case "Ready":
       return "#39708E";
+
     case "Completed":
       return "#28794D";
+
+    case "Cancelled":
+      return "#B42318";
+  }
+}
+
+function getNextStatus(
+  status: OrderStatus
+): OrderStatus | null {
+  switch (status) {
+    case "Pending":
+      return "Preparing";
+
+    case "Preparing":
+      return "Ready";
+
+    case "Ready":
+      return "Completed";
+
+    default:
+      return null;
   }
 }
 
@@ -118,19 +96,206 @@ function getNextAction(status: OrderStatus) {
   switch (status) {
     case "Pending":
       return "Accept Order";
+
     case "Preparing":
       return "Mark as Ready";
+
     case "Ready":
       return "Complete Order";
+
     case "Completed":
       return "Completed";
+
+    case "Cancelled":
+      return "Cancelled";
+  }
+}
+
+function getCustomerName(order: Order) {
+  if (
+    typeof order.customer === "object" &&
+    order.customer !== null
+  ) {
+    const firstName = order.customer.firstName ?? "";
+    const lastName = order.customer.lastName ?? "";
+
+    const fullName =
+      `${firstName} ${lastName}`.trim();
+
+    if (fullName) {
+      return fullName;
+    }
+
+    return (
+      order.customer.username ||
+      order.customer.email ||
+      "Customer"
+    );
+  }
+
+  return order.customer || "Customer";
+}
+
+function getOrderItemSummary(order: Order) {
+  if (!order.items || order.items.length === 0) {
+    return {
+      itemName: "No items",
+      quantity: 0,
+    };
+  }
+
+  if (order.items.length === 1) {
+    return {
+      itemName: order.items[0].name,
+      quantity: order.items[0].quantity,
+    };
+  }
+
+  return {
+    itemName: `${order.items[0].name} + ${
+      order.items.length - 1
+    } more`,
+    quantity: order.items.reduce(
+      (total, item) => total + item.quantity,
+      0
+    ),
+  };
+}
+
+function formatOrderTime(createdAt: string) {
+  if (!createdAt) {
+    return "";
+  }
+
+  const date = new Date(createdAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(
+    diffMs / (1000 * 60)
+  );
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} min${
+      diffMinutes !== 1 ? "s" : ""
+    } ago`;
+  }
+
+  const diffHours = Math.floor(
+    diffMinutes / 60
+  );
+
+  if (diffHours < 24) {
+    return `${diffHours} hour${
+      diffHours !== 1 ? "s" : ""
+    } ago`;
+  }
+
+  const diffDays = Math.floor(
+    diffHours / 24
+  );
+
+  if (diffDays < 7) {
+    return `${diffDays} day${
+      diffDays !== 1 ? "s" : ""
+    } ago`;
+  }
+
+  return date.toLocaleDateString();
+}
+
+function formatPaymentMethod(
+  paymentMethod: Order["paymentMethod"]
+) {
+  switch (paymentMethod) {
+    case "gcash":
+      return "GCash";
+
+    case "cash":
+      return "Cash Payment";
+
+    default:
+      return "Payment";
   }
 }
 
 export default function SellerOrders() {
-  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+  const { token } = useAuth();
+
+  const [orders, setOrders] = useState<Order[]>([]);
   const [selectedFilter, setSelectedFilter] =
-    useState<"All" | OrderStatus>("All");
+    useState<Filter>("All");
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [updatingOrderId, setUpdatingOrderId] =
+    useState<string | null>(null);
+
+  const loadOrders = useCallback(
+    async (showLoader = true) => {
+      if (!token) {
+        setOrders([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      try {
+        if (showLoader) {
+          setLoading(true);
+        }
+
+        const sellerOrders =
+          await getSellerOrders(token);
+
+        setOrders(sellerOrders);
+      } catch (error) {
+        console.error(
+          "LOAD SELLER ORDERS ERROR:",
+          error
+        );
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to load seller orders.";
+
+        Alert.alert(
+          "Unable to Load Orders",
+          message
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [token]
+  );
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadOrders(false);
+  }, [loadOrders]);
+
+  /*
+   * Load real orders from MongoDB
+   */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useState(() => {
+    loadOrders();
+  });
 
   const filteredOrders = useMemo(() => {
     if (selectedFilter === "All") {
@@ -138,89 +303,124 @@ export default function SellerOrders() {
     }
 
     return orders.filter(
-      (order) => order.status === selectedFilter,
+      (order) =>
+        order.status === selectedFilter
     );
   }, [orders, selectedFilter]);
 
   const pendingCount = orders.filter(
-    (order) => order.status === "Pending",
+    (order) => order.status === "Pending"
   ).length;
 
   const activeCount = orders.filter(
     (order) =>
       order.status === "Preparing" ||
-      order.status === "Ready",
+      order.status === "Ready"
   ).length;
 
   const completedCount = orders.filter(
-    (order) => order.status === "Completed",
+    (order) => order.status === "Completed"
   ).length;
 
-  const handleOrderAction = (orderId: string) => {
-    const currentOrder = orders.find(
-      (order) => order.id === orderId,
-    );
+  const handleOrderAction = async (
+    order: Order
+  ) => {
+    const nextStatus =
+      getNextStatus(order.status);
 
-    if (!currentOrder) {
+    if (!nextStatus) {
       return;
     }
 
-    if (currentOrder.status === "Completed") {
+    if (!token) {
+      Alert.alert(
+        "Session Expired",
+        "Please log in again."
+      );
       return;
     }
 
-    let nextStatus: OrderStatus;
+    try {
+      setUpdatingOrderId(order._id);
 
-    switch (currentOrder.status) {
-      case "Pending":
-        nextStatus = "Preparing";
-        break;
+      const updatedOrder =
+        await updateOrderStatus(
+          token,
+          order._id,
+          nextStatus
+        );
 
-      case "Preparing":
-        nextStatus = "Ready";
-        break;
+      setOrders((currentOrders) =>
+        currentOrders.map(
+          (currentOrder) =>
+            currentOrder._id ===
+            updatedOrder._id
+              ? updatedOrder
+              : currentOrder
+        )
+      );
 
-      case "Ready":
-        nextStatus = "Completed";
-        break;
+      Alert.alert(
+        "Order Updated",
+        `Order #${order._id.slice(
+          -6
+        )} is now ${updatedOrder.status}.`
+      );
+    } catch (error) {
+      console.error(
+        "UPDATE ORDER STATUS ERROR:",
+        error
+      );
 
-      default:
-        return;
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to update order status.";
+
+      Alert.alert(
+        "Update Failed",
+        message
+      );
+    } finally {
+      setUpdatingOrderId(null);
     }
-
-    setOrders((currentOrders) =>
-      currentOrders.map((order) =>
-        order.id === orderId
-          ? {
-              ...order,
-              status: nextStatus,
-            }
-          : order,
-      ),
-    );
-
-    Alert.alert(
-      "Order Updated",
-      `${currentOrder.id} is now ${nextStatus}.`,
-    );
   };
 
   const renderOrder = (order: Order) => {
-    const statusBackground = getStatusBackground(
-      order.status,
-    );
+    const statusBackground =
+      getStatusBackground(order.status);
 
-    const statusColor = getStatusColor(order.status);
+    const statusColor =
+      getStatusColor(order.status);
+
+    const {
+      itemName,
+      quantity,
+    } = getOrderItemSummary(order);
+
+    const isUpdating =
+      updatingOrderId === order._id;
+
+    const isCompleted =
+      order.status === "Completed";
+
+    const isCancelled =
+      order.status === "Cancelled";
 
     return (
-      <View key={order.id} style={styles.orderCard}>
+      <View
+        key={order._id}
+        style={styles.orderCard}
+      >
         {/* ORDER HEADER */}
         <View style={styles.orderHeader}>
-          <View>
-            <Text style={styles.orderId}>{order.id}</Text>
+          <View style={styles.orderHeaderLeft}>
+            <Text style={styles.orderId}>
+              #{order._id.slice(-6).toUpperCase()}
+            </Text>
 
             <Text style={styles.orderTime}>
-              {order.time}
+              {formatOrderTime(order.createdAt)}
             </Text>
           </View>
 
@@ -228,7 +428,8 @@ export default function SellerOrders() {
             style={[
               styles.statusBadge,
               {
-                backgroundColor: statusBackground,
+                backgroundColor:
+                  statusBackground,
               },
             ]}
           >
@@ -263,7 +464,7 @@ export default function SellerOrders() {
             </Text>
 
             <Text style={styles.customerName}>
-              {order.customer}
+              {getCustomerName(order)}
             </Text>
           </View>
         </View>
@@ -279,17 +480,20 @@ export default function SellerOrders() {
           </View>
 
           <View style={styles.itemInfo}>
-            <Text style={styles.itemName}>
-              {order.item}
+            <Text
+              style={styles.itemName}
+              numberOfLines={1}
+            >
+              {itemName}
             </Text>
 
             <Text style={styles.quantity}>
-              Quantity: {order.quantity}
+              Quantity: {quantity}
             </Text>
           </View>
 
           <Text style={styles.itemAmount}>
-            ₱{order.amount.toLocaleString()}
+            ₱{Number(order.total).toLocaleString()}
           </Text>
         </View>
 
@@ -303,51 +507,145 @@ export default function SellerOrders() {
             />
 
             <Text style={styles.paymentText}>
-              Cash Payment
+              {formatPaymentMethod(
+                order.paymentMethod
+              )}
             </Text>
           </View>
 
           <Text style={styles.totalLabel}>
             Total:{" "}
             <Text style={styles.totalAmount}>
-              ₱{order.amount.toLocaleString()}
+              ₱
+              {Number(
+                order.total
+              ).toLocaleString()}
             </Text>
           </Text>
         </View>
 
+        {/* PICKUP LOCATION */}
+        {!!order.pickupLocation && (
+          <View style={styles.pickupRow}>
+            <Ionicons
+              name="location-outline"
+              size={15}
+              color={MUTED}
+            />
+
+            <Text
+              style={styles.pickupText}
+              numberOfLines={1}
+            >
+              {order.pickupLocation}
+            </Text>
+          </View>
+        )}
+
         {/* ACTION */}
-        {order.status !== "Completed" ? (
+        {!isCompleted &&
+        !isCancelled ? (
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleOrderAction(order.id)}
+            style={[
+              styles.actionButton,
+              isUpdating &&
+                styles.actionButtonDisabled,
+            ]}
+            onPress={() =>
+              handleOrderAction(order)
+            }
+            disabled={isUpdating}
             activeOpacity={0.85}
           >
-            <Text style={styles.actionButtonText}>
-              {getNextAction(order.status)}
-            </Text>
+            {isUpdating ? (
+              <>
+                <ActivityIndicator
+                  size="small"
+                  color="#FFFFFF"
+                />
 
-            <Ionicons
-              name="arrow-forward"
-              size={18}
-              color="#FFFFFF"
-            />
+                <Text
+                  style={styles.actionButtonText}
+                >
+                  Updating...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text
+                  style={styles.actionButtonText}
+                >
+                  {getNextAction(
+                    order.status
+                  )}
+                </Text>
+
+                <Ionicons
+                  name="arrow-forward"
+                  size={18}
+                  color="#FFFFFF"
+                />
+              </>
+            )}
           </TouchableOpacity>
-        ) : (
-          <View style={styles.completedButton}>
+        ) : isCompleted ? (
+          <View
+            style={styles.completedButton}
+          >
             <Ionicons
               name="checkmark-circle"
               size={18}
               color="#28794D"
             />
 
-            <Text style={styles.completedButtonText}>
+            <Text
+              style={
+                styles.completedButtonText
+              }
+            >
               Order Completed
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.cancelledButton}>
+            <Ionicons
+              name="close-circle"
+              size={18}
+              color="#B42318"
+            />
+
+            <Text
+              style={
+                styles.cancelledButtonText
+              }
+            >
+              Order Cancelled
             </Text>
           </View>
         )}
       </View>
     );
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={["top"]}
+      >
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator
+            size="large"
+            color={CARDINAL}
+          />
+
+          <Text style={styles.loadingText}>
+            Loading orders...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -357,6 +655,13 @@ export default function SellerOrders() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={CARDINAL}
+          />
+        }
       >
         {/* HEADER */}
         <View style={styles.header}>
@@ -370,7 +675,8 @@ export default function SellerOrders() {
             </Text>
 
             <Text style={styles.subtitle}>
-              Manage and process your customer orders.
+              Manage and process your customer
+              orders.
             </Text>
           </View>
 
@@ -395,7 +701,9 @@ export default function SellerOrders() {
             </Text>
           </View>
 
-          <View style={styles.summaryDivider} />
+          <View
+            style={styles.summaryDivider}
+          />
 
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>
@@ -407,7 +715,9 @@ export default function SellerOrders() {
             </Text>
           </View>
 
-          <View style={styles.summaryDivider} />
+          <View
+            style={styles.summaryDivider}
+          />
 
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>
@@ -423,17 +733,23 @@ export default function SellerOrders() {
         {/* FILTERS */}
         <ScrollView
           horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterContainer}
+          showsHorizontalScrollIndicator={
+            false
+          }
+          contentContainerStyle={
+            styles.filterContainer
+          }
         >
           {FILTERS.map((filter) => {
-            const selected = selectedFilter === filter;
+            const selected =
+              selectedFilter === filter;
 
             const count =
               filter === "All"
                 ? orders.length
                 : orders.filter(
-                    (order) => order.status === filter,
+                    (order) =>
+                      order.status === filter
                   ).length;
 
             return (
@@ -441,7 +757,8 @@ export default function SellerOrders() {
                 key={filter}
                 style={[
                   styles.filterButton,
-                  selected && styles.filterButtonActive,
+                  selected &&
+                    styles.filterButtonActive,
                 ]}
                 onPress={() =>
                   setSelectedFilter(filter)
@@ -480,7 +797,7 @@ export default function SellerOrders() {
           })}
         </ScrollView>
 
-        {/* ORDER LIST */}
+        {/* ORDER LIST HEADER */}
         <View style={styles.listHeader}>
           <Text style={styles.listTitle}>
             {selectedFilter === "All"
@@ -490,10 +807,13 @@ export default function SellerOrders() {
 
           <Text style={styles.listCount}>
             {filteredOrders.length} order
-            {filteredOrders.length !== 1 ? "s" : ""}
+            {filteredOrders.length !== 1
+              ? "s"
+              : ""}
           </Text>
         </View>
 
+        {/* ORDER LIST */}
         {filteredOrders.length > 0 ? (
           filteredOrders.map(renderOrder)
         ) : (
@@ -511,7 +831,8 @@ export default function SellerOrders() {
             </Text>
 
             <Text style={styles.emptyText}>
-              There are no orders under this status yet.
+              There are no orders under this
+              status yet.
             </Text>
           </View>
         )}
@@ -697,6 +1018,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
+  orderHeaderLeft: {
+    flex: 1,
+  },
+
   orderId: {
     fontSize: 14,
     fontWeight: "900",
@@ -831,6 +1156,20 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
+  pickupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 13,
+    gap: 5,
+  },
+
+  pickupText: {
+    flex: 1,
+    fontSize: 10,
+    color: MUTED,
+    fontWeight: "600",
+  },
+
   actionButton: {
     height: 45,
     borderRadius: 12,
@@ -839,6 +1178,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+
+  actionButtonDisabled: {
+    opacity: 0.65,
   },
 
   actionButtonText: {
@@ -860,6 +1203,22 @@ const styles = StyleSheet.create({
   completedButtonText: {
     fontSize: 12,
     color: "#28794D",
+    fontWeight: "800",
+  },
+
+  cancelledButton: {
+    height: 45,
+    borderRadius: 12,
+    backgroundColor: "#FDECEC",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+
+  cancelledButtonText: {
+    fontSize: 12,
+    color: "#B42318",
     fontWeight: "800",
   },
 
@@ -897,8 +1256,20 @@ const styles = StyleSheet.create({
     maxWidth: 250,
   },
 
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: MUTED,
+    fontWeight: "600",
+  },
+
   bottomSpace: {
     height: 20,
   },
 });
-

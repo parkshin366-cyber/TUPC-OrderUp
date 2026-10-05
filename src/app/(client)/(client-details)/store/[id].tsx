@@ -1,17 +1,31 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import {
   ActivityIndicator,
-  Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import {
+  getPublicStore,
+  getStoreProducts,
+  type Product,
+  type Store,
+} from "../../../../services/api";
 
 // =====================================================
 // COLORS
@@ -20,11 +34,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
 const GOLD = "#D8B56A";
+
 const BG = "#F7F7F8";
 const TEXT = "#171717";
 const MUTED = "#737373";
 const BORDER = "#E7E7E8";
 const WHITE = "#FFFFFF";
+
+const SUCCESS = "#18864B";
+const SUCCESS_BG = "#EAF7EF";
 
 // =====================================================
 // STORAGE
@@ -33,33 +51,8 @@ const WHITE = "#FFFFFF";
 const CART_STORAGE_KEY = "@tupc_orderup_cart";
 
 // =====================================================
-// TYPES
+// CART TYPE
 // =====================================================
-
-type Product = {
-  id: string;
-  storeId: string;
-  name: string;
-  category: string;
-  price: number;
-  rating: number;
-  image: string;
-  description: string;
-};
-
-type Store = {
-  id: string;
-  name: string;
-  type: string;
-  description: string;
-  rating: string;
-  reviewCount: string;
-  time: string;
-  location: string;
-  coverImage: string;
-  categories: string[];
-  verified: boolean;
-};
 
 type CartItem = {
   id: string;
@@ -71,241 +64,29 @@ type CartItem = {
 };
 
 // =====================================================
-// STORES
+// HELPERS
 // =====================================================
 
-const STORES: Store[] = [
-  {
-    id: "tupc-food-hub",
-    name: "TUPC Food Hub",
-    type: "Meals • Snacks",
-    description:
-      "Your campus go-to for affordable meals, snacks, and drinks.",
-    rating: "4.8",
-    reviewCount: "328",
-    time: "10–15 min",
-    location: "Main Campus",
-    coverImage:
-      "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80",
-    categories: ["All", "Meals", "Snacks", "Drinks"],
-    verified: true,
-  },
-  {
-    id: "cardinal-cafe",
-    name: "Cardinal Café",
-    type: "Coffee • Drinks",
-    description:
-      "Fresh coffee, refreshing drinks, and quick campus favorites.",
-    rating: "4.9",
-    reviewCount: "214",
-    time: "5–10 min",
-    location: "Student Center",
-    coverImage:
-      "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1200&q=80",
-    categories: ["All", "Coffee", "Drinks", "Snacks"],
-    verified: true,
-  },
-  {
-    id: "campus-essentials",
-    name: "Campus Essentials",
-    type: "Supplies • Accessories",
-    description:
-      "School supplies, accessories, and everyday essentials for students.",
-    rating: "4.7",
-    reviewCount: "176",
-    time: "10–20 min",
-    location: "Academic Building",
-    coverImage:
-      "https://images.unsplash.com/photo-1455885666463-6f7cbd7f0f55?auto=format&fit=crop&w=1200&q=80",
-    categories: ["All", "School", "Essentials", "Accessories"],
-    verified: true,
-  },
-];
+const getProductIcon = (
+  category: string
+): keyof typeof Ionicons.glyphMap => {
+  switch (category) {
+    case "Meals":
+      return "restaurant-outline";
 
-// =====================================================
-// PRODUCTS
-// =====================================================
+    case "Snacks":
+      return "fast-food-outline";
 
-const PRODUCTS: Product[] = [
-  {
-    id: "food-1",
-    storeId: "tupc-food-hub",
-    name: "Chicken Rice Meal",
-    category: "Meals",
-    price: 89,
-    rating: 4.8,
-    description:
-      "Tender chicken served with steamed rice and a simple savory sauce.",
-    image:
-      "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "food-2",
-    storeId: "tupc-food-hub",
-    name: "Beef Tapa Meal",
-    category: "Meals",
-    price: 99,
-    rating: 4.7,
-    description:
-      "Classic sweet-savory beef tapa served with rice.",
-    image:
-      "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "food-3",
-    storeId: "tupc-food-hub",
-    name: "Iced Coffee",
-    category: "Drinks",
-    price: 65,
-    rating: 4.9,
-    description:
-      "Cold and refreshing coffee perfect for a campus break.",
-    image:
-      "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "food-4",
-    storeId: "tupc-food-hub",
-    name: "Cheese Burger",
-    category: "Snacks",
-    price: 85,
-    rating: 4.6,
-    description:
-      "Juicy burger with melted cheese in a soft bun.",
-    image:
-      "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "food-5",
-    storeId: "tupc-food-hub",
-    name: "French Fries",
-    category: "Snacks",
-    price: 55,
-    rating: 4.7,
-    description:
-      "Crispy golden fries with a lightly salted finish.",
-    image:
-      "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "food-6",
-    storeId: "tupc-food-hub",
-    name: "Bottled Water",
-    category: "Drinks",
-    price: 25,
-    rating: 4.5,
-    description:
-      "Cold bottled drinking water.",
-    image:
-      "https://images.unsplash.com/photo-1564419320461-6870880221ad?auto=format&fit=crop&w=700&q=80",
-  },
+    case "Drinks":
+      return "cafe-outline";
 
-  // ===================================================
-  // CARDINAL CAFE
-  // ===================================================
+    case "Desserts":
+      return "ice-cream-outline";
 
-  {
-    id: "cafe-1",
-    storeId: "cardinal-cafe",
-    name: "Iced Latte",
-    category: "Coffee",
-    price: 75,
-    rating: 4.9,
-    description:
-      "Smooth espresso blended with chilled milk.",
-    image:
-      "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "cafe-2",
-    storeId: "cardinal-cafe",
-    name: "Caramel Macchiato",
-    category: "Coffee",
-    price: 95,
-    rating: 4.8,
-    description:
-      "Creamy coffee with caramel sweetness.",
-    image:
-      "https://images.unsplash.com/photo-1485808191679-5f86510681a2?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "cafe-3",
-    storeId: "cardinal-cafe",
-    name: "Chocolate Frappe",
-    category: "Drinks",
-    price: 89,
-    rating: 4.8,
-    description:
-      "Rich chocolate blended into a cold creamy frappe.",
-    image:
-      "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "cafe-4",
-    storeId: "cardinal-cafe",
-    name: "Blueberry Muffin",
-    category: "Snacks",
-    price: 55,
-    rating: 4.6,
-    description:
-      "Soft muffin filled with sweet blueberry flavor.",
-    image:
-      "https://images.unsplash.com/photo-1558303056-8849c2d8b0d0?auto=format&fit=crop&w=700&q=80",
-  },
-
-  // ===================================================
-  // CAMPUS ESSENTIALS
-  // ===================================================
-
-  {
-    id: "ess-1",
-    storeId: "campus-essentials",
-    name: "Ballpen Set",
-    category: "School",
-    price: 45,
-    rating: 4.8,
-    description:
-      "Reliable everyday ballpens for classes and note-taking.",
-    image:
-      "https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "ess-2",
-    storeId: "campus-essentials",
-    name: "Notebook",
-    category: "School",
-    price: 65,
-    rating: 4.7,
-    description:
-      "Durable notebook for lectures, notes, and school work.",
-    image:
-      "https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "ess-3",
-    storeId: "campus-essentials",
-    name: "USB Flash Drive",
-    category: "Accessories",
-    price: 299,
-    rating: 4.6,
-    description:
-      "Compact storage for school files and projects.",
-    image:
-      "https://images.unsplash.com/photo-1618410320927-95f3f0c3d7c8?auto=format&fit=crop&w=700&q=80",
-  },
-  {
-    id: "ess-4",
-    storeId: "campus-essentials",
-    name: "Phone Charging Cable",
-    category: "Essentials",
-    price: 149,
-    rating: 4.7,
-    description:
-      "Convenient charging cable for everyday campus use.",
-    image:
-      "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&w=700&q=80",
-  },
-];
+    default:
+      return "bag-outline";
+  }
+};
 
 // =====================================================
 // SCREEN
@@ -313,60 +94,125 @@ const PRODUCTS: Product[] = [
 
 export default function StoreDetails() {
   const params = useLocalSearchParams<{
-    id?: string;
+    id?: string | string[];
   }>();
 
-  const storeId =
-    typeof params.id === "string"
-      ? params.id
-      : "tupc-food-hub";
+  const storeId = Array.isArray(params.id)
+    ? params.id[0] ?? ""
+    : params.id ?? "";
+
+  // ===================================================
+  // STATE
+  // ===================================================
+
+  const [store, setStore] =
+    useState<Store | null>(null);
+
+  const [products, setProducts] =
+    useState<Product[]>([]);
 
   const [selectedCategory, setSelectedCategory] =
     useState("All");
 
-  const [favorite, setFavorite] = useState(false);
+  const [favorite, setFavorite] =
+    useState(false);
 
-  const [cartItems, setCartItems] = useState<CartItem[]>(
-    []
-  );
+  const [cartItems, setCartItems] =
+    useState<CartItem[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [loadingCart, setLoadingCart] =
+    useState(true);
 
   const [addingProductId, setAddingProductId] =
     useState<string | null>(null);
 
-  const [loadingCart, setLoadingCart] = useState(true);
-
   // ===================================================
-  // FIND STORE
+  // LOAD STORE + PRODUCTS
   // ===================================================
 
-  const store = useMemo(() => {
-    return STORES.find((item) => item.id === storeId);
-  }, [storeId]);
+  const loadStore = useCallback(
+    async (showLoading = true) => {
+      if (!storeId) {
+        setStore(null);
+        setProducts([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        if (showLoading) {
+          setLoading(true);
+        }
+
+        const [storeResult, productsResult] =
+          await Promise.all([
+            getPublicStore(storeId),
+            getStoreProducts(storeId),
+          ]);
+
+        setStore(storeResult);
+        setProducts(productsResult);
+
+        // If selected category no longer exists,
+        // return to All.
+        if (
+          selectedCategory !== "All" &&
+          !productsResult.some(
+            (product) =>
+              product.category ===
+              selectedCategory
+          )
+        ) {
+          setSelectedCategory("All");
+        }
+      } catch (error) {
+        console.error(
+          "LOAD STORE DETAILS ERROR:",
+          error
+        );
+
+        setStore(null);
+        setProducts([]);
+      } finally {
+        if (showLoading) {
+          setLoading(false);
+        }
+      }
+    },
+    [storeId, selectedCategory]
+  );
 
   // ===================================================
-  // STORE PRODUCTS
+  // INITIAL LOAD
   // ===================================================
 
-  const storeProducts = useMemo(() => {
-    return PRODUCTS.filter(
-      (product) => product.storeId === storeId
-    );
-  }, [storeId]);
+  useEffect(() => {
+    loadStore(true);
+  }, [loadStore]);
 
   // ===================================================
-  // FILTERED PRODUCTS
+  // REFRESH
   // ===================================================
 
-  const filteredProducts = useMemo(() => {
-    if (selectedCategory === "All") {
-      return storeProducts;
+  const handleRefresh = async () => {
+    if (refreshing) {
+      return;
     }
 
-    return storeProducts.filter(
-      (product) =>
-        product.category === selectedCategory
-    );
-  }, [selectedCategory, storeProducts]);
+    setRefreshing(true);
+
+    try {
+      await loadStore(false);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // ===================================================
   // LOAD CART
@@ -382,18 +228,25 @@ export default function StoreDetails() {
             CART_STORAGE_KEY
           );
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         if (savedCart) {
-          const parsed: CartItem[] =
+          const parsed =
             JSON.parse(savedCart);
 
           setCartItems(
-            Array.isArray(parsed) ? parsed : []
+            Array.isArray(parsed)
+              ? parsed
+              : []
           );
         }
       } catch (error) {
-        console.log("Failed to load cart:", error);
+        console.log(
+          "Failed to load cart:",
+          error
+        );
       } finally {
         if (mounted) {
           setLoadingCart(false);
@@ -412,51 +265,164 @@ export default function StoreDetails() {
   // SAVE CART
   // ===================================================
 
-  const saveCart = async (items: CartItem[]) => {
+  const saveCart = async (
+    items: CartItem[]
+  ) => {
     try {
       await AsyncStorage.setItem(
         CART_STORAGE_KEY,
         JSON.stringify(items)
       );
     } catch (error) {
-      console.log("Failed to save cart:", error);
+      console.log(
+        "Failed to save cart:",
+        error
+      );
     }
   };
+
+  // ===================================================
+  // PRODUCT CATEGORIES
+  // ===================================================
+
+  const categories = useMemo(() => {
+    const uniqueCategories =
+      Array.from(
+        new Set(
+          products.map(
+            (product) =>
+              product.category
+          )
+        )
+      );
+
+    return [
+      "All",
+      ...uniqueCategories,
+    ];
+  }, [products]);
+
+  // ===================================================
+  // FILTERED PRODUCTS
+  // ===================================================
+
+  const filteredProducts = useMemo(() => {
+    if (selectedCategory === "All") {
+      return products;
+    }
+
+    return products.filter(
+      (product) =>
+        product.category ===
+        selectedCategory
+    );
+  }, [
+    products,
+    selectedCategory,
+  ]);
+
+  // ===================================================
+  // CART COUNT
+  // ===================================================
+
+  const cartCount = useMemo(() => {
+    return cartItems.reduce(
+      (total, item) =>
+        total + item.quantity,
+      0
+    );
+  }, [cartItems]);
+
+  // ===================================================
+  // CART TOTAL
+  // ===================================================
+
+  const cartTotal = useMemo(() => {
+    return cartItems.reduce(
+      (total, item) =>
+        total +
+        item.price *
+          item.quantity,
+      0
+    );
+  }, [cartItems]);
 
   // ===================================================
   // ADD TO CART
   // ===================================================
 
-  const addToCart = async (product: Product) => {
-    if (!store) return;
+  const addToCart = async (
+    product: Product
+  ) => {
+    if (!store) {
+      return;
+    }
+
+    // Store is closed.
+    if (!store.isOpen) {
+      return;
+    }
+
+    // Product is unavailable.
+    if (!product.available) {
+      return;
+    }
+
+    // No stock.
+    if (product.stock <= 0) {
+      return;
+    }
 
     try {
-      setAddingProductId(product.id);
-
-      const existingItem = cartItems.find(
-        (item) => item.id === product.id
+      setAddingProductId(
+        product._id
       );
+
+      const existingItem =
+        cartItems.find(
+          (item) =>
+            item.id ===
+            product._id
+        );
+
+      // =============================================
+      // STOCK LIMIT
+      // =============================================
+
+      if (
+        existingItem &&
+        existingItem.quantity >=
+          product.stock
+      ) {
+        return;
+      }
 
       let updatedCart: CartItem[];
 
       if (existingItem) {
-        updatedCart = cartItems.map((item) =>
-          item.id === product.id
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-              }
-            : item
-        );
+        updatedCart =
+          cartItems.map((item) =>
+            item.id ===
+            product._id
+              ? {
+                  ...item,
+                  quantity:
+                    item.quantity +
+                    1,
+                }
+              : item
+          );
       } else {
-        const newItem: CartItem = {
-          id: product.id,
-          storeId: product.storeId,
-          name: product.name,
-          price: product.price,
-          image: product.image,
-          quantity: 1,
-        };
+        const newItem: CartItem =
+          {
+            id: product._id,
+            storeId:
+              product.store,
+            name: product.name,
+            price: product.price,
+            image: "",
+            quantity: 1,
+          };
 
         updatedCart = [
           ...cartItems,
@@ -464,11 +430,18 @@ export default function StoreDetails() {
         ];
       }
 
-      setCartItems(updatedCart);
+      setCartItems(
+        updatedCart
+      );
 
-      await saveCart(updatedCart);
+      await saveCart(
+        updatedCart
+      );
     } catch (error) {
-      console.log("Failed to add to cart:", error);
+      console.log(
+        "Failed to add to cart:",
+        error
+      );
     } finally {
       setTimeout(() => {
         setAddingProductId(null);
@@ -477,36 +450,77 @@ export default function StoreDetails() {
   };
 
   // ===================================================
-  // CART TOTAL
-  // ===================================================
-
-  const cartCount = useMemo(() => {
-    return cartItems.reduce(
-      (total, item) => total + item.quantity,
-      0
-    );
-  }, [cartItems]);
-
-  const cartTotal = useMemo(() => {
-    return cartItems.reduce(
-      (total, item) =>
-        total + item.price * item.quantity,
-      0
-    );
-  }, [cartItems]);
-
-  // ===================================================
   // OPEN PRODUCT
   // ===================================================
 
-  const openProduct = (productId: string) => {
+  const openProduct = (
+    productId: string
+  ) => {
+    if (!productId) {
+      return;
+    }
+
     router.push({
-      pathname: "/product/[id]",
+      pathname:
+        "/(client)/(client-details)/product/[id]",
       params: {
         id: productId,
       },
     });
   };
+
+  // ===================================================
+  // LOADING SCREEN
+  // ===================================================
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={[
+          "top",
+          "left",
+          "right",
+        ]}
+      >
+        <View
+          style={styles.loadingScreen}
+        >
+          <View
+            style={styles.loadingIcon}
+          >
+            <Ionicons
+              name="storefront-outline"
+              size={34}
+              color={CARDINAL}
+            />
+          </View>
+
+          <ActivityIndicator
+            size="large"
+            color={CARDINAL}
+          />
+
+          <Text
+            style={
+              styles.loadingTitle
+            }
+          >
+            Loading store...
+          </Text>
+
+          <Text
+            style={
+              styles.loadingSubtitle
+            }
+          >
+            Getting the latest store
+            information and products.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // ===================================================
   // INVALID STORE
@@ -516,10 +530,18 @@ export default function StoreDetails() {
     return (
       <SafeAreaView
         style={styles.safeArea}
-        edges={["top", "left", "right"]}
+        edges={[
+          "top",
+          "left",
+          "right",
+        ]}
       >
-        <View style={styles.invalidStore}>
-          <View style={styles.invalidIcon}>
+        <View
+          style={styles.invalidStore}
+        >
+          <View
+            style={styles.invalidIcon}
+          >
             <Ionicons
               name="storefront-outline"
               size={34}
@@ -527,23 +549,40 @@ export default function StoreDetails() {
             />
           </View>
 
-          <Text style={styles.invalidTitle}>
+          <Text
+            style={
+              styles.invalidTitle
+            }
+          >
             Store not found
           </Text>
 
-          <Text style={styles.invalidSubtitle}>
-            This campus store may no longer be
-            available.
+          <Text
+            style={
+              styles.invalidSubtitle
+            }
+          >
+            This campus store may no
+            longer be available.
           </Text>
 
           <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
+            onPress={() =>
+              router.back()
+            }
+            style={({
+              pressed,
+            }) => [
               styles.backButton,
-              pressed && styles.pressed,
+              pressed &&
+                styles.pressed,
             ]}
           >
-            <Text style={styles.backButtonText}>
+            <Text
+              style={
+                styles.backButtonText
+              }
+            >
               Go Back
             </Text>
           </Pressable>
@@ -553,26 +592,37 @@ export default function StoreDetails() {
   }
 
   // ===================================================
-  // RENDER
+  // SCREEN
   // ===================================================
 
   return (
     <SafeAreaView
       style={styles.safeArea}
-      edges={["top", "left", "right"]}
+      edges={[
+        "top",
+        "left",
+        "right",
+      ]}
     >
-      <View style={styles.container}>
+      <View
+        style={styles.container}
+      >
         {/* =================================================
             HEADER
         ================================================= */}
 
         <View style={styles.header}>
           <Pressable
-            style={({ pressed }) => [
+            style={({
+              pressed,
+            }) => [
               styles.headerButton,
-              pressed && styles.pressed,
+              pressed &&
+                styles.pressed,
             ]}
-            onPress={() => router.back()}
+            onPress={() =>
+              router.back()
+            }
           >
             <Ionicons
               name="chevron-back"
@@ -581,9 +631,15 @@ export default function StoreDetails() {
             />
           </Pressable>
 
-          <View style={styles.headerCenter}>
+          <View
+            style={
+              styles.headerCenter
+            }
+          >
             <Text
-              style={styles.headerTitle}
+              style={
+                styles.headerTitle
+              }
               numberOfLines={1}
             >
               {store.name}
@@ -591,11 +647,18 @@ export default function StoreDetails() {
           </View>
 
           <Pressable
-            style={({ pressed }) => [
+            style={({
+              pressed,
+            }) => [
               styles.headerButton,
-              pressed && styles.pressed,
+              pressed &&
+                styles.pressed,
             ]}
-            onPress={() => router.push("/cart")}
+            onPress={() =>
+              router.push(
+                "/cart"
+              )
+            }
           >
             <Ionicons
               name="bag-outline"
@@ -604,9 +667,19 @@ export default function StoreDetails() {
             />
 
             {cartCount > 0 && (
-              <View style={styles.cartBadge}>
-                <Text style={styles.cartBadgeText}>
-                  {cartCount > 99 ? "99+" : cartCount}
+              <View
+                style={
+                  styles.cartBadge
+                }
+              >
+                <Text
+                  style={
+                    styles.cartBadgeText
+                  }
+                >
+                  {cartCount > 99
+                    ? "99+"
+                    : cartCount}
                 </Text>
               </View>
             )}
@@ -618,7 +691,25 @@ export default function StoreDetails() {
         ================================================= */}
 
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={
+            false
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={
+                refreshing
+              }
+              onRefresh={
+                handleRefresh
+              }
+              tintColor={
+                CARDINAL
+              }
+              colors={[
+                CARDINAL,
+              ]}
+            />
+          }
           contentContainerStyle={[
             styles.scrollContent,
             cartCount > 0 &&
@@ -626,32 +717,59 @@ export default function StoreDetails() {
           ]}
         >
           {/* =================================================
-              COVER
+              STORE HERO
           ================================================= */}
 
-          <View style={styles.coverContainer}>
-            <Image
-              source={{
-                uri: store.coverImage,
-              }}
-              style={styles.coverImage}
+          <View
+            style={
+              styles.coverContainer
+            }
+          >
+            <View
+              style={
+                styles.coverBackground
+              }
+            >
+              <Ionicons
+                name="storefront"
+                size={64}
+                color={
+                  CARDINAL
+                }
+              />
+            </View>
+
+            <View
+              style={
+                styles.coverOverlay
+              }
             />
 
-            <View style={styles.coverOverlay} />
-
-            <View style={styles.coverTopLabel}>
+            <View
+              style={
+                styles.coverTopLabel
+              }
+            >
               <Ionicons
                 name="location-outline"
                 size={13}
                 color="#FFFFFF"
               />
 
-              <Text style={styles.coverTopLabelText}>
-                {store.location}
+              <Text
+                style={
+                  styles.coverTopLabelText
+                }
+                numberOfLines={1}
+              >
+                {store.location ||
+                  "Campus"}
               </Text>
             </View>
 
-            <View style={styles.storeLogo}>
+            <View
+              style={styles.storeLogo}
+            >
               <Ionicons
                 name="storefront"
                 size={31}
@@ -664,47 +782,64 @@ export default function StoreDetails() {
               STORE INFO
           ================================================= */}
 
-          <View style={styles.storeInfo}>
-            <View style={styles.storeTitleRow}>
-              <View style={styles.storeTitleArea}>
-                <View style={styles.storeNameRow}>
+          <View
+            style={styles.storeInfo}
+          >
+            <View
+              style={
+                styles.storeTitleRow
+              }
+            >
+              <View
+                style={
+                  styles.storeTitleArea
+                }
+              >
+                <Text
+                  style={
+                    styles.storeName
+                  }
+                  numberOfLines={2}
+                >
+                  {store.name}
+                </Text>
+
+                <View
+                  style={
+                    styles.verifiedRow
+                  }
+                >
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={16}
+                    color={CARDINAL}
+                  />
+
                   <Text
-                    style={styles.storeName}
-                    numberOfLines={2}
+                    style={
+                      styles.verifiedText
+                    }
                   >
-                    {store.name}
+                    Approved Campus
+                    Seller
                   </Text>
-                </View>
-
-                <View style={styles.verifiedRow}>
-                  {store.verified && (
-                    <>
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={16}
-                        color={CARDINAL}
-                      />
-
-                      <Text
-                        style={styles.verifiedText}
-                      >
-                        Verified Campus Store
-                      </Text>
-                    </>
-                  )}
                 </View>
               </View>
 
               <Pressable
-                style={({ pressed }) => [
+                style={({
+                  pressed,
+                }) => [
                   styles.favoriteButton,
                   favorite &&
                     styles.favoriteButtonActive,
-                  pressed && styles.pressed,
+                  pressed &&
+                    styles.pressed,
                 ]}
                 onPress={() =>
                   setFavorite(
-                    (current) => !current
+                    (current) =>
+                      !current
                   )
                 }
               >
@@ -716,69 +851,86 @@ export default function StoreDetails() {
                   }
                   size={22}
                   color={
-                    favorite ? "#FFFFFF" : CARDINAL
+                    favorite
+                      ? WHITE
+                      : CARDINAL
                   }
                 />
               </Pressable>
             </View>
 
-            <Text style={styles.storeType}>
-              {store.type}
-            </Text>
+            {/* OPEN / CLOSED */}
 
-            <Text style={styles.storeDescription}>
-              {store.description}
+            <View
+              style={
+                styles.openStatusRow
+              }
+            >
+              <View
+                style={[
+                  styles.openStatusBadge,
+                  store.isOpen
+                    ? styles.openStatusBadgeOpen
+                    : styles.openStatusBadgeClosed,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+                    store.isOpen
+                      ? styles.statusDotOpen
+                      : styles.statusDotClosed,
+                  ]}
+                />
+
+                <Text
+                  style={[
+                    styles.openStatusText,
+                    store.isOpen
+                      ? styles.openStatusTextOpen
+                      : styles.openStatusTextClosed,
+                  ]}
+                >
+                  {store.isOpen
+                    ? "Open"
+                    : "Closed"}
+                </Text>
+              </View>
+
+              <Text
+                style={
+                  styles.storeHours
+                }
+              >
+                {store.openTime} -{" "}
+                {store.closeTime}
+              </Text>
+            </View>
+
+            {/* DESCRIPTION */}
+
+            <Text
+              style={
+                styles.storeDescription
+              }
+            >
+              {store.description ||
+                "No store description available."}
             </Text>
 
             {/* META */}
 
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <View style={styles.metaIcon}>
-                  <Ionicons
-                    name="star"
-                    size={14}
-                    color={GOLD}
-                  />
-                </View>
-
-                <View>
-                  <Text style={styles.metaText}>
-                    {store.rating}
-                  </Text>
-
-                  <Text style={styles.metaSubtext}>
-                    {store.reviewCount} reviews
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.metaDivider} />
-
-              <View style={styles.metaItem}>
-                <View style={styles.metaIcon}>
-                  <Ionicons
-                    name="time-outline"
-                    size={16}
-                    color={CARDINAL}
-                  />
-                </View>
-
-                <View>
-                  <Text style={styles.metaText}>
-                    Open
-                  </Text>
-
-                  <Text style={styles.metaSubtext}>
-                    {store.time}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.metaDivider} />
-
-              <View style={styles.metaItem}>
-                <View style={styles.metaIcon}>
+            <View
+              style={styles.metaRow}
+            >
+              <View
+                style={styles.metaItem}
+              >
+                <View
+                  style={
+                    styles.metaIcon
+                  }
+                >
                   <Ionicons
                     name="location-outline"
                     size={16}
@@ -787,12 +939,109 @@ export default function StoreDetails() {
                 </View>
 
                 <View>
-                  <Text style={styles.metaText}>
-                    Campus
+                  <Text
+                    style={
+                      styles.metaText
+                    }
+                  >
+                    Location
                   </Text>
 
-                  <Text style={styles.metaSubtext}>
-                    {store.location}
+                  <Text
+                    style={
+                      styles.metaSubtext
+                    }
+                    numberOfLines={1}
+                  >
+                    {store.location ||
+                      "Not specified"}
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={
+                  styles.metaDivider
+                }
+              />
+
+              <View
+                style={
+                  styles.metaItem
+                }
+              >
+                <View
+                  style={
+                    styles.metaIcon
+                  }
+                >
+                  <Ionicons
+                    name="bag-handle-outline"
+                    size={16}
+                    color={CARDINAL}
+                  />
+                </View>
+
+                <View>
+                  <Text
+                    style={
+                      styles.metaText
+                    }
+                  >
+                    Pickup
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.metaSubtext
+                    }
+                  >
+                    {store.pickupEnabled
+                      ? "Available"
+                      : "Unavailable"}
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={
+                  styles.metaDivider
+                }
+              />
+
+              <View
+                style={
+                  styles.metaItem
+                }
+              >
+                <View
+                  style={
+                    styles.metaIcon
+                  }
+                >
+                  <Ionicons
+                    name="cube-outline"
+                    size={16}
+                    color={CARDINAL}
+                  />
+                </View>
+
+                <View>
+                  <Text
+                    style={
+                      styles.metaText
+                    }
+                  >
+                    Products
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.metaSubtext
+                    }
+                  >
+                    {products.length}{" "}
+                    available
                   </Text>
                 </View>
               </View>
@@ -803,80 +1052,143 @@ export default function StoreDetails() {
               MENU
           ================================================= */}
 
-          <View style={styles.categorySection}>
-            <View style={styles.menuHeader}>
+          <View
+            style={
+              styles.categorySection
+            }
+          >
+            <View
+              style={
+                styles.menuHeader
+              }
+            >
               <View>
-                <Text style={styles.sectionTitle}>
+                <Text
+                  style={
+                    styles.sectionTitle
+                  }
+                >
                   Menu
                 </Text>
 
-                <Text style={styles.sectionSubtitle}>
-                  Choose something you like
+                <Text
+                  style={
+                    styles.sectionSubtitle
+                  }
+                >
+                  Choose something you
+                  like
                 </Text>
               </View>
 
-              <View style={styles.menuCount}>
-                <Text style={styles.menuCountText}>
-                  {storeProducts.length} items
+              <View
+                style={
+                  styles.menuCount
+                }
+              >
+                <Text
+                  style={
+                    styles.menuCountText
+                  }
+                >
+                  {products.length}{" "}
+                  items
                 </Text>
               </View>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={
-                styles.categoryList
-              }
-            >
-              {store.categories.map((category) => {
-                const active =
-                  selectedCategory === category;
+            {/* CATEGORIES */}
 
-                return (
-                  <Pressable
-                    key={category}
-                    style={({ pressed }) => [
-                      styles.categoryButton,
-                      active &&
-                        styles.categoryButtonActive,
-                      pressed && styles.pressed,
-                    ]}
-                    onPress={() =>
-                      setSelectedCategory(category)
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.categoryText,
-                        active &&
-                          styles.categoryTextActive,
-                      ]}
-                    >
-                      {category}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            {categories.length >
+              1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={
+                  false
+                }
+                contentContainerStyle={
+                  styles.categoryList
+                }
+              >
+                {categories.map(
+                  (category) => {
+                    const active =
+                      selectedCategory ===
+                      category;
+
+                    return (
+                      <Pressable
+                        key={
+                          category
+                        }
+                        style={({
+                          pressed,
+                        }) => [
+                          styles.categoryButton,
+                          active &&
+                            styles.categoryButtonActive,
+                          pressed &&
+                            styles.pressed,
+                        ]}
+                        onPress={() =>
+                          setSelectedCategory(
+                            category
+                          )
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.categoryText,
+                            active &&
+                              styles.categoryTextActive,
+                          ]}
+                        >
+                          {category}
+                        </Text>
+                      </Pressable>
+                    );
+                  }
+                )}
+              </ScrollView>
+            )}
           </View>
 
           {/* =================================================
               PRODUCTS
           ================================================= */}
 
-          <View style={styles.productsSection}>
-            <View style={styles.productsHeader}>
+          <View
+            style={
+              styles.productsSection
+            }
+          >
+            <View
+              style={
+                styles.productsHeader
+              }
+            >
               <View>
-                <Text style={styles.sectionTitle}>
-                  {selectedCategory === "All"
-                    ? "Popular Items"
+                <Text
+                  style={
+                    styles.sectionTitle
+                  }
+                >
+                  {selectedCategory ===
+                  "All"
+                    ? "Products"
                     : selectedCategory}
                 </Text>
 
-                <Text style={styles.sectionSubtitle}>
-                  {filteredProducts.length}{" "}
-                  {filteredProducts.length === 1
+                <Text
+                  style={
+                    styles.sectionSubtitle
+                  }
+                >
+                  {
+                    filteredProducts.length
+                  }{" "}
+                  {filteredProducts.length ===
+                  1
                     ? "item"
                     : "items"}{" "}
                   available
@@ -885,204 +1197,372 @@ export default function StoreDetails() {
             </View>
 
             {loadingCart ? (
-              <View style={styles.loadingBox}>
+              <View
+                style={
+                  styles.loadingBox
+                }
+              >
                 <ActivityIndicator
                   size="small"
-                  color={CARDINAL}
+                  color={
+                    CARDINAL
+                  }
                 />
 
-                <Text style={styles.loadingText}>
+                <Text
+                  style={
+                    styles.loadingText
+                  }
+                >
                   Loading cart...
                 </Text>
               </View>
-            ) : filteredProducts.length > 0 ? (
-              <View style={styles.productGrid}>
-                {filteredProducts.map((product) => {
-                  const cartItem = cartItems.find(
-                    (item) =>
-                      item.id === product.id
-                  );
+            ) : filteredProducts.length >
+              0 ? (
+              <View
+                style={
+                  styles.productGrid
+                }
+              >
+                {filteredProducts.map(
+                  (product) => {
+                    const cartItem =
+                      cartItems.find(
+                        (item) =>
+                          item.id ===
+                          product._id
+                      );
 
-                  const quantity =
-                    cartItem?.quantity ?? 0;
+                    const quantity =
+                      cartItem?.quantity ??
+                      0;
 
-                  const isAdding =
-                    addingProductId === product.id;
+                    const isAdding =
+                      addingProductId ===
+                      product._id;
 
-                  return (
-                    <View
-                      key={product.id}
-                      style={styles.productCard}
-                    >
-                      {/* IMAGE */}
+                    const outOfStock =
+                      product.stock <=
+                      0;
 
-                      <Pressable
-                        onPress={() =>
-                          openProduct(product.id)
+                    const unavailable =
+                      !product.available;
+
+                    const cannotAdd =
+                      !store.isOpen ||
+                      outOfStock ||
+                      unavailable ||
+                      isAdding;
+
+                    return (
+                      <View
+                        key={
+                          product._id
                         }
-                        style={({ pressed }) => [
-                          styles.productImageContainer,
-                          pressed &&
-                            styles.imagePressed,
+                        style={[
+                          styles.productCard,
+                          unavailable &&
+                            styles.productCardUnavailable,
                         ]}
                       >
-                        <Image
-                          source={{
-                            uri: product.image,
-                          }}
-                          style={styles.productImage}
-                        />
+                        {/* PRODUCT ICON */}
 
-                        <View
-                          style={styles.imageOverlay}
-                        />
-
-                        <View
-                          style={styles.ratingBadge}
-                        >
-                          <Ionicons
-                            name="star"
-                            size={11}
-                            color={GOLD}
-                          />
-
-                          <Text
-                            style={
-                              styles.ratingBadgeText
-                            }
-                          >
-                            {product.rating}
-                          </Text>
-                        </View>
-                      </Pressable>
-
-                      {/* PRODUCT INFO */}
-
-                      <View style={styles.productInfo}>
                         <Pressable
                           onPress={() =>
                             openProduct(
-                              product.id
+                              product._id
                             )
                           }
+                          style={({
+                            pressed,
+                          }) => [
+                            styles.productImageContainer,
+                            pressed &&
+                              styles.imagePressed,
+                          ]}
                         >
-                          <Text
-                            style={styles.productName}
-                            numberOfLines={1}
-                          >
-                            {product.name}
-                          </Text>
-
-                          <Text
+                          <View
                             style={
-                              styles.productCategory
+                              styles.productPlaceholder
                             }
                           >
-                            {product.category}
-                          </Text>
-                        </Pressable>
-
-                        <View
-                          style={styles.productBottom}
-                        >
-                          <View>
-                            <Text
-                              style={
-                                styles.productPrice
-                              }
-                            >
-                              ₱
-                              {product.price.toFixed(
-                                2
+                            <Ionicons
+                              name={getProductIcon(
+                                product.category
                               )}
-                            </Text>
-
-                            {quantity > 0 && (
-                              <Text
-                                style={
-                                  styles.inCartText
-                                }
-                              >
-                                {quantity} in cart
-                              </Text>
-                            )}
+                              size={43}
+                              color={
+                                CARDINAL
+                              }
+                            />
                           </View>
 
-                          <Pressable
-                            disabled={isAdding}
-                            onPress={() =>
-                              addToCart(product)
+                          {/* CATEGORY */}
+
+                          <View
+                            style={
+                              styles.categoryBadge
                             }
-                            style={({ pressed }) => [
-                              styles.addButton,
-                              quantity > 0 &&
-                                styles.addButtonActive,
-                              pressed &&
-                                styles.addButtonPressed,
-                            ]}
                           >
-                            {isAdding ? (
-                              <ActivityIndicator
-                                size="small"
-                                color="#FFFFFF"
-                              />
-                            ) : (
-                              <Ionicons
-                                name={
-                                  quantity > 0
-                                    ? "checkmark"
-                                    : "add"
+                            <Text
+                              style={
+                                styles.categoryBadgeText
+                              }
+                            >
+                              {
+                                product.category
+                              }
+                            </Text>
+                          </View>
+
+                          {/* STOCK */}
+
+                          {outOfStock ? (
+                            <View
+                              style={
+                                styles.stockBadgeOut
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.stockBadgeTextOut
                                 }
-                                size={19}
-                                color="#FFFFFF"
-                              />
-                            )}
+                              >
+                                OUT OF STOCK
+                              </Text>
+                            </View>
+                          ) : (
+                            <View
+                              style={
+                                styles.stockBadge
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.stockBadgeText
+                                }
+                              >
+                                {product.stock}{" "}
+                                left
+                              </Text>
+                            </View>
+                          )}
+
+                          {!product.available && (
+                            <View
+                              style={
+                                styles.unavailableOverlay
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.unavailableText
+                                }
+                              >
+                                UNAVAILABLE
+                              </Text>
+                            </View>
+                          )}
+                        </Pressable>
+
+                        {/* PRODUCT INFO */}
+
+                        <View
+                          style={
+                            styles.productInfo
+                          }
+                        >
+                          <Pressable
+                            onPress={() =>
+                              openProduct(
+                                product._id
+                              )
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.productName
+                              }
+                              numberOfLines={
+                                2
+                              }
+                            >
+                              {
+                                product.name
+                              }
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.productCategory
+                              }
+                            >
+                              {
+                                product.category
+                              }
+                            </Text>
                           </Pressable>
+
+                          <View
+                            style={
+                              styles.productBottom
+                            }
+                          >
+                            <View>
+                              <Text
+                                style={
+                                  styles.productPrice
+                                }
+                              >
+                                ₱
+                                {product.price.toFixed(
+                                  2
+                                )}
+                              </Text>
+
+                              {quantity >
+                                0 && (
+                                <Text
+                                  style={
+                                    styles.inCartText
+                                  }
+                                >
+                                  {quantity}{" "}
+                                  in cart
+                                </Text>
+                              )}
+                            </View>
+
+                            <Pressable
+                              disabled={
+                                cannotAdd
+                              }
+                              onPress={() =>
+                                addToCart(
+                                  product
+                                )
+                              }
+                              style={({
+                                pressed,
+                              }) => [
+                                styles.addButton,
+                                quantity >
+                                  0 &&
+                                  styles.addButtonActive,
+                                cannotAdd &&
+                                  styles.addButtonDisabled,
+                                pressed &&
+                                  !cannotAdd &&
+                                  styles.addButtonPressed,
+                              ]}
+                            >
+                              {isAdding ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color={
+                                    WHITE
+                                  }
+                                />
+                              ) : outOfStock ? (
+                                <Ionicons
+                                  name="close"
+                                  size={19}
+                                  color={
+                                    WHITE
+                                  }
+                                />
+                              ) : (
+                                <Ionicons
+                                  name={
+                                    quantity >
+                                    0
+                                      ? "checkmark"
+                                      : "add"
+                                  }
+                                  size={19}
+                                  color={
+                                    WHITE
+                                  }
+                                />
+                              )}
+                            </Pressable>
+                          </View>
                         </View>
                       </View>
-                    </View>
-                  );
-                })}
+                    );
+                  }
+                )}
               </View>
             ) : (
-              <View style={styles.emptyMenu}>
-                <View style={styles.emptyMenuIcon}>
+              <View
+                style={
+                  styles.emptyMenu
+                }
+              >
+                <View
+                  style={
+                    styles.emptyMenuIcon
+                  }
+                >
                   <Ionicons
                     name="restaurant-outline"
                     size={30}
-                    color={CARDINAL}
+                    color={
+                      CARDINAL
+                    }
                   />
                 </View>
 
-                <Text style={styles.emptyMenuTitle}>
+                <Text
+                  style={
+                    styles.emptyMenuTitle
+                  }
+                >
                   No items available
                 </Text>
 
-                <Text style={styles.emptyMenuText}>
-                  There are no products in this
+                <Text
+                  style={
+                    styles.emptyMenuText
+                  }
+                >
+                  There are no products
+                  available in this
                   category right now.
                 </Text>
 
-                <Pressable
-                  onPress={() =>
-                    setSelectedCategory("All")
-                  }
-                  style={({ pressed }) => [
-                    styles.showAllButton,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text
-                    style={styles.showAllButtonText}
+                {selectedCategory !==
+                  "All" && (
+                  <Pressable
+                    onPress={() =>
+                      setSelectedCategory(
+                        "All"
+                      )
+                    }
+                    style={({
+                      pressed,
+                    }) => [
+                      styles.showAllButton,
+                      pressed &&
+                        styles.pressed,
+                    ]}
                   >
-                    Show All Items
-                  </Text>
-                </Pressable>
+                    <Text
+                      style={
+                        styles.showAllButtonText
+                      }
+                    >
+                      Show All Items
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
 
-          <View style={styles.bottomSpace} />
+          <View
+            style={styles.bottomSpace}
+          />
         </ScrollView>
 
         {/* =================================================
@@ -1090,27 +1570,55 @@ export default function StoreDetails() {
         ================================================= */}
 
         {cartCount > 0 && (
-          <View style={styles.cartBarContainer}>
+          <View
+            style={
+              styles.cartBarContainer
+            }
+          >
             <Pressable
-              onPress={() => router.push("/cart")}
-              style={({ pressed }) => [
+              onPress={() =>
+                router.push(
+                  "/cart"
+                )
+              }
+              style={({
+                pressed,
+              }) => [
                 styles.cartBar,
-                pressed && styles.cartBarPressed,
+                pressed &&
+                  styles.cartBarPressed,
               ]}
             >
-              <View style={styles.cartBarLeft}>
-                <View style={styles.cartBarIcon}>
+              <View
+                style={
+                  styles.cartBarLeft
+                }
+              >
+                <View
+                  style={
+                    styles.cartBarIcon
+                  }
+                >
                   <Ionicons
                     name="bag-handle"
                     size={20}
-                    color="#FFFFFF"
+                    color={
+                      WHITE
+                    }
                   />
 
-                  <View style={styles.cartBarBadge}>
+                  <View
+                    style={
+                      styles.cartBarBadge
+                    }
+                  >
                     <Text
-                      style={styles.cartBarBadgeText}
+                      style={
+                        styles.cartBarBadgeText
+                      }
                     >
-                      {cartCount > 99
+                      {cartCount >
+                      99
                         ? "99+"
                         : cartCount}
                     </Text>
@@ -1118,29 +1626,52 @@ export default function StoreDetails() {
                 </View>
 
                 <View>
-                  <Text style={styles.cartBarTitle}>
+                  <Text
+                    style={
+                      styles.cartBarTitle
+                    }
+                  >
                     View Cart
                   </Text>
 
-                  <Text style={styles.cartBarSubtitle}>
+                  <Text
+                    style={
+                      styles.cartBarSubtitle
+                    }
+                  >
                     {cartCount}{" "}
-                    {cartCount === 1
+                    {cartCount ===
+                    1
                       ? "item"
                       : "items"}{" "}
-                    from {store.name}
+                    from{" "}
+                    {store.name}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.cartBarRight}>
-                <Text style={styles.cartBarTotal}>
-                  ₱{cartTotal.toFixed(2)}
+              <View
+                style={
+                  styles.cartBarRight
+                }
+              >
+                <Text
+                  style={
+                    styles.cartBarTotal
+                  }
+                >
+                  ₱
+                  {cartTotal.toFixed(
+                    2
+                  )}
                 </Text>
 
                 <Ionicons
                   name="chevron-forward"
                   size={19}
-                  color="#FFFFFF"
+                  color={
+                    WHITE
+                  }
                 />
               </View>
             </Pressable>
@@ -1156,6 +1687,10 @@ export default function StoreDetails() {
 // =====================================================
 
 const styles = StyleSheet.create({
+  // ===================================================
+  // SCREEN
+  // ===================================================
+
   safeArea: {
     flex: 1,
     backgroundColor: BG,
@@ -1164,6 +1699,42 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: BG,
+  },
+
+  // ===================================================
+  // LOADING
+  // ===================================================
+
+  loadingScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 30,
+  },
+
+  loadingIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    backgroundColor: "#FCECEF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+
+  loadingTitle: {
+    marginTop: 15,
+    fontSize: 19,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  loadingSubtitle: {
+    marginTop: 6,
+    fontSize: 11,
+    lineHeight: 17,
+    color: MUTED,
+    textAlign: "center",
   },
 
   // ===================================================
@@ -1243,12 +1814,16 @@ const styles = StyleSheet.create({
   coverContainer: {
     height: 195,
     position: "relative",
-    backgroundColor: "#DDDDDD",
+    backgroundColor: "#FCECEF",
+    overflow: "hidden",
   },
 
-  coverImage: {
+  coverBackground: {
     width: "100%",
     height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FCECEF",
   },
 
   coverOverlay: {
@@ -1257,13 +1832,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: "rgba(166,25,46,0.07)",
   },
 
   coverTopLabel: {
     position: "absolute",
     top: 15,
     right: 16,
+    maxWidth: "65%",
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 10,
@@ -1314,11 +1890,6 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
 
-  storeNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
   storeName: {
     fontSize: 23,
     lineHeight: 28,
@@ -1340,13 +1911,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  storeType: {
-    marginTop: 8,
-    fontSize: 12,
-    color: MUTED,
-    fontWeight: "700",
-  },
-
   favoriteButton: {
     width: 44,
     height: 44,
@@ -1358,6 +1922,63 @@ const styles = StyleSheet.create({
 
   favoriteButtonActive: {
     backgroundColor: CARDINAL,
+  },
+
+  openStatusRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  openStatusBadge: {
+    height: 25,
+    paddingHorizontal: 9,
+    borderRadius: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+
+  openStatusBadgeOpen: {
+    backgroundColor: SUCCESS_BG,
+  },
+
+  openStatusBadgeClosed: {
+    backgroundColor: "#F4F4F4",
+  },
+
+  openStatusText: {
+    fontSize: 9,
+    fontWeight: "900",
+  },
+
+  openStatusTextOpen: {
+    color: SUCCESS,
+  },
+
+  openStatusTextClosed: {
+    color: MUTED,
+  },
+
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+
+  statusDotOpen: {
+    backgroundColor: SUCCESS,
+  },
+
+  statusDotClosed: {
+    backgroundColor: "#999999",
+  },
+
+  storeHours: {
+    marginLeft: 8,
+    fontSize: 10,
+    fontWeight: "700",
+    color: MUTED,
   },
 
   storeDescription: {
@@ -1397,14 +2018,14 @@ const styles = StyleSheet.create({
   },
 
   metaText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900",
     color: TEXT,
   },
 
   metaSubtext: {
     marginTop: 2,
-    fontSize: 9,
+    fontSize: 8,
     color: MUTED,
     fontWeight: "600",
   },
@@ -1413,7 +2034,7 @@ const styles = StyleSheet.create({
     width: 1,
     height: 30,
     backgroundColor: BORDER,
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
 
   // ===================================================
@@ -1520,47 +2141,95 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
+  productCardUnavailable: {
+    opacity: 0.72,
+  },
+
   productImageContainer: {
     height: 140,
-    backgroundColor: "#EEEEEE",
+    backgroundColor: "#FCECEF",
     position: "relative",
   },
 
-  productImage: {
+  productPlaceholder: {
     width: "100%",
     height: "100%",
-  },
-
-  imageOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 45,
-    backgroundColor: "rgba(0,0,0,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FCECEF",
   },
 
   imagePressed: {
     opacity: 0.82,
   },
 
-  ratingBadge: {
+  categoryBadge: {
     position: "absolute",
     top: 9,
-    right: 9,
+    left: 9,
     paddingHorizontal: 7,
     paddingVertical: 5,
     borderRadius: 9,
     backgroundColor: WHITE,
-    flexDirection: "row",
-    alignItems: "center",
   },
 
-  ratingBadgeText: {
-    marginLeft: 3,
-    fontSize: 10,
-    fontWeight: "800",
-    color: TEXT,
+  categoryBadgeText: {
+    fontSize: 8,
+    fontWeight: "900",
+    color: CARDINAL,
+  },
+
+  stockBadge: {
+    position: "absolute",
+    right: 9,
+    bottom: 9,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 9,
+    backgroundColor: SUCCESS_BG,
+  },
+
+  stockBadgeText: {
+    fontSize: 8,
+    fontWeight: "900",
+    color: SUCCESS,
+  },
+
+  stockBadgeOut: {
+    position: "absolute",
+    right: 9,
+    bottom: 9,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 9,
+    backgroundColor: "#F4F4F4",
+  },
+
+  stockBadgeTextOut: {
+    fontSize: 7,
+    fontWeight: "900",
+    color: MUTED,
+  },
+
+  unavailableOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.62)",
+  },
+
+  unavailableText: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#444444",
+    color: WHITE,
+    fontSize: 8,
+    fontWeight: "900",
   },
 
   productInfo: {
@@ -1569,6 +2238,7 @@ const styles = StyleSheet.create({
 
   productName: {
     fontSize: 13,
+    lineHeight: 17,
     fontWeight: "900",
     color: TEXT,
   },
@@ -1613,9 +2283,17 @@ const styles = StyleSheet.create({
     backgroundColor: CARDINAL_DARK,
   },
 
+  addButtonDisabled: {
+    backgroundColor: "#AAAAAA",
+  },
+
   addButtonPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.94 }],
+    transform: [
+      {
+        scale: 0.94,
+      },
+    ],
   },
 
   // ===================================================
@@ -1707,7 +2385,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 8,
-    backgroundColor: "rgba(247,247,248,0.96)",
+    backgroundColor:
+      "rgba(247,247,248,0.96)",
   },
 
   cartBar: {
@@ -1742,7 +2421,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.16)",
+    backgroundColor:
+      "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -1780,7 +2460,8 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     marginTop: 2,
     fontSize: 9,
-    color: "rgba(255,255,255,0.75)",
+    color:
+      "rgba(255,255,255,0.75)",
   },
 
   cartBarRight: {
@@ -1858,4 +2539,3 @@ const styles = StyleSheet.create({
     height: 25,
   },
 });
-

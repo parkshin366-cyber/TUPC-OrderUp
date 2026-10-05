@@ -1,19 +1,31 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
 import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  ActivityIndicator,
   Alert,
-  Image,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import { useCart } from "../../../../context/CartContext";
+
+import {
+  getPublicProduct,
+  type Product,
+  type Store,
+} from "../../../../services/api";
 
 // ============================================================
 // COLORS
@@ -22,11 +34,15 @@ import { useCart } from "../../../../context/CartContext";
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
 const GOLD = "#D8B56A";
+
 const BG = "#F7F7F8";
 const TEXT = "#171717";
 const MUTED = "#737373";
 const BORDER = "#E7E7E8";
 const WHITE = "#FFFFFF";
+
+const SUCCESS = "#18864B";
+const SUCCESS_BG = "#EAF7EF";
 
 // ============================================================
 // FAVORITES STORAGE
@@ -50,7 +66,32 @@ type FavoriteProduct = {
 };
 
 // ============================================================
-// PRODUCT DETAILS
+// PRODUCT ICON
+// ============================================================
+
+const getProductIcon = (
+  category: string
+): keyof typeof Ionicons.glyphMap => {
+  switch (category) {
+    case "Meals":
+      return "restaurant-outline";
+
+    case "Snacks":
+      return "fast-food-outline";
+
+    case "Drinks":
+      return "cafe-outline";
+
+    case "Desserts":
+      return "ice-cream-outline";
+
+    default:
+      return "bag-outline";
+  }
+};
+
+// ============================================================
+// SCREEN
 // ============================================================
 
 export default function ProductDetails() {
@@ -64,45 +105,133 @@ export default function ProductDetails() {
     ? params.id[0]
     : params.id;
 
-  const [quantity, setQuantity] = useState(1);
-  const [favorite, setFavorite] = useState(false);
+  // ==========================================================
+  // PRODUCT / STORE STATE
+  // ==========================================================
+
+  const [product, setProduct] =
+    useState<Product | null>(null);
+
+  const [store, setStore] =
+    useState<Store | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [loadError, setLoadError] =
+    useState<string | null>(null);
+
+  // ==========================================================
+  // QUANTITY
+  // ==========================================================
+
+  const [quantity, setQuantity] =
+    useState(1);
+
+  // ==========================================================
+  // FAVORITE
+  // ==========================================================
+
+  const [favorite, setFavorite] =
+    useState(false);
+
   const [favoriteLoading, setFavoriteLoading] =
     useState(true);
 
   // ==========================================================
-  // PRODUCT DATA
+  // LOAD PRODUCT
   // ==========================================================
 
-  const product = {
-    id: String(productId ?? "chicken-rice-meal"),
+  useEffect(() => {
+    let mounted = true;
 
-    name: "Chicken Rice Meal",
+    const loadProduct = async () => {
+      if (!productId) {
+        if (mounted) {
+          setProduct(null);
+          setStore(null);
+          setLoadError("Product ID is missing.");
+          setLoading(false);
+        }
 
-    price: 89,
+        return;
+      }
 
-    store: "TUPC Main Canteen",
+      try {
+        setLoading(true);
+        setLoadError(null);
 
-    category: "Meals",
+        const result = await getPublicProduct(
+          String(productId)
+        );
 
-    rating: 4.8,
+        if (!mounted) {
+          return;
+        }
 
-    reviews: 124,
+        setProduct(result.product);
+        setStore(result.store);
 
-    description:
-      "A delicious and filling chicken rice meal prepared fresh for TUPC students and staff.",
+        if (result.product.stock > 0) {
+          setQuantity((current) =>
+            Math.min(
+              Math.max(current, 1),
+              result.product.stock,
+              20
+            )
+          );
+        } else {
+          setQuantity(1);
+        }
+      } catch (error) {
+        console.error(
+          "LOAD PRODUCT DETAILS ERROR:",
+          error
+        );
 
-    image:
-      "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=1000&q=80",
-  };
+        if (!mounted) {
+          return;
+        }
+
+        setProduct(null);
+        setStore(null);
+
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load product."
+        );
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProduct();
+
+    return () => {
+      mounted = false;
+    };
+  }, [productId]);
 
   // ==========================================================
-  // CHECK IF PRODUCT IS ALREADY FAVORITE
+  // CHECK FAVORITE
   // ==========================================================
 
   useEffect(() => {
     let mounted = true;
 
     const loadFavoriteStatus = async () => {
+      if (!product) {
+        if (mounted) {
+          setFavorite(false);
+          setFavoriteLoading(false);
+        }
+
+        return;
+      }
+
       try {
         const saved =
           await AsyncStorage.getItem(
@@ -117,7 +246,8 @@ export default function ProductDetails() {
           return;
         }
 
-        const parsed: unknown = JSON.parse(saved);
+        const parsed: unknown =
+          JSON.parse(saved);
 
         if (!Array.isArray(parsed)) {
           if (mounted) {
@@ -127,23 +257,28 @@ export default function ProductDetails() {
           return;
         }
 
-        const exists = parsed.some((item) => {
-          if (typeof item === "string") {
-            return item === product.id;
+        const exists = parsed.some(
+          (item: unknown) => {
+            if (typeof item === "string") {
+              return item === product._id;
+            }
+
+            if (
+              item &&
+              typeof item === "object"
+            ) {
+              const raw =
+                item as Record<
+                  string,
+                  unknown
+                >;
+
+              return raw.id === product._id;
+            }
+
+            return false;
           }
-
-          if (
-            item &&
-            typeof item === "object"
-          ) {
-            const raw =
-              item as Record<string, unknown>;
-
-            return raw.id === product.id;
-          }
-
-          return false;
-        });
+        );
 
         if (mounted) {
           setFavorite(exists);
@@ -164,19 +299,25 @@ export default function ProductDetails() {
       }
     };
 
+    setFavoriteLoading(true);
+
     loadFavoriteStatus();
 
     return () => {
       mounted = false;
     };
-  }, [product.id]);
+  }, [product]);
 
   // ==========================================================
   // TOGGLE FAVORITE
   // ==========================================================
 
   const toggleFavorite = async () => {
-    if (favoriteLoading) {
+    if (
+      favoriteLoading ||
+      !product ||
+      !store
+    ) {
       return;
     }
 
@@ -196,46 +337,60 @@ export default function ProductDetails() {
           if (Array.isArray(parsed)) {
             favorites = parsed
               .filter(
-                (item): item is FavoriteProduct =>
+                (
+                  item: unknown
+                ): item is FavoriteProduct =>
                   !!item &&
-                  typeof item === "object" &&
+                  typeof item ===
+                    "object" &&
                   typeof (
-                    item as Record<string, unknown>
+                    item as Record<
+                      string,
+                      unknown
+                    >
                   ).id === "string"
               )
-              .map((item) => {
-                const raw =
-                  item as Record<string, unknown>;
+              .map(
+                (item: FavoriteProduct) => ({
+                  id: String(item.id),
 
-                return {
-                  id: String(raw.id),
                   name:
-                    typeof raw.name === "string"
-                      ? raw.name
-                      : "Product",
-                  store:
-                    typeof raw.store === "string"
-                      ? raw.store
-                      : "TUPC Store",
-                  price:
-                    typeof raw.price === "string"
-                      ? raw.price
-                      : String(raw.price ?? ""),
-                  image:
-                    typeof raw.image === "string"
-                      ? raw.image
-                      : undefined,
-                  category:
-                    typeof raw.category ===
+                    typeof item.name ===
                     "string"
-                      ? raw.category
+                      ? item.name
+                      : "Product",
+
+                  store:
+                    typeof item.store ===
+                    "string"
+                      ? item.store
+                      : store.name,
+
+                  price:
+                    typeof item.price ===
+                    "string"
+                      ? item.price
+                      : "",
+
+                  image:
+                    typeof item.image ===
+                    "string"
+                      ? item.image
                       : undefined,
+
+                  category:
+                    typeof item.category ===
+                    "string"
+                      ? item.category
+                      : undefined,
+
                   icon:
-                    typeof raw.icon === "string"
-                      ? (raw.icon as keyof typeof Ionicons.glyphMap)
+                    typeof item.icon ===
+                    "string"
+                      ? (item.icon as keyof typeof Ionicons.glyphMap)
                       : undefined,
-                };
-              });
+                })
+              );
           }
         } catch {
           favorites = [];
@@ -244,42 +399,41 @@ export default function ProductDetails() {
 
       const alreadyFavorite =
         favorites.some(
-          (item) => item.id === product.id
+          (item) =>
+            item.id === product._id
         );
-
-      let updatedFavorites: FavoriteProduct[];
 
       if (alreadyFavorite) {
-        // ====================================================
-        // REMOVE FAVORITE
-        // ====================================================
-
-        updatedFavorites = favorites.filter(
-          (item) => item.id !== product.id
-        );
+        const updatedFavorites =
+          favorites.filter(
+            (item) =>
+              item.id !== product._id
+          );
 
         setFavorite(false);
 
         await AsyncStorage.setItem(
           FAVORITES_STORAGE_KEY,
-          JSON.stringify(updatedFavorites)
+          JSON.stringify(
+            updatedFavorites
+          )
         );
       } else {
-        // ====================================================
-        // ADD FAVORITE
-        // ====================================================
+        const favoriteProduct: FavoriteProduct =
+          {
+            id: product._id,
+            name: product.name,
+            store: store.name,
+            price: `₱${product.price.toFixed(
+              2
+            )}`,
+            category: product.category,
+            icon: getProductIcon(
+              product.category
+            ),
+          };
 
-        const favoriteProduct: FavoriteProduct = {
-          id: product.id,
-          name: product.name,
-          store: product.store,
-          price: `₱${product.price}`,
-          image: product.image,
-          category: product.category,
-          icon: "restaurant",
-        };
-
-        updatedFavorites = [
+        const updatedFavorites = [
           ...favorites,
           favoriteProduct,
         ];
@@ -288,7 +442,9 @@ export default function ProductDetails() {
 
         await AsyncStorage.setItem(
           FAVORITES_STORAGE_KEY,
-          JSON.stringify(updatedFavorites)
+          JSON.stringify(
+            updatedFavorites
+          )
         );
       }
     } catch (error) {
@@ -305,23 +461,48 @@ export default function ProductDetails() {
   };
 
   // ==========================================================
-  // QUANTITY
+  // QUANTITY LIMIT
+  // ==========================================================
+
+  const maxQuantity = useMemo(() => {
+    if (!product) {
+      return 1;
+    }
+
+    return Math.min(
+      product.stock,
+      20
+    );
+  }, [product]);
+
+  // ==========================================================
+  // INCREASE
   // ==========================================================
 
   const increaseQuantity = () => {
-    if (quantity < 20) {
-      setQuantity(
-        (current) => current + 1
-      );
+    if (!product) {
+      return;
     }
+
+    setQuantity((current) =>
+      Math.min(
+        current + 1,
+        maxQuantity
+      )
+    );
   };
 
+  // ==========================================================
+  // DECREASE
+  // ==========================================================
+
   const decreaseQuantity = () => {
-    if (quantity > 1) {
-      setQuantity(
-        (current) => current - 1
-      );
-    }
+    setQuantity((current) =>
+      Math.max(
+        current - 1,
+        1
+      )
+    );
   };
 
   // ==========================================================
@@ -329,20 +510,111 @@ export default function ProductDetails() {
   // ==========================================================
 
   const total =
-    product.price * quantity;
+    product
+      ? product.price * quantity
+      : 0;
+
+  // ==========================================================
+  // AVAILABILITY
+  // ==========================================================
+
+  const outOfStock =
+    !product ||
+    product.stock <= 0;
+
+  const productUnavailable =
+    !product ||
+    !product.available;
+
+  const storeClosed =
+    !store ||
+    !store.isOpen;
+
+  const canAddToCart =
+    !!product &&
+    !!store &&
+    product.available &&
+    product.stock > 0 &&
+    store.isOpen &&
+    quantity > 0 &&
+    quantity <= product.stock;
 
   // ==========================================================
   // ADD TO CART
   // ==========================================================
 
   const handleAddToCart = () => {
+    if (!product || !store) {
+      return;
+    }
+
+    if (!product.available) {
+      Alert.alert(
+        "Product Unavailable",
+        "This product is currently unavailable."
+      );
+
+      return;
+    }
+
+    if (product.stock <= 0) {
+      Alert.alert(
+        "Out of Stock",
+        "This product is currently out of stock."
+      );
+
+      return;
+    }
+
+    if (!store.isOpen) {
+      Alert.alert(
+        "Store Closed",
+        `${store.name} is currently closed.`
+      );
+
+      return;
+    }
+
+    if (quantity > product.stock) {
+      Alert.alert(
+        "Not Enough Stock",
+        `Only ${product.stock} item${
+          product.stock === 1
+            ? ""
+            : "s"
+        } available.`
+      );
+
+      setQuantity(
+        Math.max(
+          1,
+          product.stock
+        )
+      );
+
+      return;
+    }
+
+    // ======================================================
+    // IMPORTANT:
+    // Store _id is now saved in the CartItem.
+    // This will be used by checkout when creating
+    // the actual MongoDB Order.
+    // ======================================================
+
     addToCart(
       {
-        id: product.id,
+        id: product._id,
         name: product.name,
         price: product.price,
-        store: product.store,
-        image: product.image,
+
+        // ACTUAL MONGODB STORE ID
+        storeId: store._id,
+
+        // STORE NAME FOR DISPLAY
+        store: store.name,
+
+        image: "",
       },
       quantity
     );
@@ -367,23 +639,147 @@ export default function ProductDetails() {
   };
 
   // ==========================================================
+  // LOADING
+  // ==========================================================
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+      >
+        <View
+          style={
+            styles.loadingScreen
+          }
+        >
+          <View
+            style={
+              styles.loadingIcon
+            }
+          >
+            <Ionicons
+              name="cube-outline"
+              size={34}
+              color={CARDINAL}
+            />
+          </View>
+
+          <ActivityIndicator
+            size="large"
+            color={CARDINAL}
+          />
+
+          <Text
+            style={
+              styles.loadingTitle
+            }
+          >
+            Loading product...
+          </Text>
+
+          <Text
+            style={
+              styles.loadingSubtitle
+            }
+          >
+            Getting the latest product
+            information.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ==========================================================
+  // ERROR / NOT FOUND
+  // ==========================================================
+
+  if (!product || !store) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+      >
+        <View
+          style={
+            styles.invalidProduct
+          }
+        >
+          <View
+            style={
+              styles.invalidIcon
+            }
+          >
+            <Ionicons
+              name="cube-outline"
+              size={35}
+              color={CARDINAL}
+            />
+          </View>
+
+          <Text
+            style={
+              styles.invalidTitle
+            }
+          >
+            Product not found
+          </Text>
+
+          <Text
+            style={
+              styles.invalidSubtitle
+            }
+          >
+            {loadError ||
+              "This product may have been removed or is no longer available."}
+          </Text>
+
+          <Pressable
+            onPress={() =>
+              router.back()
+            }
+            style={({
+              pressed,
+            }) => [
+              styles.backButton,
+              pressed &&
+                styles.buttonPressed,
+            ]}
+          >
+            <Text
+              style={
+                styles.backButtonText
+              }
+            >
+              Go Back
+            </Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ==========================================================
   // RENDER
   // ==========================================================
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <SafeAreaView
+      style={styles.safeArea}
+    >
+      <View
+        style={styles.container}
+      >
+        {/* ==================================================
+            HEADER
+        ================================================== */}
 
-        {/* ================================================== */}
-        {/* HEADER */}
-        {/* ================================================== */}
-
-        <View style={styles.header}>
-
-          {/* BACK */}
-
+        <View
+          style={styles.header}
+        >
           <Pressable
-            style={({ pressed }) => [
+            style={({
+              pressed,
+            }) => [
               styles.headerButton,
               pressed &&
                 styles.buttonPressed,
@@ -391,8 +787,6 @@ export default function ProductDetails() {
             onPress={() =>
               router.back()
             }
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
           >
             <Ionicons
               name="chevron-back"
@@ -401,31 +795,27 @@ export default function ProductDetails() {
             />
           </Pressable>
 
-          {/* TITLE */}
-
           <Text
             style={styles.headerTitle}
           >
             Product Details
           </Text>
 
-          {/* FAVORITE */}
-
           <Pressable
-            style={({ pressed }) => [
+            style={({
+              pressed,
+            }) => [
               styles.headerButton,
               favorite &&
                 styles.favoriteHeaderButton,
               pressed &&
                 styles.buttonPressed,
             ]}
-            onPress={toggleFavorite}
-            disabled={favoriteLoading}
-            accessibilityRole="button"
-            accessibilityLabel={
-              favorite
-                ? "Remove from favorites"
-                : "Add to favorites"
+            onPress={
+              toggleFavorite
+            }
+            disabled={
+              favoriteLoading
             }
           >
             <Ionicons
@@ -444,30 +834,40 @@ export default function ProductDetails() {
           </Pressable>
         </View>
 
-        {/* ================================================== */}
-        {/* CONTENT */}
-        {/* ================================================== */}
+        {/* ==================================================
+            CONTENT
+        ================================================== */}
 
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={
+            false
+          }
           contentContainerStyle={
             styles.scrollContent
           }
         >
-
-          {/* PRODUCT IMAGE */}
+          {/* PRODUCT IMAGE / PLACEHOLDER */}
 
           <View
-            style={styles.imageContainer}
+            style={
+              styles.imageContainer
+            }
           >
-            <Image
-              source={{
-                uri: product.image,
-              }}
+            <View
               style={
-                styles.productImage
+                styles.productImagePlaceholder
               }
-            />
+            >
+              <Ionicons
+                name={getProductIcon(
+                  product.category
+                )}
+                size={78}
+                color={CARDINAL}
+              />
+            </View>
+
+            {/* CATEGORY */}
 
             <View
               style={
@@ -483,23 +883,23 @@ export default function ProductDetails() {
               </Text>
             </View>
 
-            {/* FAVORITE IMAGE BUTTON */}
+            {/* FAVORITE */}
 
             <Pressable
-              style={({ pressed }) => [
+              style={({
+                pressed,
+              }) => [
                 styles.imageFavoriteButton,
                 favorite &&
                   styles.imageFavoriteButtonActive,
                 pressed &&
                   styles.buttonPressed,
               ]}
-              onPress={toggleFavorite}
-              disabled={favoriteLoading}
-              accessibilityRole="button"
-              accessibilityLabel={
-                favorite
-                  ? "Remove product from favorites"
-                  : "Add product to favorites"
+              onPress={
+                toggleFavorite
+              }
+              disabled={
+                favoriteLoading
               }
             >
               <Ionicons
@@ -520,8 +920,9 @@ export default function ProductDetails() {
 
           {/* PRODUCT INFO */}
 
-          <View style={styles.content}>
-
+          <View
+            style={styles.content}
+          >
             <View
               style={styles.titleRow}
             >
@@ -546,7 +947,7 @@ export default function ProductDetails() {
                       styles.storeName
                     }
                   >
-                    {product.store}
+                    {store.name}
                   </Text>
                 </Pressable>
               </View>
@@ -554,40 +955,64 @@ export default function ProductDetails() {
               <Text
                 style={styles.price}
               >
-                ₱{product.price}
+                ₱
+                {product.price.toFixed(
+                  2
+                )}
               </Text>
             </View>
 
-            {/* RATING */}
+            {/* AVAILABILITY */}
 
             <View
-              style={styles.ratingRow}
+              style={
+                styles.availabilityRow
+              }
             >
               <View
-                style={styles.ratingBox}
+                style={[
+                  styles.availabilityBox,
+                  product.available &&
+                  product.stock > 0
+                    ? styles.availableBox
+                    : styles.unavailableBox,
+                ]}
               >
                 <Ionicons
-                  name="star"
+                  name={
+                    product.available &&
+                    product.stock > 0
+                      ? "checkmark-circle"
+                      : "close-circle"
+                  }
                   size={15}
-                  color={GOLD}
+                  color={
+                    product.available &&
+                    product.stock > 0
+                      ? SUCCESS
+                      : MUTED
+                  }
                 />
 
                 <Text
-                  style={
-                    styles.ratingText
-                  }
+                  style={[
+                    styles.availabilityText,
+                    product.available &&
+                    product.stock > 0
+                      ? styles.availableText
+                      : styles.unavailableText,
+                  ]}
                 >
-                  {product.rating}
+                  {product.stock <=
+                  0
+                    ? "Out of stock"
+                    : !product.available
+                      ? "Unavailable"
+                      : store.isOpen
+                        ? "Available"
+                        : "Store closed"}
                 </Text>
               </View>
-
-              <Text
-                style={
-                  styles.reviewText
-                }
-              >
-                {product.reviews} reviews
-              </Text>
 
               <View
                 style={styles.dot}
@@ -595,10 +1020,11 @@ export default function ProductDetails() {
 
               <Text
                 style={
-                  styles.availableText
+                  styles.stockText
                 }
               >
-                Available
+                {product.stock}{" "}
+                in stock
               </Text>
             </View>
 
@@ -615,12 +1041,16 @@ export default function ProductDetails() {
             </Text>
 
             <Text
-              style={styles.description}
+              style={
+                styles.description
+              }
             >
-              {product.description}
+              Product information is
+              currently managed by{" "}
+              {store.name}.
             </Text>
 
-            {/* INFO CARD */}
+            {/* STORE INFO */}
 
             <View
               style={styles.infoCard}
@@ -629,7 +1059,7 @@ export default function ProductDetails() {
                 style={styles.infoIcon}
               >
                 <Ionicons
-                  name="restaurant-outline"
+                  name="storefront-outline"
                   size={21}
                   color={CARDINAL}
                 />
@@ -641,18 +1071,31 @@ export default function ProductDetails() {
                 }
               >
                 <Text
-                  style={styles.infoTitle}
+                  style={
+                    styles.infoTitle
+                  }
                 >
-                  Freshly prepared
+                  {store.name}
                 </Text>
 
                 <Text
                   style={styles.infoText}
                 >
-                  Your order will be
-                  prepared by the
-                  selected campus
-                  store.
+                  {store.location ||
+                    "Campus store"}{" "}
+                  •{" "}
+                  {store.isOpen
+                    ? "Open"
+                    : "Closed"}
+                </Text>
+
+                <Text
+                  style={styles.infoText}
+                >
+                  Pickup:{" "}
+                  {store.pickupEnabled
+                    ? "Available"
+                    : "Unavailable"}
                 </Text>
               </View>
             </View>
@@ -678,7 +1121,18 @@ export default function ProductDetails() {
                     styles.quantityHint
                   }
                 >
-                  Maximum of 20 items
+                  Maximum{" "}
+                  {Math.min(
+                    product.stock,
+                    20
+                  )}{" "}
+                  item
+                  {Math.min(
+                    product.stock,
+                    20
+                  ) === 1
+                    ? ""
+                    : "s"}
                 </Text>
               </View>
 
@@ -688,17 +1142,26 @@ export default function ProductDetails() {
                 }
               >
                 <Pressable
-                  style={
-                    styles.quantityButton
-                  }
+                  style={[
+                    styles.quantityButton,
+                    quantity <= 1 &&
+                      styles.quantityButtonDisabled,
+                  ]}
                   onPress={
                     decreaseQuantity
+                  }
+                  disabled={
+                    quantity <= 1
                   }
                 >
                   <Ionicons
                     name="remove"
                     size={20}
-                    color={TEXT}
+                    color={
+                      quantity <= 1
+                        ? "#AAAAAA"
+                        : TEXT
+                    }
                   />
                 </Pressable>
 
@@ -711,17 +1174,29 @@ export default function ProductDetails() {
                 </Text>
 
                 <Pressable
-                  style={
-                    styles.quantityButton
-                  }
+                  style={[
+                    styles.quantityButton,
+                    quantity >=
+                      maxQuantity &&
+                      styles.quantityButtonDisabled,
+                  ]}
                   onPress={
                     increaseQuantity
+                  }
+                  disabled={
+                    quantity >=
+                    maxQuantity
                   }
                 >
                   <Ionicons
                     name="add"
                     size={20}
-                    color={TEXT}
+                    color={
+                      quantity >=
+                      maxQuantity
+                        ? "#AAAAAA"
+                        : TEXT
+                    }
                   />
                 </Pressable>
               </View>
@@ -733,43 +1208,62 @@ export default function ProductDetails() {
           </View>
         </ScrollView>
 
-        {/* ================================================== */}
-        {/* BOTTOM ACTION */}
-        {/* ================================================== */}
+        {/* ==================================================
+            BOTTOM ACTION
+        ================================================== */}
 
         <View
-          style={styles.bottomAction}
+          style={
+            styles.bottomAction
+          }
         >
           <View
             style={styles.totalArea}
           >
             <Text
-              style={styles.totalLabel}
+              style={
+                styles.totalLabel
+              }
             >
               Total
             </Text>
 
             <Text
-              style={styles.totalPrice}
+              style={
+                styles.totalPrice
+              }
             >
-              ₱{total}
+              ₱{total.toFixed(2)}
             </Text>
           </View>
 
           <Pressable
-            style={({ pressed }) => [
+            style={({
+              pressed,
+            }) => [
               styles.addButton,
+              !canAddToCart &&
+                styles.addButtonDisabled,
               pressed &&
+                canAddToCart &&
                 styles.buttonPressed,
             ]}
             onPress={
               handleAddToCart
             }
-            accessibilityRole="button"
-            accessibilityLabel="Add product to cart"
+            disabled={
+              !canAddToCart
+            }
           >
             <Ionicons
-              name="bag-add-outline"
+              name={
+                outOfStock ||
+                productUnavailable
+                  ? "close-circle-outline"
+                  : storeClosed
+                    ? "lock-closed-outline"
+                    : "bag-add-outline"
+              }
               size={21}
               color={WHITE}
             />
@@ -779,7 +1273,13 @@ export default function ProductDetails() {
                 styles.addButtonText
               }
             >
-              Add to Cart
+              {outOfStock
+                ? "Out of Stock"
+                : productUnavailable
+                  ? "Unavailable"
+                  : storeClosed
+                    ? "Store Closed"
+                    : "Add to Cart"}
             </Text>
           </Pressable>
         </View>
@@ -802,6 +1302,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
+
+  // ==========================================================
+  // LOADING
+  // ==========================================================
+
+  loadingScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 30,
+  },
+
+  loadingIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    backgroundColor: "#FCECEF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+
+  loadingTitle: {
+    marginTop: 15,
+    fontSize: 19,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  loadingSubtitle: {
+    marginTop: 6,
+    fontSize: 11,
+    lineHeight: 17,
+    color: MUTED,
+    textAlign: "center",
+  },
+
+  // ==========================================================
+  // HEADER
+  // ==========================================================
 
   header: {
     height: 62,
@@ -833,19 +1373,31 @@ const styles = StyleSheet.create({
     color: TEXT,
   },
 
+  // ==========================================================
+  // SCROLL
+  // ==========================================================
+
   scrollContent: {
     paddingBottom: 20,
   },
 
+  // ==========================================================
+  // IMAGE
+  // ==========================================================
+
   imageContainer: {
     height: 290,
-    backgroundColor: "#ECECEC",
+    backgroundColor: "#FCECEF",
     position: "relative",
+    overflow: "hidden",
   },
 
-  productImage: {
+  productImagePlaceholder: {
     width: "100%",
     height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FCECEF",
   },
 
   categoryBadge: {
@@ -889,6 +1441,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#FCECEF",
   },
 
+  // ==========================================================
+  // CONTENT
+  // ==========================================================
+
   content: {
     paddingHorizontal: 18,
     paddingTop: 20,
@@ -925,31 +1481,48 @@ const styles = StyleSheet.create({
     color: CARDINAL,
   },
 
-  ratingRow: {
+  // ==========================================================
+  // AVAILABILITY
+  // ==========================================================
+
+  availabilityRow: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 14,
   },
 
-  ratingBox: {
+  availabilityBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#FFF8E8",
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 8,
+    gap: 4,
   },
 
-  ratingText: {
-    fontSize: 13,
+  availableBox: {
+    backgroundColor: SUCCESS_BG,
+  },
+
+  unavailableBox: {
+    backgroundColor: "#F4F4F4",
+  },
+
+  availabilityText: {
+    fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
   },
 
-  reviewText: {
-    marginLeft: 9,
-    fontSize: 13,
+  availableText: {
+    color: SUCCESS,
+  },
+
+  unavailableText: {
+    color: MUTED,
+  },
+
+  stockText: {
+    fontSize: 12,
     color: MUTED,
     fontWeight: "600",
   },
@@ -960,12 +1533,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: MUTED,
     marginHorizontal: 9,
-  },
-
-  availableText: {
-    fontSize: 13,
-    color: "#238636",
-    fontWeight: "700",
   },
 
   divider: {
@@ -986,6 +1553,10 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: MUTED,
   },
+
+  // ==========================================================
+  // INFO CARD
+  // ==========================================================
 
   infoCard: {
     marginTop: 20,
@@ -1025,6 +1596,10 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
+  // ==========================================================
+  // QUANTITY
+  // ==========================================================
+
   quantitySection: {
     marginTop: 24,
     flexDirection: "row",
@@ -1055,6 +1630,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  quantityButtonDisabled: {
+    opacity: 0.5,
+  },
+
   quantityText: {
     minWidth: 35,
     textAlign: "center",
@@ -1066,6 +1645,10 @@ const styles = StyleSheet.create({
   bottomSpace: {
     height: 30,
   },
+
+  // ==========================================================
+  // BOTTOM ACTION
+  // ==========================================================
 
   bottomAction: {
     paddingHorizontal: 18,
@@ -1108,13 +1691,71 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
 
-  buttonPressed: {
-    opacity: 0.82,
+  addButtonDisabled: {
+    backgroundColor: "#AAAAAA",
   },
 
   addButtonText: {
     color: WHITE,
     fontSize: 14,
     fontWeight: "900",
+  },
+
+  // ==========================================================
+  // INVALID
+  // ==========================================================
+
+  invalidProduct: {
+    flex: 1,
+    paddingHorizontal: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  invalidIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    backgroundColor: "#FCECEF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  invalidTitle: {
+    marginTop: 17,
+    fontSize: 20,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  invalidSubtitle: {
+    marginTop: 6,
+    maxWidth: 300,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    color: MUTED,
+  },
+
+  backButton: {
+    marginTop: 20,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: CARDINAL,
+  },
+
+  backButtonText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: WHITE,
+  },
+
+  // ==========================================================
+  // GENERAL
+  // ==========================================================
+
+  buttonPressed: {
+    opacity: 0.82,
   },
 });

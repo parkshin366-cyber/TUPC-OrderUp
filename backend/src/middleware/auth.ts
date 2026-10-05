@@ -75,6 +75,74 @@ export async function authenticate(
   }
 }
 
+/**
+ * =====================================================
+ * SELLER AUTHORIZATION
+ * =====================================================
+ *
+ * Requires:
+ * - valid JWT
+ * - existing user
+ * - approved account
+ * - seller role
+ */
+export async function requireSeller(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const user = await User.findById(req.userId).select(
+      "role status"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.status !== "approved") {
+      return res.status(403).json({
+        success: false,
+        message: "Account is not approved",
+      });
+    }
+
+    if (user.role !== "seller") {
+      return res.status(403).json({
+        success: false,
+        message: "Seller access required",
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error(
+      "Seller authorization error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+}
+
+/**
+ * =====================================================
+ * ADMIN AUTHORIZATION
+ * =====================================================
+ */
 export async function requireAdmin(
   req: AuthRequest,
   res: Response,
@@ -88,7 +156,9 @@ export async function requireAdmin(
       });
     }
 
-    const user = await User.findById(req.userId).select("role status");
+    const user = await User.findById(req.userId).select(
+      "role status"
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -113,7 +183,10 @@ export async function requireAdmin(
 
     next();
   } catch (error) {
-    console.error("Admin authorization error:", error);
+    console.error(
+      "Admin authorization error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,

@@ -1,16 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import {
+  getMyStore,
+  saveMyStore,
+  Store,
+} from "../../services/api";
+
+import { useAuth } from "../../context/AuthContext";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -21,32 +30,146 @@ const BG = "#F7F7F8";
 const WHITE = "#FFFFFF";
 const BORDER = "#E7E7E8";
 const GREEN = "#15803D";
+const RED = "#B91C1C";
 
 export default function SellerStore() {
-  const [storeName, setStoreName] = useState("TUPC Cardinal Bites");
-  const [description, setDescription] = useState(
-    "Affordable meals, snacks, and drinks for the TUPC community."
+  const { token } = useAuth();
+
+  // =====================================================
+  // STORE STATE
+  // =====================================================
+
+  const [store, setStore] = useState<Store | null>(
+    null
   );
-  const [location, setLocation] = useState(
-    "TUPC Main Campus"
-  );
+
+  const [storeName, setStoreName] = useState("");
+  const [description, setDescription] = useState("");
+  const [location, setLocation] = useState("");
 
   const [openTime, setOpenTime] = useState("7:00 AM");
   const [closeTime, setCloseTime] = useState("6:00 PM");
 
   const [storeOpen, setStoreOpen] = useState(true);
-  const [pickupEnabled, setPickupEnabled] = useState(true);
+  const [pickupEnabled, setPickupEnabled] =
+    useState(true);
 
-  const [hasChanges, setHasChanges] = useState(false);
+  // =====================================================
+  // UI STATE
+  // =====================================================
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] =
+    useState(false);
+
+  // =====================================================
+  // LOAD STORE
+  // =====================================================
+
+  const loadStore = useCallback(async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const result = await getMyStore(token);
+
+      if (result) {
+        setStore(result);
+
+        setStoreName(result.name ?? "");
+        setDescription(result.description ?? "");
+        setLocation(result.location ?? "");
+
+        setOpenTime(
+          result.openTime || "7:00 AM"
+        );
+
+        setCloseTime(
+          result.closeTime || "6:00 PM"
+        );
+
+        setStoreOpen(
+          result.isOpen ?? true
+        );
+
+        setPickupEnabled(
+          result.pickupEnabled ?? true
+        );
+      } else {
+        // No store yet.
+        // Start with blank fields.
+        setStore(null);
+
+        setStoreName("");
+        setDescription("");
+        setLocation("");
+
+        setOpenTime("7:00 AM");
+        setCloseTime("6:00 PM");
+
+        setStoreOpen(true);
+        setPickupEnabled(true);
+      }
+
+      setHasChanges(false);
+    } catch (error) {
+      console.error(
+        "LOAD SELLER STORE ERROR:",
+        error
+      );
+
+      Alert.alert(
+        "Unable to Load Store",
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while loading your store."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadStore();
+  }, [loadStore]);
+
+  // =====================================================
+  // CHANGE TRACKING
+  // =====================================================
 
   const markChanged = () => {
-    if (!hasChanges) {
-      setHasChanges(true);
-    }
+    setHasChanges(true);
   };
 
-  const saveChanges = () => {
-    if (!storeName.trim()) {
+  // =====================================================
+  // SAVE STORE
+  // =====================================================
+
+  const saveChanges = async () => {
+    if (!token) {
+      Alert.alert(
+        "Session Required",
+        "Please log in again."
+      );
+      return;
+    }
+
+    const trimmedName = storeName.trim();
+    const trimmedDescription =
+      description.trim();
+    const trimmedLocation =
+      location.trim();
+    const trimmedOpenTime =
+      openTime.trim();
+    const trimmedCloseTime =
+      closeTime.trim();
+
+    if (!trimmedName) {
       Alert.alert(
         "Store Name Required",
         "Please enter your store name."
@@ -54,7 +177,7 @@ export default function SellerStore() {
       return;
     }
 
-    if (!location.trim()) {
+    if (!trimmedLocation) {
       Alert.alert(
         "Location Required",
         "Please enter your pickup location."
@@ -62,23 +185,143 @@ export default function SellerStore() {
       return;
     }
 
-    setHasChanges(false);
+    if (!trimmedOpenTime) {
+      Alert.alert(
+        "Opening Time Required",
+        "Please enter your opening time."
+      );
+      return;
+    }
 
-    Alert.alert(
-      "Store Updated",
-      "Your store information has been saved successfully."
-    );
+    if (!trimmedCloseTime) {
+      Alert.alert(
+        "Closing Time Required",
+        "Please enter your closing time."
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const savedStore = await saveMyStore(
+        token,
+        {
+          name: trimmedName,
+          description: trimmedDescription,
+          location: trimmedLocation,
+          openTime: trimmedOpenTime,
+          closeTime: trimmedCloseTime,
+          isOpen: storeOpen,
+          pickupEnabled,
+        }
+      );
+
+      setStore(savedStore);
+
+      setStoreName(savedStore.name);
+      setDescription(
+        savedStore.description ?? ""
+      );
+      setLocation(
+        savedStore.location ?? ""
+      );
+
+      setOpenTime(
+        savedStore.openTime || "7:00 AM"
+      );
+
+      setCloseTime(
+        savedStore.closeTime || "6:00 PM"
+      );
+
+      setStoreOpen(
+        savedStore.isOpen ?? true
+      );
+
+      setPickupEnabled(
+        savedStore.pickupEnabled ?? true
+      );
+
+      setHasChanges(false);
+
+      Alert.alert(
+        "Store Updated",
+        "Your store information has been saved successfully."
+      );
+    } catch (error) {
+      console.error(
+        "SAVE STORE ERROR:",
+        error
+      );
+
+      Alert.alert(
+        "Unable to Save Store",
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while saving your store."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const toggleStoreStatus = (value: boolean) => {
+  // =====================================================
+  // STORE STATUS
+  // =====================================================
+
+  const toggleStoreStatus = (
+    value: boolean
+  ) => {
     setStoreOpen(value);
     markChanged();
   };
 
-  const togglePickup = (value: boolean) => {
+  const togglePickup = (
+    value: boolean
+  ) => {
     setPickupEnabled(value);
     markChanged();
   };
+
+  // =====================================================
+  // LOADING SCREEN
+  // =====================================================
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+      >
+        <View style={styles.loadingScreen}>
+          <View style={styles.loadingIcon}>
+            <Ionicons
+              name="storefront-outline"
+              size={32}
+              color={CARDINAL}
+            />
+          </View>
+
+          <ActivityIndicator
+            size="large"
+            color={CARDINAL}
+          />
+
+          <Text style={styles.loadingTitle}>
+            Loading your store...
+          </Text>
+
+          <Text style={styles.loadingText}>
+            Getting your store information from the server.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // =====================================================
+  // MAIN UI
+  // =====================================================
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -88,6 +331,7 @@ export default function SellerStore() {
         keyboardShouldPersistTaps="handled"
       >
         {/* HEADER */}
+
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.eyebrow}>
@@ -117,7 +361,7 @@ export default function SellerStore() {
                 {
                   backgroundColor: storeOpen
                     ? GREEN
-                    : "#B91C1C",
+                    : RED,
                 },
               ]}
             />
@@ -128,7 +372,7 @@ export default function SellerStore() {
                 {
                   color: storeOpen
                     ? GREEN
-                    : "#B91C1C",
+                    : RED,
                 },
               ]}
             >
@@ -138,6 +382,7 @@ export default function SellerStore() {
         </View>
 
         {/* STORE PREVIEW */}
+
         <View style={styles.previewCard}>
           <View style={styles.previewCover}>
             <View style={styles.coverPatternOne} />
@@ -192,7 +437,8 @@ export default function SellerStore() {
               style={styles.previewDescription}
               numberOfLines={2}
             >
-              {description || "Store description"}
+              {description ||
+                "Store description"}
             </Text>
 
             <View style={styles.previewInfoRow}>
@@ -207,7 +453,8 @@ export default function SellerStore() {
                   style={styles.previewInfoText}
                   numberOfLines={1}
                 >
-                  {location || "Pickup location"}
+                  {location ||
+                    "Pickup location"}
                 </Text>
               </View>
 
@@ -218,7 +465,9 @@ export default function SellerStore() {
                   color={MUTED}
                 />
 
-                <Text style={styles.previewInfoText}>
+                <Text
+                  style={styles.previewInfoText}
+                >
                   {openTime} - {closeTime}
                 </Text>
               </View>
@@ -227,6 +476,7 @@ export default function SellerStore() {
         </View>
 
         {/* STORE STATUS */}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Store Status
@@ -249,7 +499,7 @@ export default function SellerStore() {
               color={
                 storeOpen
                   ? GREEN
-                  : "#B91C1C"
+                  : RED
               }
             />
           </View>
@@ -270,7 +520,10 @@ export default function SellerStore() {
 
           <Switch
             value={storeOpen}
-            onValueChange={toggleStoreStatus}
+            onValueChange={
+              toggleStoreStatus
+            }
+            disabled={saving}
             trackColor={{
               false: "#D4D4D8",
               true: "#DFAAB3",
@@ -284,6 +537,7 @@ export default function SellerStore() {
         </View>
 
         {/* BASIC INFORMATION */}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Store Information
@@ -296,6 +550,7 @@ export default function SellerStore() {
 
         <View style={styles.formCard}>
           {/* STORE NAME */}
+
           <Text style={styles.inputLabel}>
             Store Name
           </Text>
@@ -316,10 +571,12 @@ export default function SellerStore() {
               placeholder="Enter store name"
               placeholderTextColor="#A1A1AA"
               style={styles.input}
+              editable={!saving}
             />
           </View>
 
           {/* DESCRIPTION */}
+
           <Text style={styles.inputLabel}>
             Store Description
           </Text>
@@ -351,10 +608,12 @@ export default function SellerStore() {
               ]}
               multiline
               textAlignVertical="top"
+              editable={!saving}
             />
           </View>
 
           {/* LOCATION */}
+
           <Text style={styles.inputLabel}>
             Pickup Location
           </Text>
@@ -375,11 +634,13 @@ export default function SellerStore() {
               placeholder="Enter pickup location"
               placeholderTextColor="#A1A1AA"
               style={styles.input}
+              editable={!saving}
             />
           </View>
         </View>
 
         {/* BUSINESS HOURS */}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Business Hours
@@ -433,6 +694,7 @@ export default function SellerStore() {
                   style={styles.timeTextInput}
                   placeholder="7:00 AM"
                   placeholderTextColor="#A1A1AA"
+                  editable={!saving}
                 />
               </View>
             </View>
@@ -466,6 +728,7 @@ export default function SellerStore() {
                   style={styles.timeTextInput}
                   placeholder="6:00 PM"
                   placeholderTextColor="#A1A1AA"
+                  editable={!saving}
                 />
               </View>
             </View>
@@ -485,13 +748,17 @@ export default function SellerStore() {
                 Sunday
               </Text>
 
-              <Text style={styles.closedDaySubtitle}>
+              <Text
+                style={styles.closedDaySubtitle}
+              >
                 Closed
               </Text>
             </View>
 
             <View style={styles.closedBadge}>
-              <Text style={styles.closedBadgeText}>
+              <Text
+                style={styles.closedBadgeText}
+              >
                 CLOSED
               </Text>
             </View>
@@ -499,6 +766,7 @@ export default function SellerStore() {
         </View>
 
         {/* ORDER SETTINGS */}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Order Settings
@@ -510,6 +778,8 @@ export default function SellerStore() {
         </View>
 
         <View style={styles.settingCard}>
+          {/* PICKUP */}
+
           <View style={styles.settingRow}>
             <View style={styles.settingIcon}>
               <Ionicons
@@ -524,7 +794,11 @@ export default function SellerStore() {
                 Campus Pickup
               </Text>
 
-              <Text style={styles.settingDescription}>
+              <Text
+                style={
+                  styles.settingDescription
+                }
+              >
                 Allow customers to pick up orders at your
                 store.
               </Text>
@@ -532,7 +806,10 @@ export default function SellerStore() {
 
             <Switch
               value={pickupEnabled}
-              onValueChange={togglePickup}
+              onValueChange={
+                togglePickup
+              }
+              disabled={saving}
               trackColor={{
                 false: "#D4D4D8",
                 true: "#DFAAB3",
@@ -545,7 +822,11 @@ export default function SellerStore() {
             />
           </View>
 
-          <View style={styles.settingDivider} />
+          <View
+            style={styles.settingDivider}
+          />
+
+          {/* CASH */}
 
           <View style={styles.settingRow}>
             <View
@@ -566,7 +847,11 @@ export default function SellerStore() {
                 Cash Payment
               </Text>
 
-              <Text style={styles.settingDescription}>
+              <Text
+                style={
+                  styles.settingDescription
+                }
+              >
                 Customers can pay when they pick up
                 their order.
               </Text>
@@ -579,7 +864,11 @@ export default function SellerStore() {
             </View>
           </View>
 
-          <View style={styles.settingDivider} />
+          <View
+            style={styles.settingDivider}
+          />
+
+          {/* GCASH */}
 
           <View style={styles.settingRow}>
             <View
@@ -600,7 +889,11 @@ export default function SellerStore() {
                 GCash
               </Text>
 
-              <Text style={styles.settingDescription}>
+              <Text
+                style={
+                  styles.settingDescription
+                }
+              >
                 Accept digital payments from customers.
               </Text>
             </View>
@@ -624,6 +917,7 @@ export default function SellerStore() {
         </View>
 
         {/* STORE VISIBILITY */}
+
         <View style={styles.infoCard}>
           <View style={styles.infoIcon}>
             <Ionicons
@@ -646,21 +940,33 @@ export default function SellerStore() {
         </View>
 
         {/* SAVE */}
+
         <Pressable
           style={[
             styles.saveButton,
-            !hasChanges && styles.saveButtonDisabled,
+            (!hasChanges || saving) &&
+              styles.saveButtonDisabled,
           ]}
           onPress={saveChanges}
+          disabled={!hasChanges || saving}
         >
-          <Ionicons
-            name="checkmark-circle-outline"
-            size={21}
-            color={WHITE}
-          />
+          {saving ? (
+            <ActivityIndicator
+              size="small"
+              color={WHITE}
+            />
+          ) : (
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={21}
+              color={WHITE}
+            />
+          )}
 
           <Text style={styles.saveButtonText}>
-            {hasChanges
+            {saving
+              ? "Saving..."
+              : hasChanges
               ? "Save Changes"
               : "All Changes Saved"}
           </Text>
@@ -682,6 +988,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 30,
+  },
+
+  loadingScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 30,
+  },
+
+  loadingIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    backgroundColor: "#FAECEF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+
+  loadingTitle: {
+    marginTop: 15,
+    fontSize: 17,
+    fontWeight: "800",
+    color: TEXT,
+  },
+
+  loadingText: {
+    marginTop: 5,
+    fontSize: 11,
+    color: MUTED,
+    textAlign: "center",
   },
 
   header: {
@@ -768,7 +1105,8 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor:
+      "rgba(255,255,255,0.06)",
     right: -55,
     top: -75,
   },
@@ -778,7 +1116,8 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: "rgba(216,181,106,0.12)",
+    backgroundColor:
+      "rgba(216,181,106,0.12)",
     left: -35,
     bottom: -65,
   },
@@ -791,7 +1130,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.8)",
+    borderColor:
+      "rgba(255,255,255,0.8)",
   },
 
   previewBody: {
@@ -1232,4 +1572,3 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 });
-

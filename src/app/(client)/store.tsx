@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -16,10 +16,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
-  STORES,
+  getPublicStores,
   type Store,
-  type StoreType,
-} from "../../data/stores";
+} from "../../services/api";
 
 // =====================================================
 // TUP CARDINAL THEME
@@ -27,7 +26,6 @@ import {
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
-const CARDINAL_DEEP = "#570B17";
 const GOLD = "#D8B56A";
 
 const BACKGROUND = "#F7F7F8";
@@ -38,132 +36,65 @@ const BORDER = "#E5E5E5";
 
 const SUCCESS = "#18864B";
 const SUCCESS_BG = "#EAF7EF";
-
-// =====================================================
-// TYPES
-// =====================================================
-
-type FilterType = "all" | StoreType;
-
-// =====================================================
-// STORE FILTERS
-// =====================================================
-
-const STORE_FILTERS: {
-  id: FilterType;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}[] = [
-  {
-    id: "all",
-    label: "All",
-    icon: "apps-outline",
-  },
-  {
-    id: "canteen",
-    label: "Canteen",
-    icon: "restaurant-outline",
-  },
-  {
-    id: "organization",
-    label: "Organizations",
-    icon: "people-outline",
-  },
-  {
-    id: "others",
-    label: "Others",
-    icon: "ellipsis-horizontal-circle-outline",
-  },
-];
-
-// =====================================================
-// STORE TYPE LABEL
-// =====================================================
-
-const getStoreTypeLabel = (type: StoreType) => {
-  switch (type) {
-    case "canteen":
-      return "Canteen";
-
-    case "organization":
-      return "Organization";
-
-    case "others":
-      return "Other Seller";
-
-    default:
-      return "Store";
-  }
-};
-
-// =====================================================
-// STORE TYPE ICON
-// =====================================================
-
-const getStoreTypeIcon = (
-  type: StoreType
-): keyof typeof Ionicons.glyphMap => {
-  switch (type) {
-    case "canteen":
-      return "restaurant-outline";
-
-    case "organization":
-      return "people-outline";
-
-    case "others":
-      return "person-outline";
-
-    default:
-      return "storefront-outline";
-  }
-};
-
-// =====================================================
-// FILTER TITLE
-// =====================================================
-
-const getFilterTitle = (filter: FilterType) => {
-  switch (filter) {
-    case "canteen":
-      return "Canteens";
-
-    case "organization":
-      return "Organizations";
-
-    case "others":
-      return "Other Sellers";
-
-    default:
-      return "All Stores";
-  }
-};
+const CLOSED = "#777777";
+const CLOSED_BG = "#F4F4F4";
 
 // =====================================================
 // MAIN SCREEN
 // =====================================================
 
 export default function StoreScreen() {
-  const [selectedFilter, setSelectedFilter] =
-    useState<FilterType>("all");
+  // ===================================================
+  // STATE
+  // ===================================================
 
-  const [refreshing, setRefreshing] = useState(false);
+  const [stores, setStores] = useState<Store[]>([]);
+
+  const [loading, setLoading] = useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
 
   const [openingStoreId, setOpeningStoreId] =
     useState<string | null>(null);
 
   // ===================================================
-  // FILTER STORES
+  // LOAD STORES FROM BACKEND
   // ===================================================
 
-  const filteredStores = useMemo(() => {
-    return STORES.filter((store) => {
-      if (selectedFilter === "all") {
-        return true;
-      }
+  const loadStores = useCallback(
+    async (showLoading = true) => {
+      try {
+        if (showLoading) {
+          setLoading(true);
+        }
 
-      return store.type === selectedFilter;
-    });
-  }, [selectedFilter]);
+        const result = await getPublicStores();
+
+        setStores(result);
+      } catch (error) {
+        console.error(
+          "LOAD PUBLIC STORES ERROR:",
+          error
+        );
+
+        setStores([]);
+      } finally {
+        if (showLoading) {
+          setLoading(false);
+        }
+      }
+    },
+    []
+  );
+
+  // ===================================================
+  // INITIAL LOAD
+  // ===================================================
+
+  useEffect(() => {
+    loadStores(true);
+  }, [loadStores]);
 
   // ===================================================
   // REFRESH
@@ -177,11 +108,7 @@ export default function StoreScreen() {
     setRefreshing(true);
 
     try {
-      // Temporary refresh.
-      // Replace this later with your real API request.
-      await new Promise((resolve) => {
-        setTimeout(resolve, 700);
-      });
+      await loadStores(false);
     } finally {
       setRefreshing(false);
     }
@@ -196,27 +123,32 @@ export default function StoreScreen() {
       return;
     }
 
-    setOpeningStoreId(store.id);
+    setOpeningStoreId(store._id);
 
     setTimeout(() => {
       setOpeningStoreId(null);
 
       router.push({
-        pathname: "/(client)/(client-details)/store/[id]",
+        pathname:
+          "/(client)/(client-details)/store/[id]",
         params: {
-          id: store.id,
+          id: store._id,
         },
       });
     }, 120);
   };
 
   // ===================================================
-  // CLEAR FILTER
+  // STORE COUNT
   // ===================================================
 
-  const clearFilters = () => {
-    setSelectedFilter("all");
-  };
+  const storeCountText = useMemo(() => {
+    return `${stores.length} ${
+      stores.length === 1
+        ? "store"
+        : "stores"
+    } available`;
+  }, [stores.length]);
 
   // ===================================================
   // STORE CARD
@@ -227,17 +159,25 @@ export default function StoreScreen() {
   }: {
     item: Store;
   }) => {
-    const isOpen = item.status === "Open";
-    const isOpening = openingStoreId === item.id;
+    const isOpen = item.isOpen === true;
+
+    const isOpening =
+      openingStoreId === item._id;
 
     return (
       <Pressable
         onPress={() => openStore(item)}
-        disabled={openingStoreId !== null}
+        disabled={
+          openingStoreId !== null
+        }
         style={({ pressed }) => [
           styles.storeCard,
-          pressed && styles.storeCardPressed,
-          isOpening && styles.storeCardOpening,
+
+          pressed &&
+            styles.storeCardPressed,
+
+          isOpening &&
+            styles.storeCardOpening,
         ]}
       >
         {/* ===========================================
@@ -247,25 +187,40 @@ export default function StoreScreen() {
         <View style={styles.storeIconWrapper}>
           <View style={styles.storeIconCircle}>
             <Ionicons
-              name={item.icon}
+              name="storefront-outline"
               size={29}
               color={CARDINAL}
             />
           </View>
 
-          {item.featured && (
-            <View style={styles.featuredBadge}>
-              <Ionicons
-                name="star"
-                size={9}
-                color={WHITE}
-              />
+          <View
+            style={[
+              styles.statusMiniBadge,
+              isOpen
+                ? styles.statusMiniOpen
+                : styles.statusMiniClosed,
+            ]}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                isOpen
+                  ? styles.statusDotOpen
+                  : styles.statusDotClosed,
+              ]}
+            />
 
-              <Text style={styles.featuredText}>
-                Featured
-              </Text>
-            </View>
-          )}
+            <Text
+              style={[
+                styles.statusMiniText,
+                isOpen
+                  ? styles.statusTextOpen
+                  : styles.statusTextClosed,
+              ]}
+            >
+              {isOpen ? "OPEN" : "CLOSED"}
+            </Text>
+          </View>
         </View>
 
         {/* ===========================================
@@ -278,52 +233,23 @@ export default function StoreScreen() {
           <View style={styles.storeTitleRow}>
             <Text
               style={styles.storeName}
-              numberOfLines={1}
+              numberOfLines={2}
             >
               {item.name}
             </Text>
-
-            <View
-              style={[
-                styles.statusBadge,
-                isOpen
-                  ? styles.statusOpen
-                  : styles.statusClosed,
-              ]}
-            >
-              <View
-                style={[
-                  styles.statusDot,
-                  isOpen
-                    ? styles.statusDotOpen
-                    : styles.statusDotClosed,
-                ]}
-              />
-
-              <Text
-                style={[
-                  styles.statusText,
-                  isOpen
-                    ? styles.statusTextOpen
-                    : styles.statusTextClosed,
-                ]}
-              >
-                {item.status}
-              </Text>
-            </View>
           </View>
 
-          {/* STORE TYPE */}
+          {/* SELLER LABEL */}
 
           <View style={styles.typeRow}>
             <Ionicons
-              name={getStoreTypeIcon(item.type)}
+              name="checkmark-circle"
               size={13}
               color={CARDINAL}
             />
 
             <Text style={styles.storeType}>
-              {getStoreTypeLabel(item.type)}
+              TUPC Seller
             </Text>
           </View>
 
@@ -333,60 +259,81 @@ export default function StoreScreen() {
             style={styles.storeDescription}
             numberOfLines={2}
           >
-            {item.description}
+            {item.description ||
+              "No store description available."}
           </Text>
 
-          {/* CATEGORIES */}
+          {/* LOCATION */}
 
-          <View style={styles.categoryRow}>
-            {item.categories
-              .slice(0, 3)
-              .map((category) => (
-                <View
-                  key={category}
-                  style={styles.categoryChip}
-                >
-                  <Text
-                    style={styles.categoryChipText}
-                  >
-                    {category}
-                  </Text>
-                </View>
-              ))}
+          <View style={styles.infoRow}>
+            <Ionicons
+              name="location-outline"
+              size={14}
+              color={MUTED}
+            />
+
+            <Text
+              style={styles.infoText}
+              numberOfLines={1}
+            >
+              {item.location ||
+                "Pickup location not specified"}
+            </Text>
           </View>
 
-          {/* META */}
+          {/* HOURS */}
 
-          <View style={styles.metaRow}>
-            {/* RATING */}
+          <View style={styles.infoRow}>
+            <Ionicons
+              name="time-outline"
+              size={14}
+              color={MUTED}
+            />
 
-            <View style={styles.metaItem}>
-              <Ionicons
-                name="star"
-                size={13}
-                color={GOLD}
-              />
+            <Text
+              style={styles.infoText}
+              numberOfLines={1}
+            >
+              {item.openTime} - {item.closeTime}
+            </Text>
+          </View>
 
-              <Text style={styles.metaText}>
-                {item.rating.toFixed(1)}
-              </Text>
-            </View>
+          {/* PICKUP */}
 
-            <View style={styles.metaDivider} />
+          <View style={styles.bottomRow}>
+            {item.pickupEnabled ? (
+              <View style={styles.pickupBadge}>
+                <Ionicons
+                  name="bag-handle-outline"
+                  size={12}
+                  color={SUCCESS}
+                />
 
-            {/* DELIVERY TIME */}
+                <Text
+                  style={styles.pickupText}
+                >
+                  Campus Pickup
+                </Text>
+              </View>
+            ) : (
+              <View
+                style={styles.noPickupBadge}
+              >
+                <Ionicons
+                  name="close-circle-outline"
+                  size={12}
+                  color={MUTED}
+                />
 
-            <View style={styles.metaItem}>
-              <Ionicons
-                name="time-outline"
-                size={14}
-                color={MUTED}
-              />
-
-              <Text style={styles.metaText}>
-                {item.deliveryTime}
-              </Text>
-            </View>
+                <Text
+                  style={
+                    styles.noPickupText
+                  }
+                >
+                  Pickup Unavailable
+                </Text>
+              </View>
+            )}
 
             {/* ARROW */}
 
@@ -415,8 +362,6 @@ export default function StoreScreen() {
   // ===================================================
 
   const renderEmpty = () => {
-    const hasFilter = selectedFilter !== "all";
-
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIcon}>
@@ -432,30 +377,30 @@ export default function StoreScreen() {
         </Text>
 
         <Text style={styles.emptyText}>
-          There are no stores available in this
-          category yet.
+          There are no approved seller stores
+          available right now.
         </Text>
 
-        {hasFilter && (
-          <Pressable
-            onPress={clearFilters}
-            style={({ pressed }) => [
-              styles.resetButton,
-              pressed &&
-                styles.resetButtonPressed,
-            ]}
-          >
-            <Ionicons
-              name="refresh-outline"
-              size={15}
-              color={WHITE}
-            />
+        <Pressable
+          onPress={() => loadStores(true)}
+          style={({ pressed }) => [
+            styles.resetButton,
+            pressed &&
+              styles.resetButtonPressed,
+          ]}
+        >
+          <Ionicons
+            name="refresh-outline"
+            size={15}
+            color={WHITE}
+          />
 
-            <Text style={styles.resetButtonText}>
-              Clear Filters
-            </Text>
-          </Pressable>
-        )}
+          <Text
+            style={styles.resetButtonText}
+          >
+            Refresh Stores
+          </Text>
+        </Pressable>
       </View>
     );
   };
@@ -472,68 +417,23 @@ export default function StoreScreen() {
         =========================================== */}
 
         <View style={styles.header}>
-          <View style={styles.headerTextContainer}>
+          <View
+            style={styles.headerTextContainer}
+          >
+            <Text style={styles.eyebrow}>
+              TUPC-ORDERUP
+            </Text>
+
             <Text style={styles.title}>
               Stores
             </Text>
 
             <Text style={styles.subtitle}>
-              Find canteens, organizations, and other
-              sellers around campus.
+              Find stores, canteens, and sellers
+              around campus.
             </Text>
           </View>
         </View>
-
-        {/* ===========================================
-            FILTERS
-        =========================================== */}
-
-        <FlatList
-          data={STORE_FILTERS}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={
-            styles.filterContent
-          }
-          renderItem={({ item }) => {
-            const active =
-              selectedFilter === item.id;
-
-            return (
-              <Pressable
-                onPress={() =>
-                  setSelectedFilter(item.id)
-                }
-                style={({ pressed }) => [
-                  styles.filterButton,
-                  active &&
-                    styles.filterButtonActive,
-                  pressed &&
-                    styles.filterButtonPressed,
-                ]}
-              >
-                <Ionicons
-                  name={item.icon}
-                  size={16}
-                  color={
-                    active ? WHITE : MUTED
-                  }
-                />
-
-                <Text
-                  style={[
-                    styles.filterText,
-                    active &&
-                      styles.filterTextActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          }}
-        />
 
         {/* ===========================================
             RESULT HEADER
@@ -542,15 +442,11 @@ export default function StoreScreen() {
         <View style={styles.resultHeader}>
           <View>
             <Text style={styles.resultTitle}>
-              {getFilterTitle(selectedFilter)}
+              Available Stores
             </Text>
 
             <Text style={styles.resultCount}>
-              {filteredStores.length}{" "}
-              {filteredStores.length === 1
-                ? "store"
-                : "stores"}{" "}
-              available
+              {storeCountText}
             </Text>
           </View>
 
@@ -564,6 +460,52 @@ export default function StoreScreen() {
       </View>
     );
   };
+
+  // ===================================================
+  // LOADING SCREEN
+  // ===================================================
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={["top"]}
+      >
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor={BACKGROUND}
+        />
+
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingIcon}>
+            <Ionicons
+              name="storefront-outline"
+              size={34}
+              color={CARDINAL}
+            />
+          </View>
+
+          <ActivityIndicator
+            size="large"
+            color={CARDINAL}
+          />
+
+          <Text
+            style={styles.loadingTitle}
+          >
+            Loading stores...
+          </Text>
+
+          <Text
+            style={styles.loadingText}
+          >
+            Getting available stores from
+            TUPC-OrderUp.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // ===================================================
   // SCREEN
@@ -580,19 +522,27 @@ export default function StoreScreen() {
       />
 
       <FlatList
-        data={filteredStores}
-        keyExtractor={(item) => item.id}
+        data={stores}
+        keyExtractor={(item) =>
+          item._id
+        }
         renderItem={renderStore}
-        ListHeaderComponent={ListHeader}
-        ListEmptyComponent={renderEmpty}
+        ListHeaderComponent={
+          ListHeader
+        }
+        ListEmptyComponent={
+          renderEmpty
+        }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.listContent,
-          filteredStores.length === 0 &&
+          stores.length === 0 &&
             styles.listContentEmpty,
         ]}
         ItemSeparatorComponent={() => (
-          <View style={styles.cardSeparator} />
+          <View
+            style={styles.cardSeparator}
+          />
         )}
         refreshControl={
           <RefreshControl
@@ -632,15 +582,59 @@ const styles = StyleSheet.create({
   },
 
   // ===================================================
+  // LOADING
+  // ===================================================
+
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 30,
+  },
+
+  loadingIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 25,
+    backgroundColor: "#FBECEF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+
+  loadingTitle: {
+    marginTop: 15,
+    fontSize: 18,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  loadingText: {
+    marginTop: 5,
+    fontSize: 11,
+    lineHeight: 17,
+    color: MUTED,
+    textAlign: "center",
+  },
+
+  // ===================================================
   // HEADER
   // ===================================================
 
   header: {
-    marginBottom: 18,
+    marginBottom: 22,
   },
 
   headerTextContainer: {
     width: "100%",
+  },
+
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.3,
+    color: CARDINAL,
+    marginBottom: 4,
   },
 
   title: {
@@ -655,51 +649,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: MUTED,
-  },
-
-  // ===================================================
-  // FILTER
-  // ===================================================
-
-  filterContent: {
-    paddingRight: 10,
-    gap: 8,
-    paddingBottom: 22,
-  },
-
-  filterButton: {
-    height: 39,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: WHITE,
-    borderWidth: 1,
-    borderColor: BORDER,
-    flexDirection: "row",    alignItems: "center",
-    gap: 6,
-  },
-
-  filterButtonActive: {
-    backgroundColor: CARDINAL,
-    borderColor: CARDINAL,
-  },
-
-  filterButtonPressed: {
-    opacity: 0.75,
-    transform: [
-      {
-        scale: 0.97,
-      },
-    ],
-  },
-
-  filterText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: MUTED,
-  },
-
-  filterTextActive: {
-    color: WHITE,
   },
 
   // ===================================================
@@ -772,7 +721,7 @@ const styles = StyleSheet.create({
 
   storeIconWrapper: {
     width: 82,
-    minHeight: 125,
+    minHeight: 150,
     alignItems: "center",
     justifyContent: "flex-start",
     marginRight: 12,
@@ -789,24 +738,54 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  featuredBadge: {
+  statusMiniBadge: {
     position: "absolute",
     top: 56,
-    paddingHorizontal: 7,
+    minWidth: 62,
     height: 22,
+    paddingHorizontal: 7,
     borderRadius: 11,
-    backgroundColor: GOLD,
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    justifyContent: "center",
+    gap: 4,
     borderWidth: 2,
     borderColor: WHITE,
   },
 
-  featuredText: {
+  statusMiniOpen: {
+    backgroundColor: SUCCESS_BG,
+  },
+
+  statusMiniClosed: {
+    backgroundColor: CLOSED_BG,
+  },
+
+  statusMiniText: {
     fontSize: 8,
     fontWeight: "900",
-    color: WHITE,
+  },
+
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+
+  statusDotOpen: {
+    backgroundColor: SUCCESS,
+  },
+
+  statusDotClosed: {
+    backgroundColor: CLOSED,
+  },
+
+  statusTextOpen: {
+    color: SUCCESS,
+  },
+
+  statusTextClosed: {
+    color: CLOSED,
   },
 
   // ===================================================
@@ -834,14 +813,14 @@ const styles = StyleSheet.create({
   },
 
   // ===================================================
-  // STORE TYPE
+  // SELLER TYPE
   // ===================================================
 
   typeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginBottom: 5,
+    marginBottom: 6,
   },
 
   storeType: {
@@ -859,114 +838,73 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: "500",
     color: MUTED,
-    marginBottom: 8,
-  },
-
-  // ===================================================
-  // PRODUCT CATEGORIES
-  // ===================================================
-
-  categoryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 5,
     marginBottom: 9,
   },
 
-  categoryChip: {
-    paddingHorizontal: 7,
-    height: 22,
-    borderRadius: 7,
-    backgroundColor: "#F6F6F7",
-    borderWidth: 1,
-    borderColor: "#ECECEE",
+  // ===================================================
+  // INFO
+  // ===================================================
+
+  infoRow: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 5,
+    marginBottom: 6,
   },
 
-  categoryChipText: {
-    fontSize: 8,
-    fontWeight: "800",
+  infoText: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: "700",
     color: MUTED,
   },
 
   // ===================================================
-  // STATUS
+  // BOTTOM
   // ===================================================
 
-  statusBadge: {
-    height: 22,
-    paddingHorizontal: 7,
-    borderRadius: 11,
+  bottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 3,
+    minHeight: 29,
+  },
+
+  pickupBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-  },
-
-  statusOpen: {
     backgroundColor: SUCCESS_BG,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
 
-  statusClosed: {
-    backgroundColor: "#F4F4F4",
-  },
-
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-
-  statusDotOpen: {
-    backgroundColor: SUCCESS,
-  },
-
-  statusDotClosed: {
-    backgroundColor: "#999999",
-  },
-
-  statusText: {
+  pickupText: {
     fontSize: 8,
     fontWeight: "900",
-  },
-
-  statusTextOpen: {
     color: SUCCESS,
   },
 
-  statusTextClosed: {
-    color: "#777777",
-  },
-
-  // ===================================================
-  // META
-  // ===================================================
-
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    minHeight: 28,
-  },
-
-  metaItem: {
+  noPickupBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    backgroundColor: "#F4F4F4",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
 
-  metaText: {
-    fontSize: 10,
-    fontWeight: "800",
+  noPickupText: {
+    fontSize: 8,
+    fontWeight: "900",
     color: MUTED,
   },
 
-  metaDivider: {
-    width: 1,
-    height: 13,
-    backgroundColor: BORDER,
-    marginHorizontal: 9,
-  },
+  // ===================================================
+  // ARROW
+  // ===================================================
 
   storeArrow: {
     marginLeft: "auto",
@@ -979,7 +917,7 @@ const styles = StyleSheet.create({
   },
 
   // ===================================================
-  // EMPTY STATE
+  // EMPTY
   // ===================================================
 
   emptyContainer: {

@@ -1,14 +1,36 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
-    Alert,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { useAuth } from "../../context/AuthContext";
+import {
+  getMyProducts,
+  getSellerOrders,
+  Order,
+  Product,
+} from "../../services/api";
+import {
+  computeSales,
+  describeChange,
+  describeItems,
+  formatChange,
+  formatOrderCode,
+  formatTimeAgo,
+  getCustomerName,
+  getRecentOrders,
+  Period,
+} from "../../services/sellerAnalytics";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -21,129 +43,9 @@ const WHITE = "#FFFFFF";
 const GREEN = "#2E7D32";
 const RED = "#C62828";
 
-type Period = "Today" | "7 Days" | "30 Days";
+type Trend = "up" | "down" | "flat";
 
-type Sale = {
-  id: string;
-  customer: string;
-  item: string;
-  amount: number;
-  payment: "Cash" | "GCash";
-  status: "Completed" | "Pending";
-  time: string;
-};
-
-const salesData: Record<
-  Period,
-  {
-    total: number;
-    orders: number;
-    average: number;
-    change: string;
-    chart: number[];
-    labels: string[];
-  }
-> = {
-  Today: {
-    total: 4280,
-    orders: 24,
-    average: 178.33,
-    change: "+12.5%",
-    chart: [28, 42, 35, 55, 48, 72, 64, 86],
-    labels: ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM"],
-  },
-  "7 Days": {
-    total: 28640,
-    orders: 164,
-    average: 174.63,
-    change: "+18.2%",
-    chart: [42, 58, 51, 74, 63, 82, 70, 94],
-    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", ""],
-  },
-  "30 Days": {
-    total: 112480,
-    orders: 648,
-    average: 173.58,
-    change: "+21.7%",
-    chart: [35, 48, 44, 61, 54, 72, 66, 91],
-    labels: ["1", "5", "10", "15", "20", "25", "28", "30"],
-  },
-};
-
-const recentSales: Sale[] = [
-  {
-    id: "#ORD-1048",
-    customer: "Joshua B.",
-    item: "Chicken Rice Meal",
-    amount: 149,
-    payment: "GCash",
-    status: "Completed",
-    time: "2 min ago",
-  },
-  {
-    id: "#ORD-1047",
-    customer: "Maria S.",
-    item: "Iced Coffee + Fries",
-    amount: 135,
-    payment: "Cash",
-    status: "Completed",
-    time: "8 min ago",
-  },
-  {
-    id: "#ORD-1046",
-    customer: "Kevin R.",
-    item: "Beef Tapa Meal",
-    amount: 169,
-    payment: "GCash",
-    status: "Completed",
-    time: "14 min ago",
-  },
-  {
-    id: "#ORD-1045",
-    customer: "Angela M.",
-    item: "Burger Meal",
-    amount: 129,
-    payment: "Cash",
-    status: "Completed",
-    time: "22 min ago",
-  },
-  {
-    id: "#ORD-1044",
-    customer: "Daniel C.",
-    item: "Chicken Rice Meal",
-    amount: 149,
-    payment: "GCash",
-    status: "Pending",
-    time: "31 min ago",
-  },
-];
-
-const topProducts = [
-  {
-    name: "Chicken Rice Meal",
-    category: "Meals",
-    sold: 184,
-    revenue: 27416,
-  },
-  {
-    name: "Iced Coffee",
-    category: "Drinks",
-    sold: 142,
-    revenue: 11360,
-  },
-  {
-    name: "Beef Tapa Meal",
-    category: "Meals",
-    sold: 96,
-    revenue: 16224,
-  },
-  {
-    name: "Burger Meal",
-    category: "Meals",
-    sold: 81,
-    revenue: 10449,
-  },
-];
+const PERIODS: Period[] = ["Today", "7 Days", "30 Days", "All Time"];
 
 const formatCurrency = (value: number) =>
   `₱${value.toLocaleString("en-PH", {
@@ -151,30 +53,96 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 2,
   })}`;
 
+const getTrend = (percent: number | null): Trend => {
+  if (percent === null) {
+    return "flat";
+  }
+
+  return percent >= 0 ? "up" : "down";
+};
+
 export default function SellerSalesScreen() {
+  const { token } = useAuth();
+
   const [period, setPeriod] = useState<Period>("Today");
 
-  const currentData = salesData[period];
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
 
-  const paymentSummary = useMemo(() => {
-    const cash = recentSales
-      .filter((sale) => sale.payment === "Cash")
-      .reduce((sum, sale) => sum + sale.amount, 0);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-    const gcash = recentSales
-      .filter((sale) => sale.payment === "GCash")
-      .reduce((sum, sale) => sum + sale.amount, 0);
+  // =====================================================
+  // LOAD ORDERS AND PRODUCTS
+  // =====================================================
 
-    const total = cash + gcash;
+  const loadData = useCallback(async () => {
+    if (!token) {
+      setOrders([]);
+      setProducts([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
-    return {
-      cash,
-      gcash,
-      total,
-      cashPercent: total ? Math.round((cash / total) * 100) : 0,
-      gcashPercent: total ? Math.round((gcash / total) * 100) : 0,
-    };
-  }, []);
+    try {
+      // Orders are required. Products only add category/price details,
+      // so sales still show if the product request fails.
+      const [ordersResult, productsResult] = await Promise.allSettled([
+        getSellerOrders(token),
+        getMyProducts(token),
+      ]);
+
+      if (ordersResult.status === "rejected") {
+        throw ordersResult.reason;
+      }
+
+      setOrders(ordersResult.value);
+
+      setProducts(
+        productsResult.status === "fulfilled" ? productsResult.value : []
+      );
+    } catch (error) {
+      console.error("LOAD SALES ERROR:", error);
+
+      Alert.alert(
+        "Unable to Load Sales",
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while loading your sales."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [token]);
+
+  // Reload whenever the tab is opened so new orders show up.
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData();
+  }, [loadData]);
+
+  // =====================================================
+  // NUMBERS
+  // =====================================================
+
+  const sales = useMemo(
+    () => computeSales(orders, products, period),
+    [orders, products, period]
+  );
+
+  const recentOrders = useMemo(() => getRecentOrders(orders, 5), [orders]);
+
+  const trend = getTrend(sales.changePercent);
+
+  const chartMax = Math.max(...sales.chart, 0);
 
   const handleExport = () => {
     Alert.alert(
@@ -183,12 +151,35 @@ export default function SellerSalesScreen() {
     );
   };
 
+  // =====================================================
+  // LOADING
+  // =====================================================
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={CARDINAL} />
+
+          <Text style={styles.loadingText}>Loading sales...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={CARDINAL}
+          />
+        }
       >
         {/* HEADER */}
         <View style={styles.header}>
@@ -214,7 +205,7 @@ export default function SellerSalesScreen() {
 
         {/* PERIOD FILTER */}
         <View style={styles.periodCard}>
-          {(["Today", "7 Days", "30 Days"] as Period[]).map((item) => {
+          {PERIODS.map((item) => {
             const active = period === item;
 
             return (
@@ -244,22 +235,22 @@ export default function SellerSalesScreen() {
           <SummaryCard
             icon="cash-outline"
             label="Total Sales"
-            value={formatCurrency(currentData.total)}
-            detail={currentData.change}
-            positive
+            value={formatCurrency(sales.total)}
+            detail={formatChange(sales.changePercent, sales.total)}
+            trend={trend}
           />
 
           <SummaryCard
             icon="receipt-outline"
             label="Orders"
-            value={currentData.orders.toString()}
+            value={sales.orderCount.toString()}
             detail="Completed orders"
           />
 
           <SummaryCard
             icon="trending-up-outline"
             label="Avg. Order"
-            value={formatCurrency(currentData.average)}
+            value={formatCurrency(sales.average)}
             detail="Per transaction"
           />
         </View>
@@ -278,16 +269,30 @@ export default function SellerSalesScreen() {
           <View style={styles.chartTop}>
             <View>
               <Text style={styles.chartAmount}>
-                {formatCurrency(currentData.total)}
+                {formatCurrency(sales.total)}
               </Text>
+
               <View style={styles.growthRow}>
-                <Ionicons
-                  name="arrow-up"
-                  size={14}
-                  color={GREEN}
-                />
-                <Text style={styles.growthText}>
-                  {currentData.change} from previous period
+                {trend !== "flat" && (
+                  <Ionicons
+                    name={trend === "up" ? "arrow-up" : "arrow-down"}
+                    size={14}
+                    color={trend === "up" ? GREEN : RED}
+                  />
+                )}
+
+                <Text
+                  style={[
+                    styles.growthText,
+                    trend === "down" && styles.growthTextDown,
+                    trend === "flat" && styles.growthTextFlat,
+                  ]}
+                >
+                  {describeChange(
+                    sales.changePercent,
+                    sales.total,
+                    "previous period"
+                  )}
                 </Text>
               </View>
             </View>
@@ -303,24 +308,31 @@ export default function SellerSalesScreen() {
             <View style={[styles.chartGridLine, { top: "66%" }]} />
 
             <View style={styles.barsRow}>
-              {currentData.chart.map((value, index) => (
-                <View style={styles.barColumn} key={`${value}-${index}`}>
-                  <View style={styles.barTrack}>
-                    <View
-                      style={[
-                        styles.bar,
-                        {
-                          height: `${value}%`,
-                        },
-                      ]}
-                    />
-                  </View>
+              {sales.chart.map((value, index) => {
+                const heightPercent =
+                  chartMax > 0 && value > 0
+                    ? Math.max((value / chartMax) * 100, 4)
+                    : 0;
 
-                  <Text style={styles.barLabel}>
-                    {currentData.labels[index]}
-                  </Text>
-                </View>
-              ))}
+                return (
+                  <View style={styles.barColumn} key={`${index}`}>
+                    <View style={styles.barTrack}>
+                      <View
+                        style={[
+                          styles.bar,
+                          {
+                            height: `${heightPercent}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    <Text style={styles.barLabel}>
+                      {sales.labels[index]}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
         </View>
@@ -333,50 +345,54 @@ export default function SellerSalesScreen() {
               Your best-performing products
             </Text>
           </View>
-
-          <Pressable
-            onPress={() => Alert.alert("Products", "Product analytics coming soon.")}
-          >
-            <Text style={styles.viewAll}>View All</Text>
-          </Pressable>
         </View>
 
-        <View style={styles.productsCard}>
-          {topProducts.map((product, index) => (
-            <View
-              key={product.name}
-              style={[
-                styles.productRow,
-                index === topProducts.length - 1 && styles.lastRow,
-              ]}
-            >
-              <View style={styles.rankCircle}>
-                <Text style={styles.rankText}>{index + 1}</Text>
-              </View>
+        {sales.topProducts.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No product sales yet</Text>
+            <Text style={styles.emptyText}>
+              Products will appear here once orders are completed in this
+              period.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.productsCard}>
+            {sales.topProducts.map((product, index) => (
+              <View
+                key={product.name}
+                style={[
+                  styles.productRow,
+                  index === sales.topProducts.length - 1 && styles.lastRow,
+                ]}
+              >
+                <View style={styles.rankCircle}>
+                  <Text style={styles.rankText}>{index + 1}</Text>
+                </View>
 
-              <View style={styles.productInfo}>
-                <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productCategory}>
-                  {product.category} · {product.sold} sold
-                </Text>
-              </View>
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName}>{product.name}</Text>
+                  <Text style={styles.productCategory}>
+                    {product.category} · {product.sold} sold
+                  </Text>
+                </View>
 
-              <View style={styles.productRevenue}>
-                <Text style={styles.revenueText}>
-                  {formatCurrency(product.revenue)}
-                </Text>
-                <Text style={styles.revenueLabel}>revenue</Text>
+                <View style={styles.productRevenue}>
+                  <Text style={styles.revenueText}>
+                    {formatCurrency(product.revenue)}
+                  </Text>
+                  <Text style={styles.revenueLabel}>revenue</Text>
+                </View>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
 
         {/* PAYMENT METHODS */}
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>Payment Methods</Text>
             <Text style={styles.sectionSubtitle}>
-              Recent payment distribution
+              Payment distribution for {period.toLowerCase()}
             </Text>
           </View>
         </View>
@@ -385,8 +401,8 @@ export default function SellerSalesScreen() {
           <PaymentRow
             icon="cash-outline"
             label="Cash"
-            amount={paymentSummary.cash}
-            percent={paymentSummary.cashPercent}
+            amount={sales.payment.cash}
+            percent={sales.payment.cashPercent}
           />
 
           <View style={styles.paymentDivider} />
@@ -394,8 +410,8 @@ export default function SellerSalesScreen() {
           <PaymentRow
             icon="phone-portrait-outline"
             label="GCash"
-            amount={paymentSummary.gcash}
-            percent={paymentSummary.gcashPercent}
+            amount={sales.payment.gcash}
+            percent={sales.payment.gcashPercent}
           />
         </View>
 
@@ -407,75 +423,80 @@ export default function SellerSalesScreen() {
               Latest activity from your store
             </Text>
           </View>
-
-          <Pressable
-            onPress={() => Alert.alert("Transactions", "Transaction history coming soon.")}
-          >
-            <Text style={styles.viewAll}>View All</Text>
-          </Pressable>
         </View>
 
-        <View style={styles.transactionsCard}>
-          {recentSales.map((sale, index) => (
-            <View
-              key={sale.id}
-              style={[
-                styles.transactionRow,
-                index === recentSales.length - 1 && styles.lastRow,
-              ]}
-            >
-              <View style={styles.transactionIcon}>
-                <Ionicons
-                  name={
-                    sale.payment === "GCash"
-                      ? "phone-portrait-outline"
-                      : "cash-outline"
-                  }
-                  size={19}
-                  color={CARDINAL}
-                />
-              </View>
+        {recentOrders.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No orders yet</Text>
+            <Text style={styles.emptyText}>
+              New customer orders will show up here.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.transactionsCard}>
+            {recentOrders.map((order, index) => {
+              const completed = order.status === "Completed";
 
-              <View style={styles.transactionInfo}>
-                <Text style={styles.transactionCustomer}>
-                  {sale.customer}
-                </Text>
-                <Text style={styles.transactionItem} numberOfLines={1}>
-                  {sale.item}
-                </Text>
-                <Text style={styles.transactionMeta}>
-                  {sale.id} · {sale.time}
-                </Text>
-              </View>
-
-              <View style={styles.transactionRight}>
-                <Text style={styles.transactionAmount}>
-                  {formatCurrency(sale.amount)}
-                </Text>
-
+              return (
                 <View
+                  key={order._id}
                   style={[
-                    styles.statusPill,
-                    sale.status === "Completed"
-                      ? styles.completedPill
-                      : styles.pendingPill,
+                    styles.transactionRow,
+                    index === recentOrders.length - 1 && styles.lastRow,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.statusText,
-                      sale.status === "Completed"
-                        ? styles.completedText
-                        : styles.pendingText,
-                    ]}
-                  >
-                    {sale.status}
-                  </Text>
+                  <View style={styles.transactionIcon}>
+                    <Ionicons
+                      name={
+                        order.paymentMethod === "gcash"
+                          ? "phone-portrait-outline"
+                          : "cash-outline"
+                      }
+                      size={19}
+                      color={CARDINAL}
+                    />
+                  </View>
+
+                  <View style={styles.transactionInfo}>
+                    <Text style={styles.transactionCustomer}>
+                      {getCustomerName(order)}
+                    </Text>
+                    <Text style={styles.transactionItem} numberOfLines={1}>
+                      {describeItems(order)}
+                    </Text>
+                    <Text style={styles.transactionMeta}>
+                      {formatOrderCode(order)} · {formatTimeAgo(order.createdAt)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.transactionRight}>
+                    <Text style={styles.transactionAmount}>
+                      {formatCurrency(Number(order.total) || 0)}
+                    </Text>
+
+                    <View
+                      style={[
+                        styles.statusPill,
+                        completed ? styles.completedPill : styles.pendingPill,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusText,
+                          completed
+                            ? styles.completedText
+                            : styles.pendingText,
+                        ]}
+                      >
+                        {order.status}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-              </View>
-            </View>
-          ))}
-        </View>
+              );
+            })}
+          </View>
+        )}
 
         {/* FOOTER NOTE */}
         <View style={styles.footerNote}>
@@ -485,8 +506,8 @@ export default function SellerSalesScreen() {
             color={MUTED}
           />
           <Text style={styles.footerText}>
-            Sales data shown here is sample data. It will be connected to your
-            MongoDB backend later.
+            Sales are counted from completed orders. Cancelled orders are
+            excluded. Pull down to refresh.
           </Text>
         </View>
       </ScrollView>
@@ -499,13 +520,13 @@ function SummaryCard({
   label,
   value,
   detail,
-  positive,
+  trend,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value: string;
   detail: string;
-  positive?: boolean;
+  trend?: Trend;
 }) {
   return (
     <View style={styles.summaryCard}>
@@ -517,14 +538,19 @@ function SummaryCard({
       <Text style={styles.summaryValue}>{value}</Text>
 
       <View style={styles.summaryDetailRow}>
-        {positive ? (
+        {trend === "up" && (
           <Ionicons name="trending-up" size={13} color={GREEN} />
-        ) : null}
+        )}
+
+        {trend === "down" && (
+          <Ionicons name="trending-down" size={13} color={RED} />
+        )}
 
         <Text
           style={[
             styles.summaryDetail,
-            positive && styles.summaryPositive,
+            trend === "up" && styles.summaryPositive,
+            trend === "down" && styles.summaryNegative,
           ]}
         >
           {detail}
@@ -562,7 +588,7 @@ function PaymentRow({
             style={[
               styles.progressFill,
               {
-                width: `${Math.max(percent, 4)}%`,
+                width: `${percent > 0 ? Math.max(percent, 4) : 0}%`,
               },
             ]}
           />
@@ -1109,5 +1135,54 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     color: MUTED,
   },
-});
 
+  summaryNegative: {
+    color: RED,
+  },
+
+  growthTextDown: {
+    color: RED,
+  },
+
+  growthTextFlat: {
+    color: MUTED,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: MUTED,
+    fontWeight: "600",
+  },
+
+  emptyCard: {
+    backgroundColor: WHITE,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingVertical: 26,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    marginBottom: 22,
+  },
+
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: TEXT,
+  },
+
+  emptyText: {
+    marginTop: 5,
+    fontSize: 11,
+    lineHeight: 16,
+    color: MUTED,
+    textAlign: "center",
+  },
+});

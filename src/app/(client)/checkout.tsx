@@ -11,7 +11,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
+
+import {
+  createOrder,
+  type PaymentMethod,
+} from "../../services/api";
 
 // =====================================================
 // COLORS
@@ -19,7 +26,6 @@ import { useCart } from "../../context/CartContext";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
-const GOLD = "#D8B56A";
 const BG = "#F7F7F8";
 const TEXT = "#171717";
 const MUTED = "#737373";
@@ -33,8 +39,6 @@ const SOFT_GOLD = "#FFF8E7";
 // =====================================================
 // TYPES
 // =====================================================
-
-type PaymentMethod = "cash" | "gcash";
 
 type PickupLocation = {
   id: string;
@@ -55,10 +59,67 @@ const pickupLocations: PickupLocation[] = [
 ];
 
 // =====================================================
+// ERROR HELPER
+// =====================================================
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null
+  ) {
+    const err = error as any;
+
+    if (typeof err.message === "string") {
+      return err.message;
+    }
+
+    if (
+      typeof err.error === "string"
+    ) {
+      return err.error;
+    }
+
+    if (
+      typeof err.detail === "string"
+    ) {
+      return err.detail;
+    }
+
+    if (
+      typeof err.data?.message === "string"
+    ) {
+      return err.data.message;
+    }
+
+    if (
+      typeof err.data?.error === "string"
+    ) {
+      return err.data.error;
+    }
+  }
+
+  return "We couldn't place your order. Please try again.";
+}
+
+// =====================================================
 // CHECKOUT SCREEN
 // =====================================================
 
 export default function CheckoutScreen() {
+  // ===================================================
+  // AUTH
+  // ===================================================
+
+  const { token } = useAuth();
+
+  // ===================================================
+  // CART
+  // ===================================================
+
   const {
     items,
     itemCount,
@@ -66,14 +127,24 @@ export default function CheckoutScreen() {
     clearCart,
   } = useCart();
 
+  // ===================================================
+  // STATE
+  // ===================================================
+
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("cash");
 
   const [pickupLocation, setPickupLocation] =
-    useState<PickupLocation>(pickupLocations[0]);
+    useState<PickupLocation>(
+      pickupLocations[0]
+    );
 
   const [isPlacingOrder, setIsPlacingOrder] =
     useState(false);
+
+  // ===================================================
+  // TOTAL
+  // ===================================================
 
   const deliveryFee = 0;
 
@@ -82,14 +153,19 @@ export default function CheckoutScreen() {
   }, [subtotal]);
 
   // ===================================================
-  // EMPTY CART CHECK
+  // EMPTY CART
   // ===================================================
 
   if (items.length === 0) {
     return (
       <SafeAreaView
         style={styles.safeArea}
-        edges={["top", "left", "right", "bottom"]}
+        edges={[
+          "top",
+          "left",
+          "right",
+          "bottom",
+        ]}
       >
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIcon}>
@@ -112,9 +188,12 @@ export default function CheckoutScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.emptyButton,
-              pressed && styles.buttonPressed,
+              pressed &&
+                styles.buttonPressed,
             ]}
-            onPress={() => router.replace("/explore")}
+            onPress={() =>
+              router.replace("/explore")
+            }
           >
             <Ionicons
               name="bag-handle-outline"
@@ -132,10 +211,102 @@ export default function CheckoutScreen() {
   }
 
   // ===================================================
-  // PLACE ORDER
+  // GET STORE ID
+  // ===================================================
+
+  const getStoreId = (): string | null => {
+    if (!items.length) {
+      return null;
+    }
+
+    const firstStoreId =
+      items[0]?.storeId;
+
+    if (!firstStoreId) {
+      return null;
+    }
+
+    const allSameStore =
+      items.every(
+        (item) =>
+          item.storeId === firstStoreId
+      );
+
+    if (!allSameStore) {
+      return null;
+    }
+
+    return firstStoreId;
+  };
+
+  // ===================================================
+  // HANDLE PLACE ORDER
   // ===================================================
 
   const handlePlaceOrder = () => {
+    if (isPlacingOrder) {
+      return;
+    }
+
+    // -----------------------------------------------
+    // CHECK LOGIN FIRST
+    // -----------------------------------------------
+
+    if (!token) {
+      Alert.alert(
+        "Login Required",
+        "Your login session is not available. Please log in again before placing an order.",
+        [
+          {
+            text: "Log In",
+            onPress: () =>
+              router.replace("/"),
+          },
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+        ]
+      );
+
+      return;
+    }
+
+    // -----------------------------------------------
+    // CHECK STORE
+    // -----------------------------------------------
+
+    const storeId = getStoreId();
+
+    if (!storeId) {
+      Alert.alert(
+        "Store Error",
+        "Hindi matukoy kung saang store kabilang ang items. Please clear your cart and add the products again."
+      );
+
+      return;
+    }
+
+    // -----------------------------------------------
+    // CHECK PRODUCT IDS
+    // -----------------------------------------------
+
+    const invalidItem =
+      items.find(
+        (item) =>
+          !item.id ||
+          typeof item.id !== "string"
+      );
+
+    if (invalidItem) {
+      Alert.alert(
+        "Product Error",
+        "May product sa cart na walang valid product ID. Please remove it and add the product again."
+      );
+
+      return;
+    }
+
     const paymentLabel =
       paymentMethod === "cash"
         ? "Cash on Pickup"
@@ -146,6 +317,7 @@ export default function CheckoutScreen() {
       [
         `Pickup: ${pickupLocation.name}`,
         `Payment: ${paymentLabel}`,
+        `Items: ${itemCount}`,
         `Total: ₱${total.toFixed(2)}`,
         "",
         "Do you want to place this order?",
@@ -164,7 +336,7 @@ export default function CheckoutScreen() {
   };
 
   // ===================================================
-  // CONFIRM ORDER
+  // CONFIRM PLACE ORDER
   // ===================================================
 
   const confirmPlaceOrder = async () => {
@@ -175,47 +347,309 @@ export default function CheckoutScreen() {
     try {
       setIsPlacingOrder(true);
 
-      /*
-       * TEMPORARY ORDER CREATION
-       *
-       * Later, this section will call the backend:
-       *
-       * POST /api/orders
-       *
-       * and save:
-       * - user
-       * - items
-       * - store
-       * - quantity
-       * - subtotal
-       * - total
-       * - pickup location
-       * - payment method
-       * - order status
-       *
-       * For now we clear the local cart and continue
-       * to the order-success screen.
-       */
-
-      await new Promise((resolve) =>
-        setTimeout(resolve, 700)
+      console.log("");
+      console.log(
+        "========================================"
       );
+      console.log(
+        "         CHECKOUT / PLACE ORDER"
+      );
+      console.log(
+        "========================================"
+      );
+
+      // -----------------------------------------------
+      // 1. CHECK TOKEN
+      // -----------------------------------------------
+
+      if (!token) {
+        console.error(
+          "❌ NO AUTH TOKEN"
+        );
+
+        Alert.alert(
+          "Login Required",
+          "Your login session is no longer available. Please log in again.",
+          [
+            {
+              text: "OK",
+              onPress: () =>
+                router.replace("/"),
+            },
+          ]
+        );
+
+        return;
+      }
+
+      console.log(
+        "✅ AUTH TOKEN EXISTS"
+      );
+      console.log(
+        "TOKEN LENGTH:",
+        token.length
+      );
+
+      // -----------------------------------------------
+      // 2. GET STORE ID
+      // -----------------------------------------------
+
+      const storeId = getStoreId();
+
+      if (!storeId) {
+        throw new Error(
+          "Unable to determine the store for this order."
+        );
+      }
+
+      console.log(
+        "✅ STORE ID:",
+        storeId
+      );
+
+      // -----------------------------------------------
+      // 3. CHECK ITEMS
+      // -----------------------------------------------
+
+      if (!items.length) {
+        throw new Error(
+          "Your cart is empty."
+        );
+      }
+
+      // -----------------------------------------------
+      // 4. PREPARE ITEMS
+      // -----------------------------------------------
+
+      const orderItems = items.map(
+        (item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+        })
+      );
+
+      console.log(
+        "✅ ORDER ITEMS:"
+      );
+
+      console.log(
+        JSON.stringify(
+          orderItems,
+          null,
+          2
+        )
+      );
+
+      // -----------------------------------------------
+      // 5. VALIDATE PRODUCT IDs
+      // -----------------------------------------------
+
+      for (
+        const item of orderItems
+      ) {
+        if (
+          !item.productId ||
+          typeof item.productId !==
+            "string"
+        ) {
+          throw new Error(
+            "Invalid product ID found in cart."
+          );
+        }
+
+        if (
+          !item.quantity ||
+          item.quantity <= 0
+        ) {
+          throw new Error(
+            "Invalid product quantity found in cart."
+          );
+        }
+      }
+
+      // -----------------------------------------------
+      // 6. PREPARE PAYLOAD
+      // -----------------------------------------------
+
+      const payload = {
+        storeId,
+        items: orderItems,
+        pickupLocation:
+          pickupLocation.name,
+        paymentMethod,
+      };
+
+      console.log(
+        "========================================"
+      );
+      console.log(
+        "           ORDER PAYLOAD"
+      );
+      console.log(
+        "========================================"
+      );
+
+      console.log(
+        JSON.stringify(
+          payload,
+          null,
+          2
+        )
+      );
+
+      console.log(
+        "========================================"
+      );
+
+      // -----------------------------------------------
+      // 7. CREATE ORDER
+      // -----------------------------------------------
+
+      console.log(
+        "🚀 CALLING createOrder()..."
+      );
+
+      const result =
+        await createOrder(
+          token,
+          payload
+        );
+
+      // -----------------------------------------------
+      // 8. SUCCESS
+      // -----------------------------------------------
+
+      console.log(
+        "========================================"
+      );
+      console.log(
+        "✅ ORDER CREATED SUCCESSFULLY"
+      );
+      console.log(
+        "========================================"
+      );
+
+      console.log(
+        JSON.stringify(
+          result,
+          null,
+          2
+        )
+      );
+
+      // -----------------------------------------------
+      // 9. CLEAR CART ONLY AFTER SUCCESS
+      // -----------------------------------------------
 
       clearCart();
 
-      router.replace("/order-success");
-    } catch (error) {
-      console.error(
-        "Place order error:",
-        error
+      // -----------------------------------------------
+      // 10. SUCCESS SCREEN
+      // -----------------------------------------------
+
+      router.replace(
+        "/order-success"
       );
+    } catch (error: any) {
+      // -----------------------------------------------
+      // DETAILED ERROR
+      // -----------------------------------------------
+
+      console.log("");
+      console.log(
+        "========================================"
+      );
+      console.log(
+        "❌ PLACE ORDER FAILED"
+      );
+      console.log(
+        "========================================"
+      );
+
+      console.log(
+        "ERROR OBJECT:"
+      );
+
+      try {
+        console.log(
+          JSON.stringify(
+            error,
+            null,
+            2
+          )
+        );
+      } catch {
+        console.log(
+          error
+        );
+      }
+
+      console.log(
+        "ERROR MESSAGE:",
+        error?.message
+      );
+
+      console.log(
+        "ERROR STATUS:",
+        error?.status
+      );
+
+      console.log(
+        "ERROR RESPONSE:",
+        error?.response
+      );
+
+      console.log(
+        "ERROR DATA:",
+        error?.data
+      );
+
+      console.log(
+        "========================================"
+      );
+
+      // -----------------------------------------------
+      // USER MESSAGE
+      // -----------------------------------------------
+
+      let message =
+        getErrorMessage(error);
+
+      // Make common backend errors clearer
+      if (
+        message
+          .toLowerCase()
+          .includes("unauthorized") ||
+        message
+          .toLowerCase()
+          .includes("invalid token") ||
+        message
+          .toLowerCase()
+          .includes("token expired") ||
+        message
+          .toLowerCase()
+          .includes("login required")
+      ) {
+        message =
+          "Your login session is no longer valid. Please log in again.";
+      }
 
       Alert.alert(
         "Order Failed",
-        "We couldn't place your order. Please try again."
+        message
       );
     } finally {
       setIsPlacingOrder(false);
+
+      console.log(
+        "========================================"
+      );
+      console.log(
+        "         PLACE ORDER FINISHED"
+      );
+      console.log(
+        "========================================"
+      );
     }
   };
 
@@ -226,20 +660,27 @@ export default function CheckoutScreen() {
   return (
     <SafeAreaView
       style={styles.safeArea}
-      edges={["top", "left", "right", "bottom"]}
+      edges={[
+        "top",
+        "left",
+        "right",
+        "bottom",
+      ]}
     >
       <View style={styles.screen}>
-        {/* =================================================
-            HEADER
-        ================================================= */}
+
+        {/* HEADER */}
 
         <View style={styles.header}>
           <Pressable
             style={({ pressed }) => [
               styles.headerButton,
-              pressed && styles.headerButtonPressed,
+              pressed &&
+                styles.headerButtonPressed,
             ]}
-            onPress={() => router.back()}
+            onPress={() =>
+              router.back()
+            }
             disabled={isPlacingOrder}
           >
             <Ionicons
@@ -249,25 +690,37 @@ export default function CheckoutScreen() {
             />
           </Pressable>
 
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>
+          <View
+            style={styles.headerCenter}
+          >
+            <Text
+              style={styles.headerTitle}
+            >
               Checkout
             </Text>
 
-            <View style={styles.secureHeader}>
+            <View
+              style={styles.secureHeader}
+            >
               <Ionicons
                 name="lock-closed"
                 size={10}
                 color={SUCCESS}
               />
 
-              <Text style={styles.secureHeaderText}>
+              <Text
+                style={
+                  styles.secureHeaderText
+                }
+              >
                 Secure
               </Text>
             </View>
           </View>
 
-          <View style={styles.headerButton}>
+          <View
+            style={styles.headerButton}
+          >
             <Ionicons
               name="receipt-outline"
               size={20}
@@ -276,21 +729,30 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        {/* =================================================
-            CONTENT
-        ================================================= */}
+        {/* CONTENT */}
 
         <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={
+            false
+          }
+          contentContainerStyle={
+            styles.scrollContent
+          }
         >
-          {/* =================================================
-              PROGRESS
-          ================================================= */}
 
-          <View style={styles.progressCard}>
-            <View style={styles.progressStep}>
-              <View style={styles.progressCircleDone}>
+          {/* PROGRESS */}
+
+          <View
+            style={styles.progressCard}
+          >
+            <View
+              style={styles.progressStep}
+            >
+              <View
+                style={
+                  styles.progressCircleDone
+                }
+              >
                 <Ionicons
                   name="checkmark"
                   size={14}
@@ -298,85 +760,148 @@ export default function CheckoutScreen() {
                 />
               </View>
 
-              <Text style={styles.progressTextDone}>
+              <Text
+                style={
+                  styles.progressTextDone
+                }
+              >
                 Cart
               </Text>
             </View>
 
-            <View style={styles.progressLineActive} />
+            <View
+              style={
+                styles.progressLineActive
+              }
+            />
 
-            <View style={styles.progressStep}>
-              <View style={styles.progressCircleCurrent}>
-                <Text style={styles.progressNumber}>
+            <View
+              style={styles.progressStep}
+            >
+              <View
+                style={
+                  styles.progressCircleCurrent
+                }
+              >
+                <Text
+                  style={
+                    styles.progressNumber
+                  }
+                >
                   2
                 </Text>
               </View>
 
-              <Text style={styles.progressTextCurrent}>
+              <Text
+                style={
+                  styles.progressTextCurrent
+                }
+              >
                 Checkout
               </Text>
             </View>
 
-            <View style={styles.progressLine} />
+            <View
+              style={styles.progressLine}
+            />
 
-            <View style={styles.progressStep}>
-              <View style={styles.progressCircleInactive}>
-                <Text style={styles.progressNumberInactive}>
+            <View
+              style={styles.progressStep}
+            >
+              <View
+                style={
+                  styles.progressCircleInactive
+                }
+              >
+                <Text
+                  style={
+                    styles.progressNumberInactive
+                  }
+                >
                   3
                 </Text>
               </View>
 
-              <Text style={styles.progressTextInactive}>
+              <Text
+                style={
+                  styles.progressTextInactive
+                }
+              >
                 Done
               </Text>
             </View>
           </View>
 
-          {/* =================================================
-              ORDER HEADER
-          ================================================= */}
+          {/* PAGE INTRO */}
 
-          <View style={styles.pageIntro}>
+          <View
+            style={styles.pageIntro}
+          >
             <View>
-              <Text style={styles.pageTitle}>
+              <Text
+                style={styles.pageTitle}
+              >
                 Complete Your Order
               </Text>
 
-              <Text style={styles.pageSubtitle}>
-                Review your details before placing your order.
+              <Text
+                style={styles.pageSubtitle}
+              >
+                Review your details before placing
+                your order.
               </Text>
             </View>
 
-            <View style={styles.itemCountBadge}>
+            <View
+              style={
+                styles.itemCountBadge
+              }
+            >
               <Ionicons
                 name="bag-outline"
                 size={14}
                 color={CARDINAL}
               />
 
-              <Text style={styles.itemCountText}>
+              <Text
+                style={
+                  styles.itemCountText
+                }
+              >
                 {itemCount}
               </Text>
             </View>
           </View>
 
-          {/* =================================================
-              PICKUP LOCATION
-          ================================================= */}
+          {/* PICKUP LOCATION */}
 
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}>
-              <Text style={styles.sectionNumberText}>
+          <View
+            style={styles.sectionHeader}
+          >
+            <View
+              style={styles.sectionNumber}
+            >
+              <Text
+                style={
+                  styles.sectionNumberText
+                }
+              >
                 1
               </Text>
             </View>
 
             <View>
-              <Text style={styles.sectionTitle}>
+              <Text
+                style={styles.sectionTitle}
+              >
                 Pickup Location
               </Text>
 
-              <Text style={styles.sectionSubtitle}>
+              <Text
+                style={
+                  styles.sectionSubtitle
+                }
+              >
                 Where will you collect your order?
               </Text>
             </View>
@@ -385,21 +910,21 @@ export default function CheckoutScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.pickupCard,
-              pressed && styles.cardPressed,
+              pressed &&
+                styles.cardPressed,
             ]}
-            onPress={() => {
+            onPress={() =>
               Alert.alert(
                 "Pickup Location",
                 "TUPC Main Canteen is currently the available pickup location.",
-                [
-                  {
-                    text: "OK",
-                  },
-                ]
-              );
-            }}
+                [{ text: "OK" }]
+              )
+            }
+            disabled={isPlacingOrder}
           >
-            <View style={styles.pickupIcon}>
+            <View
+              style={styles.pickupIcon}
+            >
               <Ionicons
                 name="location"
                 size={23}
@@ -407,33 +932,63 @@ export default function CheckoutScreen() {
               />
             </View>
 
-            <View style={styles.pickupContent}>
-              <View style={styles.pickupTitleRow}>
-                <Text style={styles.pickupTitle}>
+            <View
+              style={styles.pickupContent}
+            >
+              <View
+                style={
+                  styles.pickupTitleRow
+                }
+              >
+                <Text
+                  style={
+                    styles.pickupTitle
+                  }
+                >
                   {pickupLocation.name}
                 </Text>
 
-                <View style={styles.selectedBadge}>
+                <View
+                  style={
+                    styles.selectedBadge
+                  }
+                >
                   <Ionicons
                     name="checkmark"
                     size={10}
                     color={SUCCESS}
                   />
 
-                  <Text style={styles.selectedBadgeText}>
+                  <Text
+                    style={
+                      styles.selectedBadgeText
+                    }
+                  >
                     Selected
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.pickupDescription}>
-                {pickupLocation.description}
+              <Text
+                style={
+                  styles.pickupDescription
+                }
+              >
+                {
+                  pickupLocation.description
+                }
               </Text>
 
-              <View style={styles.openRow}>
-                <View style={styles.openDot} />
+              <View
+                style={styles.openRow}
+              >
+                <View
+                  style={styles.openDot}
+                />
 
-                <Text style={styles.openText}>
+                <Text
+                  style={styles.openText}
+                >
                   Available for pickup
                 </Text>
               </View>
@@ -446,40 +1001,61 @@ export default function CheckoutScreen() {
             />
           </Pressable>
 
-          {/* =================================================
-              PAYMENT
-          ================================================= */}
+          {/* PAYMENT */}
 
-          <View style={styles.sectionHeaderPayment}>
-            <View style={styles.sectionNumber}>
-              <Text style={styles.sectionNumberText}>
+          <View
+            style={
+              styles.sectionHeaderPayment
+            }
+          >
+            <View
+              style={styles.sectionNumber}
+            >
+              <Text
+                style={
+                  styles.sectionNumberText
+                }
+              >
                 2
               </Text>
             </View>
 
             <View>
-              <Text style={styles.sectionTitle}>
+              <Text
+                style={styles.sectionTitle}
+              >
                 Payment Method
               </Text>
 
-              <Text style={styles.sectionSubtitle}>
+              <Text
+                style={
+                  styles.sectionSubtitle
+                }
+              >
                 Choose how you want to pay.
               </Text>
             </View>
           </View>
 
           {/* CASH */}
+
           <Pressable
             style={({ pressed }) => [
               styles.paymentCard,
-              paymentMethod === "cash" &&
+              paymentMethod ===
+                "cash" &&
                 styles.paymentCardSelected,
-              pressed && styles.cardPressed,
+              pressed &&
+                styles.cardPressed,
             ]}
-            onPress={() => setPaymentMethod("cash")}
+            onPress={() =>
+              setPaymentMethod("cash")
+            }
             disabled={isPlacingOrder}
           >
-            <View style={styles.paymentIcon}>
+            <View
+              style={styles.paymentIcon}
+            >
               <Ionicons
                 name="cash-outline"
                 size={23}
@@ -487,22 +1063,45 @@ export default function CheckoutScreen() {
               />
             </View>
 
-            <View style={styles.paymentContent}>
-              <View style={styles.paymentTitleRow}>
-                <Text style={styles.paymentTitle}>
+            <View
+              style={styles.paymentContent}
+            >
+              <View
+                style={
+                  styles.paymentTitleRow
+                }
+              >
+                <Text
+                  style={
+                    styles.paymentTitle
+                  }
+                >
                   Cash on Pickup
                 </Text>
 
-                {paymentMethod === "cash" && (
-                  <View style={styles.recommendedBadge}>
-                    <Text style={styles.recommendedText}>
+                {paymentMethod ===
+                  "cash" && (
+                  <View
+                    style={
+                      styles.recommendedBadge
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.recommendedText
+                      }
+                    >
                       Recommended
                     </Text>
                   </View>
                 )}
               </View>
 
-              <Text style={styles.paymentDescription}>
+              <Text
+                style={
+                  styles.paymentDescription
+                }
+              >
                 Pay directly when you collect your order.
               </Text>
             </View>
@@ -510,28 +1109,41 @@ export default function CheckoutScreen() {
             <View
               style={[
                 styles.radio,
-                paymentMethod === "cash" &&
+                paymentMethod ===
+                  "cash" &&
                   styles.radioSelected,
               ]}
             >
-              {paymentMethod === "cash" && (
-                <View style={styles.radioInner} />
+              {paymentMethod ===
+                "cash" && (
+                <View
+                  style={
+                    styles.radioInner
+                  }
+                />
               )}
             </View>
           </Pressable>
 
           {/* GCASH */}
+
           <Pressable
             style={({ pressed }) => [
               styles.paymentCard,
-              paymentMethod === "gcash" &&
+              paymentMethod ===
+                "gcash" &&
                 styles.paymentCardSelected,
-              pressed && styles.cardPressed,
+              pressed &&
+                styles.cardPressed,
             ]}
-            onPress={() => setPaymentMethod("gcash")}
+            onPress={() =>
+              setPaymentMethod("gcash")
+            }
             disabled={isPlacingOrder}
           >
-            <View style={styles.paymentIcon}>
+            <View
+              style={styles.paymentIcon}
+            >
               <Ionicons
                 name="phone-portrait-outline"
                 size={23}
@@ -539,12 +1151,22 @@ export default function CheckoutScreen() {
               />
             </View>
 
-            <View style={styles.paymentContent}>
-              <Text style={styles.paymentTitle}>
+            <View
+              style={styles.paymentContent}
+            >
+              <Text
+                style={
+                  styles.paymentTitle
+                }
+              >
                 GCash
               </Text>
 
-              <Text style={styles.paymentDescription}>
+              <Text
+                style={
+                  styles.paymentDescription
+                }
+              >
                 Pay using your GCash account.
               </Text>
             </View>
@@ -552,155 +1174,257 @@ export default function CheckoutScreen() {
             <View
               style={[
                 styles.radio,
-                paymentMethod === "gcash" &&
+                paymentMethod ===
+                  "gcash" &&
                   styles.radioSelected,
               ]}
             >
-              {paymentMethod === "gcash" && (
-                <View style={styles.radioInner} />
+              {paymentMethod ===
+                "gcash" && (
+                <View
+                  style={
+                    styles.radioInner
+                  }
+                />
               )}
             </View>
           </Pressable>
 
-          {/* =================================================
-              ORDER ITEMS
-          ================================================= */}
+          {/* ORDER ITEMS */}
 
-          <View style={styles.sectionHeaderItems}>
-            <View style={styles.sectionNumber}>
-              <Text style={styles.sectionNumberText}>
+          <View
+            style={
+              styles.sectionHeaderItems
+            }
+          >
+            <View
+              style={styles.sectionNumber}
+            >
+              <Text
+                style={
+                  styles.sectionNumberText
+                }
+              >
                 3
               </Text>
             </View>
 
             <View>
-              <Text style={styles.sectionTitle}>
+              <Text
+                style={styles.sectionTitle}
+              >
                 Order Items
               </Text>
 
-              <Text style={styles.sectionSubtitle}>
+              <Text
+                style={
+                  styles.sectionSubtitle
+                }
+              >
                 Items included in this order.
               </Text>
             </View>
           </View>
 
-          <View style={styles.itemsCard}>
-            {items.map((item, index) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.orderItem,
-                  index !== items.length - 1 &&
-                    styles.orderItemBorder,
-                ]}
-              >
-                <View style={styles.quantityBadge}>
-                  <Text style={styles.quantityText}>
-                    {item.quantity}×
+          <View
+            style={styles.itemsCard}
+          >
+            {items.map(
+              (item, index) => (
+                <View
+                  key={`${item.id}-${index}`}
+                  style={[
+                    styles.orderItem,
+                    index !==
+                      items.length - 1 &&
+                      styles.orderItemBorder,
+                  ]}
+                >
+                  <View
+                    style={
+                      styles.quantityBadge
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.quantityText
+                      }
+                    >
+                      {item.quantity}×
+                    </Text>
+                  </View>
+
+                  <View
+                    style={styles.itemInfo}
+                  >
+                    <Text
+                      style={
+                        styles.itemName
+                      }
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.itemStore
+                      }
+                      numberOfLines={1}
+                    >
+                      {item.store}
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.itemUnitPrice
+                      }
+                    >
+                      ₱
+                      {Number(
+                        item.price
+                      ).toFixed(2)}{" "}
+                      each
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={styles.itemPrice}
+                  >
+                    ₱
+                    {(
+                      Number(item.price) *
+                      item.quantity
+                    ).toFixed(2)}
                   </Text>
                 </View>
-
-                <View style={styles.itemInfo}>
-                  <Text
-                    style={styles.itemName}
-                    numberOfLines={1}
-                  >
-                    {item.name}
-                  </Text>
-
-                  <Text
-                    style={styles.itemStore}
-                    numberOfLines={1}
-                  >
-                    {item.store}
-                  </Text>
-
-                  <Text style={styles.itemUnitPrice}>
-                    ₱{item.price.toFixed(2)} each
-                  </Text>
-                </View>
-
-                <Text style={styles.itemPrice}>
-                  ₱{(
-                    item.price * item.quantity
-                  ).toFixed(2)}
-                </Text>
-              </View>
-            ))}
+              )
+            )}
           </View>
 
-          {/* =================================================
-              SUMMARY
-          ================================================= */}
+          {/* SUMMARY */}
 
-          <View style={styles.sectionHeaderSummary}>
-            <View style={styles.sectionNumber}>
-              <Text style={styles.sectionNumberText}>
+          <View
+            style={
+              styles.sectionHeaderSummary
+            }
+          >
+            <View
+              style={styles.sectionNumber}
+            >
+              <Text
+                style={
+                  styles.sectionNumberText
+                }
+              >
                 4
               </Text>
             </View>
 
             <View>
-              <Text style={styles.sectionTitle}>
+              <Text
+                style={styles.sectionTitle}
+              >
                 Order Summary
               </Text>
 
-              <Text style={styles.sectionSubtitle}>
+              <Text
+                style={
+                  styles.sectionSubtitle
+                }
+              >
                 Final amount for this order.
               </Text>
             </View>
           </View>
 
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>
+          <View
+            style={styles.summaryCard}
+          >
+            <View
+              style={styles.summaryRow}
+            >
+              <Text
+                style={
+                  styles.summaryLabel
+                }
+              >
                 Items ({itemCount})
               </Text>
 
-              <Text style={styles.summaryValue}>
+              <Text
+                style={
+                  styles.summaryValue
+                }
+              >
                 ₱{subtotal.toFixed(2)}
               </Text>
             </View>
 
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>
+            <View
+              style={styles.summaryRow}
+            >
+              <Text
+                style={
+                  styles.summaryLabel
+                }
+              >
                 Pickup Fee
               </Text>
 
-              <View style={styles.freeBadge}>
-                <Text style={styles.freeText}>
+              <View
+                style={styles.freeBadge}
+              >
+                <Text
+                  style={styles.freeText}
+                >
                   FREE
                 </Text>
               </View>
             </View>
 
-            <View style={styles.summaryDivider} />
+            <View
+              style={styles.summaryDivider}
+            />
 
-            <View style={styles.totalRow}>
+            <View
+              style={styles.totalRow}
+            >
               <View>
-                <Text style={styles.totalLabel}>
+                <Text
+                  style={styles.totalLabel}
+                >
                   Total Amount
                 </Text>
 
-                <Text style={styles.totalSubtext}>
-                  {paymentMethod === "cash"
+                <Text
+                  style={
+                    styles.totalSubtext
+                  }
+                >
+                  {paymentMethod ===
+                  "cash"
                     ? "Cash on pickup"
                     : "GCash payment"}
                 </Text>
               </View>
 
-              <Text style={styles.totalValue}>
+              <Text
+                style={styles.totalValue}
+              >
                 ₱{total.toFixed(2)}
               </Text>
             </View>
           </View>
 
-          {/* =================================================
-              SECURITY
-          ================================================= */}
+          {/* SECURITY */}
 
-          <View style={styles.securityCard}>
-            <View style={styles.securityIcon}>
+          <View
+            style={styles.securityCard}
+          >
+            <View
+              style={styles.securityIcon}
+            >
               <Ionicons
                 name="shield-checkmark"
                 size={19}
@@ -708,12 +1432,18 @@ export default function CheckoutScreen() {
               />
             </View>
 
-            <View style={styles.securityContent}>
-              <Text style={styles.securityTitle}>
+            <View
+              style={styles.securityContent}
+            >
+              <Text
+                style={styles.securityTitle}
+              >
                 Secure Checkout
               </Text>
 
-              <Text style={styles.securityText}>
+              <Text
+                style={styles.securityText}
+              >
                 Your order details are protected and will only
                 be shared with the campus store handling your
                 order.
@@ -721,20 +1451,28 @@ export default function CheckoutScreen() {
             </View>
           </View>
 
-          <View style={styles.bottomSpace} />
+          <View
+            style={styles.bottomSpace}
+          />
         </ScrollView>
 
-        {/* =================================================
-            BOTTOM CHECKOUT BAR
-        ================================================= */}
+        {/* BOTTOM BAR */}
 
-        <View style={styles.bottomBar}>
-          <View style={styles.bottomTotal}>
-            <Text style={styles.bottomLabel}>
+        <View
+          style={styles.bottomBar}
+        >
+          <View
+            style={styles.bottomTotal}
+          >
+            <Text
+              style={styles.bottomLabel}
+            >
               Total Amount
             </Text>
 
-            <Text style={styles.bottomPrice}>
+            <Text
+              style={styles.bottomPrice}
+            >
               ₱{total.toFixed(2)}
             </Text>
           </View>
@@ -742,13 +1480,15 @@ export default function CheckoutScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.placeButton,
-              pressed && !isPlacingOrder
-                ? styles.buttonPressed
-                : null,
+              pressed &&
+                !isPlacingOrder &&
+                styles.buttonPressed,
               isPlacingOrder &&
                 styles.placeButtonDisabled,
             ]}
-            onPress={handlePlaceOrder}
+            onPress={
+              handlePlaceOrder
+            }
             disabled={isPlacingOrder}
           >
             {isPlacingOrder ? (
@@ -758,13 +1498,21 @@ export default function CheckoutScreen() {
                   color={WHITE}
                 />
 
-                <Text style={styles.placeButtonText}>
+                <Text
+                  style={
+                    styles.placeButtonText
+                  }
+                >
                   Placing...
                 </Text>
               </>
             ) : (
               <>
-                <Text style={styles.placeButtonText}>
+                <Text
+                  style={
+                    styles.placeButtonText
+                  }
+                >
                   Place Order
                 </Text>
 
@@ -787,10 +1535,6 @@ export default function CheckoutScreen() {
 // =====================================================
 
 const styles = StyleSheet.create({
-  // ===================================================
-  // SCREEN
-  // ===================================================
-
   safeArea: {
     flex: 1,
     backgroundColor: BG,
@@ -806,10 +1550,6 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 35,
   },
-
-  // ===================================================
-  // HEADER
-  // ===================================================
 
   header: {
     minHeight: 64,
@@ -857,10 +1597,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: SUCCESS,
   },
-
-  // ===================================================
-  // PROGRESS
-  // ===================================================
 
   progressCard: {
     height: 78,
@@ -957,10 +1693,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E5E5",
   },
 
-  // ===================================================
-  // PAGE INTRO
-  // ===================================================
-
   pageIntro: {
     marginTop: 22,
     marginBottom: 20,
@@ -1000,10 +1732,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: CARDINAL,
   },
-
-  // ===================================================
-  // SECTION HEADER
-  // ===================================================
 
   sectionHeader: {
     marginBottom: 11,
@@ -1059,10 +1787,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: MUTED,
   },
-
-  // ===================================================
-  // PICKUP
-  // ===================================================
 
   pickupCard: {
     padding: 14,
@@ -1148,10 +1872,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: SUCCESS,
   },
-
-  // ===================================================
-  // PAYMENT
-  // ===================================================
 
   paymentCard: {
     minHeight: 78,
@@ -1241,10 +1961,6 @@ const styles = StyleSheet.create({
     backgroundColor: CARDINAL,
   },
 
-  // ===================================================
-  // ORDER ITEMS
-  // ===================================================
-
   itemsCard: {
     borderRadius: 17,
     backgroundColor: WHITE,
@@ -1310,10 +2026,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: TEXT,
   },
-
-  // ===================================================
-  // SUMMARY
-  // ===================================================
 
   summaryCard: {
     padding: 16,
@@ -1387,10 +2099,6 @@ const styles = StyleSheet.create({
     color: CARDINAL,
   },
 
-  // ===================================================
-  // SECURITY
-  // ===================================================
-
   securityCard: {
     marginTop: 14,
     padding: 13,
@@ -1432,10 +2140,6 @@ const styles = StyleSheet.create({
   bottomSpace: {
     height: 20,
   },
-
-  // ===================================================
-  // BOTTOM BAR
-  // ===================================================
 
   bottomBar: {
     minHeight: 82,
@@ -1491,12 +2195,12 @@ const styles = StyleSheet.create({
 
   buttonPressed: {
     opacity: 0.8,
-    transform: [{ scale: 0.98 }],
+    transform: [
+      {
+        scale: 0.98,
+      },
+    ],
   },
-
-  // ===================================================
-  // EMPTY CART
-  // ===================================================
 
   emptyContainer: {
     flex: 1,
