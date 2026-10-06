@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -14,10 +15,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
-  STORES,
-  type Store,
-  type StoreType,
-} from "../../data/stores";
+  ClientStore as Store,
+  ClientStoreType as StoreType,
+  CatalogFood,
+  loadClientCatalog,
+} from "../../services/clientCatalog";
 
 // =====================================================
 // TUP CARDINAL THEME
@@ -181,6 +183,8 @@ const getFilterTitle = (filter: FilterType) => {
 // =====================================================
 
 export default function ExploreScreen() {
+  const [stores, setStores] = useState<Store[]>([]);
+  const [foods, setFoods] = useState<CatalogFood[]>([]);
   const params = useLocalSearchParams<{
     category?: string;
   }>();
@@ -199,23 +203,54 @@ export default function ExploreScreen() {
   const [openingStoreId, setOpeningStoreId] =
     useState<string | null>(null);
 
+  useEffect(() => {
+    setSelectedCategory(initialCategory);
+    setSelectedFilter("all");
+  }, [initialCategory]);
+
   // ===================================================
   // CATEGORY FILTER
   // ===================================================
 
   const categoryFilteredStores = useMemo(() => {
     if (!selectedCategory) {
-      return STORES;
+      return stores;
     }
 
-    return STORES.filter((store) =>
+    return stores.filter((store) =>
       store.categories.some(
         (category) =>
           category.toLowerCase() ===
           selectedCategory.toLowerCase()
       )
     );
-  }, [selectedCategory]);
+  }, [selectedCategory, stores]);
+
+  const filteredFoods = useMemo(() => {
+    if (!selectedCategory) return foods;
+    const categoryMap: Record<string, string[]> = {
+      Food: ["Meals", "Desserts"],
+      Drinks: ["Drinks"],
+      Snacks: ["Snacks"],
+      School: ["School Supplies"],
+      Essentials: ["Clothing", "Accessories", "Gadgets and Electronics", "Gifts and Souvenirs", "Others"],
+    };
+    const accepted = categoryMap[selectedCategory] ?? [selectedCategory];
+    return foods.filter((food) => accepted.includes(food.category));
+  }, [foods, selectedCategory]);
+
+  useEffect(() => {
+    let active = true;
+    loadClientCatalog()
+      .then((catalog) => {
+        if (active) {
+          setStores(catalog.stores);
+          setFoods(catalog.foods);
+        }
+      })
+      .catch((error) => console.error("LOAD EXPLORE STORES ERROR:", error))
+    return () => { active = false; };
+  }, []);
 
   // ===================================================
   // STORE TYPE FILTER
@@ -290,6 +325,10 @@ export default function ExploreScreen() {
         },
       });
     }, 120);
+  };
+
+  const openProduct = (food: CatalogFood) => {
+    router.push({ pathname: "/(client)/(client-details)/product/[id]", params: { id: food.id } });
   };
 
   // ===================================================
@@ -496,8 +535,7 @@ export default function ExploreScreen() {
         </Text>
 
         <Text style={styles.emptyText}>
-          There are no stores available for
-          this selection yet.
+          There are no available products or stores for this selection yet.
         </Text>
 
         <Pressable
@@ -549,52 +587,32 @@ export default function ExploreScreen() {
             THESE ARE KEPT
         ================================================= */}
 
-        <View style={styles.categoryHeaderRow}>
-          <View>
-            <Text style={styles.categoryEyebrow}>
-              BROWSE BY CATEGORY
-            </Text>
-
-            <Text style={styles.categoryTitle}>
-              What are you looking for?
-            </Text>
-          </View>
-        </View>
-
-        {/* CATEGORY GRID */}
-
-        <View style={styles.categoryGrid}>
-          {categories.map((category) => {
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactCategories}>
+          {[{ icon: "apps-outline" as IconName, label: "All", description: "" }, ...categories].map((category) => {
             const active =
-              selectedCategory ===
-              category.label;
+              category.label === "All" ? !selectedCategory : selectedCategory === category.label;
 
             return (
               <Pressable
                 key={category.label}
                 onPress={() =>
-                  handleCategoryPress(
-                    category.label
-                  )
+                  category.label === "All" ? handleViewAllResults() : handleCategoryPress(category.label)
                 }
                 style={({ pressed }) => [
-                  styles.categoryBox,
-                  active &&
-                    styles.categoryBoxActive,
-                  pressed &&
-                    styles.categoryBoxPressed,
+                  styles.compactCategory,
+                  active && styles.compactCategoryActive,
+                  pressed && styles.categoryBoxPressed,
                 ]}
               >
                 <View
                   style={[
-                    styles.categoryIcon,
-                    active &&
-                      styles.categoryIconActive,
+                    styles.compactCategoryIcon,
+                    active && styles.compactCategoryIconActive,
                   ]}
                 >
                   <Ionicons
                     name={category.icon}
-                    size={23}
+                    size={18}
                     color={
                       active
                         ? WHITE
@@ -605,28 +623,17 @@ export default function ExploreScreen() {
 
                 <Text
                   style={[
-                    styles.categoryLabel,
-                    active &&
-                      styles.categoryLabelActive,
+                    styles.compactCategoryLabel,
+                    active && styles.categoryLabelActive,
                   ]}
                 >
                   {category.label}
                 </Text>
 
-                <Text
-                  style={[
-                    styles.categoryDescription,
-                    active &&
-                      styles.categoryDescriptionActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {category.description}
-                </Text>
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
 
         {/* =================================================
             RESULTS SECTION
@@ -635,20 +642,16 @@ export default function ExploreScreen() {
         <View style={styles.resultsTopRow}>
           <View>
             <Text style={styles.resultsEyebrow}>
-              CAMPUS STORES
+              {selectedCategory ? "AVAILABLE PRODUCTS" : "CAMPUS STORES"}
             </Text>
 
             <Text style={styles.resultsTitle}>
-              {getFilterTitle(
-                selectedFilter
-              )}
+              All Results
             </Text>
 
             <Text style={styles.resultsCount}>
-              {filteredStores.length}{" "}
-              {filteredStores.length === 1
-                ? "store"
-                : "stores"}{" "}
+              {selectedCategory ? filteredFoods.length : filteredStores.length}{" "}
+              {selectedCategory ? (filteredFoods.length === 1 ? "product" : "products") : (filteredStores.length === 1 ? "store" : "stores")}{" "}
               available
             </Text>
           </View>
@@ -679,7 +682,7 @@ export default function ExploreScreen() {
             STORE TYPE FILTERS
         ================================================= */}
 
-        <ScrollView
+        {!selectedCategory && <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={
@@ -728,15 +731,25 @@ export default function ExploreScreen() {
               </Pressable>
             );
           })}
-        </ScrollView>
+        </ScrollView>}
 
         {/* =================================================
             ALL RESULTS / STORE LIST
         ================================================= */}
 
-        <View style={styles.storeList}>
-          {filteredStores.length > 0 ? (
-            filteredStores.map(renderStore)
+        <View style={selectedCategory ? styles.productGrid : styles.storeList}>
+          {(selectedCategory ? filteredFoods.length : filteredStores.length) > 0 ? (
+            selectedCategory ? filteredFoods.map((food) => (
+              <Pressable key={food.id} onPress={() => openProduct(food)} style={({ pressed }) => [styles.productCard, pressed && styles.storeCardPressed]}>
+                <View style={styles.productImageWrap}>
+                  {food.image ? <Image source={{ uri: food.image }} style={styles.productImage} contentFit="cover" /> : <Ionicons name={food.icon ?? "restaurant-outline"} size={30} color={CARDINAL} />}
+                  <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>Available</Text></View>
+                </View>
+                <Text style={styles.productName} numberOfLines={2}>{food.name}</Text>
+                <Text style={styles.productStore} numberOfLines={1}>{food.store}</Text>
+                <View style={styles.productBottom}><Text style={styles.productPrice}>{food.price}</Text><View style={styles.productArrow}><Ionicons name="add" size={17} color={WHITE} /></View></View>
+              </Pressable>
+            )) : filteredStores.map(renderStore)
           ) : (
             renderEmpty()
           )}
@@ -747,7 +760,7 @@ export default function ExploreScreen() {
         ================================================= */}
 
         {!showingAllResults &&
-          filteredStores.length > 0 && (
+          (selectedCategory ? filteredFoods.length : filteredStores.length) > 0 && (
             <Pressable
               onPress={
                 handleViewAllResults
@@ -784,7 +797,7 @@ export default function ExploreScreen() {
                     styles.fullViewAllSubtitle
                   }
                 >
-                  Browse all {STORES.length}{" "}
+                  Browse all {stores.length}{" "}
                   campus stores
                 </Text>
               </View>
@@ -838,6 +851,46 @@ const styles = StyleSheet.create({
 
   topSpacing: {
     height: 8,
+  },
+
+  compactCategories: {
+    gap: 9,
+    paddingTop: 5,
+    paddingBottom: 18,
+    paddingRight: 12,
+  },
+
+  compactCategory: {
+    minWidth: 64,
+    paddingHorizontal: 10,
+    alignItems: "center",
+  },
+
+  compactCategoryActive: {
+    opacity: 1,
+  },
+
+  compactCategoryIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 14,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  compactCategoryIconActive: {
+    backgroundColor: CARDINAL,
+    borderColor: CARDINAL,
+  },
+
+  compactCategoryLabel: {
+    marginTop: 6,
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: MUTED,
   },
 
   // ===================================================
@@ -1052,6 +1105,89 @@ const styles = StyleSheet.create({
 
   storeList: {
     gap: 10,
+  },
+
+  productGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 12,
+  },
+
+  productCard: {
+    width: "48.5%",
+    padding: 10,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: WHITE,
+  },
+
+  productImageWrap: {
+    height: 112,
+    borderRadius: 13,
+    backgroundColor: "#FBECEF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+
+  productImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  availableBadge: {
+    position: "absolute",
+    left: 7,
+    top: 7,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.92)",
+  },
+
+  availableBadgeText: {
+    fontSize: 7.5,
+    fontWeight: "900",
+    color: SUCCESS,
+  },
+
+  productName: {
+    minHeight: 34,
+    marginTop: 9,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  productStore: {
+    marginTop: 2,
+    fontSize: 9,
+    color: MUTED,
+  },
+
+  productBottom: {
+    marginTop: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  productPrice: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: CARDINAL,
+  },
+
+  productArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: CARDINAL,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // ===================================================

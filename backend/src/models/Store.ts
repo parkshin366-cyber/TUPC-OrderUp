@@ -26,6 +26,8 @@ export interface IStore extends Document {
 
   pickupEnabled: boolean;
 
+  deliveryEnabled: boolean;
+
   createdAt: Date;
 
   updatedAt: Date;
@@ -87,6 +89,11 @@ const StoreSchema = new Schema<IStore>(
     pickupEnabled: {
       type: Boolean,
       default: true,
+    },
+
+    deliveryEnabled: {
+      type: Boolean,
+      default: false,
     },
   },
   {

@@ -1,12 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -15,8 +19,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
 import {
   getSellerOrders,
+  cancelOrderBySeller,
   Order,
   OrderStatus,
+  reviewOrderCancellation,
+  updateOrderEta,
   updateOrderStatus,
 } from "../../services/api";
 
@@ -33,6 +40,7 @@ const FILTERS: Filter[] = [
   "Pending",
   "Preparing",
   "Ready",
+  "On the Way",
   "Completed",
 ];
 
@@ -46,6 +54,9 @@ function getStatusBackground(status: OrderStatus) {
 
     case "Ready":
       return "#E8F3FA";
+
+    case "On the Way":
+      return "#E8F0FF";
 
     case "Completed":
       return "#E9F7EF";
@@ -66,6 +77,9 @@ function getStatusColor(status: OrderStatus) {
     case "Ready":
       return "#39708E";
 
+    case "On the Way":
+      return "#2867A8";
+
     case "Completed":
       return "#28794D";
 
@@ -75,9 +89,9 @@ function getStatusColor(status: OrderStatus) {
 }
 
 function getNextStatus(
-  status: OrderStatus
+  order: Order
 ): OrderStatus | null {
-  switch (status) {
+  switch (order.status) {
     case "Pending":
       return "Preparing";
 
@@ -85,6 +99,9 @@ function getNextStatus(
       return "Ready";
 
     case "Ready":
+      return order.fulfillmentMethod === "delivery" ? "On the Way" : "Completed";
+
+    case "On the Way":
       return "Completed";
 
     default:
@@ -92,8 +109,8 @@ function getNextStatus(
   }
 }
 
-function getNextAction(status: OrderStatus) {
-  switch (status) {
+function getNextAction(order: Order) {
+  switch (order.status) {
     case "Pending":
       return "Accept Order";
 
@@ -101,7 +118,10 @@ function getNextAction(status: OrderStatus) {
       return "Mark as Ready";
 
     case "Ready":
-      return "Complete Order";
+      return order.fulfillmentMethod === "delivery" ? "Start Delivery" : "Complete Order";
+
+    case "On the Way":
+      return "Complete Delivery";
 
     case "Completed":
       return "Completed";
@@ -134,6 +154,13 @@ function getCustomerName(order: Order) {
   }
 
   return order.customer || "Customer";
+}
+
+function getCustomerId(order: Order) {
+  if (typeof order.customer === "object" && order.customer !== null) {
+    return String(order.customer._id ?? order.customer.id ?? "");
+  }
+  return String(order.customer ?? "");
 }
 
 function getOrderItemSummary(order: Order) {
@@ -243,6 +270,44 @@ export default function SellerOrders() {
   const [updatingOrderId, setUpdatingOrderId] =
     useState<string | null>(null);
 
+  const [reasonModal, setReasonModal] = useState<{ order: Order; mode: "cancel" | "reject" } | null>(null);
+  const [reasonText, setReasonText] = useState("");
+
+  const handleEta = async (order: Order, minutes: number) => {
+    if (!token) return;
+    try {
+      setUpdatingOrderId(order._id);
+      await updateOrderEta(token, order._id, minutes);
+      await loadOrders(false);
+    } catch (error) {
+      Alert.alert("Unable to update time", error instanceof Error ? error.message : "Please try again.");
+    } finally { setUpdatingOrderId(null); }
+  };
+
+  const approveCancellation = (order: Order) => {
+    Alert.alert("Approve cancellation", "The order will be cancelled and its stock will be restored. The voucher will remain used.", [
+      { text: "Keep order", style: "cancel" },
+      { text: "Approve", style: "destructive", onPress: async () => {
+        if (!token) return;
+        try { setUpdatingOrderId(order._id); await reviewOrderCancellation(token, order._id, "approve"); await loadOrders(false); }
+        catch (error) { Alert.alert("Unable to approve", error instanceof Error ? error.message : "Please try again."); }
+        finally { setUpdatingOrderId(null); }
+      } },
+    ]);
+  };
+
+  const submitReasonAction = async () => {
+    if (!token || !reasonModal) return;
+    if (reasonText.trim().length < 3) return Alert.alert("Reason required", "Enter at least 3 characters.");
+    try {
+      setUpdatingOrderId(reasonModal.order._id);
+      if (reasonModal.mode === "cancel") await cancelOrderBySeller(token, reasonModal.order._id, reasonText.trim());
+      else await reviewOrderCancellation(token, reasonModal.order._id, "reject", reasonText.trim());
+      setReasonModal(null); setReasonText(""); await loadOrders(false);
+    } catch (error) { Alert.alert("Action failed", error instanceof Error ? error.message : "Please try again."); }
+    finally { setUpdatingOrderId(null); }
+  };
+
   const loadOrders = useCallback(
     async (showLoader = true) => {
       if (!token) {
@@ -315,7 +380,8 @@ export default function SellerOrders() {
   const activeCount = orders.filter(
     (order) =>
       order.status === "Preparing" ||
-      order.status === "Ready"
+      order.status === "Ready" ||
+      order.status === "On the Way"
   ).length;
 
   const completedCount = orders.filter(
@@ -326,7 +392,7 @@ export default function SellerOrders() {
     order: Order
   ) => {
     const nextStatus =
-      getNextStatus(order.status);
+      getNextStatus(order);
 
     if (!nextStatus) {
       return;
@@ -524,7 +590,7 @@ export default function SellerOrders() {
           </Text>
         </View>
 
-        {/* PICKUP LOCATION */}
+        {/* FULFILLMENT LOCATION */}
         {!!order.pickupLocation && (
           <View style={styles.pickupRow}>
             <Ionicons
@@ -537,9 +603,61 @@ export default function SellerOrders() {
               style={styles.pickupText}
               numberOfLines={1}
             >
-              {order.pickupLocation}
+              {order.fulfillmentMethod === "delivery" ? `Deliver to: ${order.deliveryAddress || order.pickupLocation}` : `Pickup: ${order.pickupLocation}`}
             </Text>
           </View>
+        )}
+
+        {order.fulfillmentMethod === "delivery" && order.deliveryLatitude != null && order.deliveryLongitude != null ? (
+          <View style={styles.pickupRow}>
+            <Ionicons name="navigate-outline" size={15} color={CARDINAL} />
+            <Text style={styles.pickupText} numberOfLines={1}>
+              Pin: {order.deliveryLatitude.toFixed(5)}, {order.deliveryLongitude.toFixed(5)}
+            </Text>
+          </View>
+        ) : null}
+
+        {!!getCustomerId(order) && (
+          <TouchableOpacity
+            style={styles.messageCustomerButton}
+            activeOpacity={0.8}
+            onPress={() => router.push({ pathname: "/(seller)/messages", params: { recipientId: getCustomerId(order), recipientName: getCustomerName(order) } } as any)}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={16} color={CARDINAL} />
+            <Text style={styles.messageCustomerText}>Message customer</Text>
+          </TouchableOpacity>
+        )}
+
+        {(order.status === "Pending" || order.status === "Preparing") && (
+          <View style={styles.etaSection}>
+            <Text style={styles.etaTitle}>Estimated preparation time</Text>
+            <View style={styles.etaOptions}>
+              {[15, 20, 30, 45].map((minutes) => (
+                <TouchableOpacity key={minutes} onPress={() => handleEta(order, minutes)} disabled={isUpdating} style={[styles.etaOption, order.estimatedMinutes === minutes && styles.etaOptionActive]}>
+                  <Text style={[styles.etaOptionText, order.estimatedMinutes === minutes && styles.etaOptionTextActive]}>{minutes} min</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {!!order.estimatedReadyAt && <Text style={styles.etaSaved}>Ready around {new Date(order.estimatedReadyAt).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" })}</Text>}
+          </View>
+        )}
+
+        {order.cancellationStatus === "requested" && (
+          <View style={styles.cancelRequestCard}>
+            <Text style={styles.cancelRequestTitle}>Customer requested cancellation</Text>
+            <Text style={styles.cancelRequestReason}>{order.cancellationReason}</Text>
+            <View style={styles.cancelRequestActions}>
+              <TouchableOpacity onPress={() => { setReasonModal({ order, mode: "reject" }); setReasonText(""); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Reject</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => approveCancellation(order)} style={styles.approveButton}><Text style={styles.approveButtonText}>Approve</Text></TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {(order.status === "Pending" || order.status === "Preparing") && order.cancellationStatus !== "requested" && (
+          <TouchableOpacity onPress={() => { setReasonModal({ order, mode: "cancel" }); setReasonText(""); }} style={styles.sellerCancelButton}>
+            <Ionicons name="close-circle-outline" size={15} color="#B42318" />
+            <Text style={styles.sellerCancelText}>Cancel order</Text>
+          </TouchableOpacity>
         )}
 
         {/* ACTION */}
@@ -575,9 +693,7 @@ export default function SellerOrders() {
                 <Text
                   style={styles.actionButtonText}
                 >
-                  {getNextAction(
-                    order.status
-                  )}
+                  {getNextAction(order)}
                 </Text>
 
                 <Ionicons
@@ -680,13 +796,13 @@ export default function SellerOrders() {
             </Text>
           </View>
 
-          <View style={styles.headerIcon}>
+          <Pressable onPress={() => router.push("/(seller)/messages" as any)} style={styles.headerIcon}>
             <Ionicons
-              name="receipt"
+              name="chatbubbles"
               size={23}
               color={CARDINAL}
             />
-          </View>
+          </Pressable>
         </View>
 
         {/* SUMMARY */}
@@ -839,6 +955,18 @@ export default function SellerOrders() {
 
         <View style={styles.bottomSpace} />
       </ScrollView>
+      <TouchableOpacity onPress={() => router.push("/(seller)/messages" as any)} activeOpacity={0.85} style={styles.chatBubble}>
+        <Ionicons name="chatbubbles" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      <Modal visible={!!reasonModal} transparent animationType="fade" onRequestClose={() => setReasonModal(null)}>
+        <View style={styles.reasonOverlay}><View style={styles.reasonCard}>
+          <Text style={styles.reasonTitle}>{reasonModal?.mode === "cancel" ? "Cancel order" : "Reject cancellation"}</Text>
+          <Text style={styles.reasonSubtitle}>{reasonModal?.mode === "cancel" ? "Tell the customer why the order is being cancelled." : "Tell the customer why preparation must continue."}</Text>
+          <TextInput value={reasonText} onChangeText={setReasonText} multiline maxLength={300} placeholder="Enter reason" placeholderTextColor="#999" style={styles.reasonInput} />
+          <View style={styles.reasonActions}><Pressable onPress={() => setReasonModal(null)} style={styles.reasonBack}><Text style={styles.reasonBackText}>Back</Text></Pressable><Pressable onPress={submitReasonAction} style={styles.reasonConfirm}><Text style={styles.reasonConfirmText}>Confirm</Text></Pressable></View>
+        </View></View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -846,7 +974,20 @@ export default function SellerOrders() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
+  },
+
+  chatBubble: {
+    position: "absolute",
+    right: 20,
+    bottom: 18,
+    width: 55,
+    height: 55,
+    borderRadius: 28,
+    backgroundColor: "#A6192E",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 7,
   },
 
   content: {
@@ -866,21 +1007,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.4,
-    color: CARDINAL,
+    color: "#A6192E",
     marginBottom: 5,
   },
 
   title: {
     fontSize: 27,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   subtitle: {
     marginTop: 5,
     fontSize: 13,
     lineHeight: 19,
-    color: MUTED,
+    color: "#737373",
     maxWidth: 300,
   },
 
@@ -894,7 +1035,7 @@ const styles = StyleSheet.create({
   },
 
   summaryCard: {
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     borderRadius: 18,
     paddingVertical: 17,
     paddingHorizontal: 10,
@@ -939,21 +1080,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
   },
 
   filterButtonActive: {
-    backgroundColor: CARDINAL,
-    borderColor: CARDINAL,
+    backgroundColor: "#A6192E",
+    borderColor: "#A6192E",
   },
 
   filterText: {
     fontSize: 11,
     fontWeight: "800",
-    color: MUTED,
+    color: "#737373",
   },
 
   filterTextActive: {
@@ -977,7 +1118,7 @@ const styles = StyleSheet.create({
   filterCountText: {
     fontSize: 9,
     fontWeight: "800",
-    color: MUTED,
+    color: "#737373",
   },
 
   filterCountTextActive: {
@@ -994,20 +1135,20 @@ const styles = StyleSheet.create({
   listTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   listCount: {
     fontSize: 11,
     fontWeight: "700",
-    color: MUTED,
+    color: "#737373",
   },
 
   orderCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 15,
     marginBottom: 12,
   },
@@ -1025,12 +1166,12 @@ const styles = StyleSheet.create({
   orderId: {
     fontSize: 14,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   orderTime: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1047,7 +1188,7 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: BORDER,
+    backgroundColor: "#E7E7E8",
     marginVertical: 13,
   },
 
@@ -1073,13 +1214,13 @@ const styles = StyleSheet.create({
 
   customerLabel: {
     fontSize: 9,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "700",
   },
 
   customerName: {
     fontSize: 12,
-    color: TEXT,
+    color: "#171717",
     fontWeight: "800",
     marginTop: 2,
   },
@@ -1109,19 +1250,19 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   quantity: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
   itemAmount: {
     fontSize: 13,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   paymentRow: {
@@ -1139,20 +1280,20 @@ const styles = StyleSheet.create({
 
   paymentText: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
     marginLeft: 5,
   },
 
   totalLabel: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
   totalAmount: {
     fontSize: 13,
-    color: TEXT,
+    color: "#171717",
     fontWeight: "900",
   },
 
@@ -1166,19 +1307,62 @@ const styles = StyleSheet.create({
   pickupText: {
     flex: 1,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
   actionButton: {
     height: 45,
     borderRadius: 12,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
+
+  messageCustomerButton: {
+    height: 39,
+    borderRadius: 12,
+    backgroundColor: "#FBECEF",
+    borderWidth: 1,
+    borderColor: "#F0B7C2",
+    marginBottom: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+
+  messageCustomerText: { color: "#A6192E", fontSize: 11, fontWeight: "900" },
+  etaSection: { padding: 12, borderRadius: 13, backgroundColor: "#FAFAFA", borderWidth: 1, borderColor: "#E7E7E8", marginBottom: 9 },
+  etaTitle: { color: "#171717", fontSize: 10, fontWeight: "900", marginBottom: 8 },
+  etaOptions: { flexDirection: "row", gap: 6 },
+  etaOption: { flex: 1, height: 31, borderRadius: 9, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E7E7E8", alignItems: "center", justifyContent: "center" },
+  etaOptionActive: { backgroundColor: "#A6192E", borderColor: "#A6192E" },
+  etaOptionText: { color: "#737373", fontSize: 9, fontWeight: "800" },
+  etaOptionTextActive: { color: "#FFFFFF" },
+  etaSaved: { marginTop: 7, color: "#A6192E", fontSize: 9, fontWeight: "800" },
+  cancelRequestCard: { padding: 12, borderRadius: 13, backgroundColor: "#FFF8E7", marginBottom: 9 },
+  cancelRequestTitle: { color: "#A86616", fontSize: 11, fontWeight: "900" },
+  cancelRequestReason: { color: "#737373", fontSize: 10, lineHeight: 15, marginTop: 4 },
+  cancelRequestActions: { flexDirection: "row", gap: 7, marginTop: 10 },
+  rejectButton: { flex: 1, height: 35, borderRadius: 9, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  rejectButtonText: { color: "#737373", fontSize: 10, fontWeight: "900" },
+  approveButton: { flex: 1, height: 35, borderRadius: 9, backgroundColor: "#A6192E", alignItems: "center", justifyContent: "center" },
+  approveButtonText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
+  sellerCancelButton: { height: 37, borderRadius: 10, backgroundColor: "#FDECEC", marginBottom: 9, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  sellerCancelText: { color: "#B42318", fontSize: 10, fontWeight: "900" },
+  reasonOverlay: { flex: 1, backgroundColor: "#00000070", alignItems: "center", justifyContent: "center", padding: 20 },
+  reasonCard: { width: "100%", maxWidth: 440, padding: 20, borderRadius: 21, backgroundColor: "#FFFFFF" },
+  reasonTitle: { color: "#171717", fontSize: 19, fontWeight: "900" },
+  reasonSubtitle: { color: "#737373", fontSize: 12, lineHeight: 18, marginTop: 5 },
+  reasonInput: { minHeight: 95, marginTop: 14, padding: 12, borderRadius: 13, borderWidth: 1, borderColor: "#E7E7E8", color: "#171717", textAlignVertical: "top" },
+  reasonActions: { flexDirection: "row", justifyContent: "flex-end", gap: 9, marginTop: 14 },
+  reasonBack: { height: 41, paddingHorizontal: 14, justifyContent: "center" },
+  reasonBackText: { color: "#737373", fontWeight: "800" },
+  reasonConfirm: { height: 41, paddingHorizontal: 18, borderRadius: 10, backgroundColor: "#A6192E", justifyContent: "center" },
+  reasonConfirmText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
 
   actionButtonDisabled: {
     opacity: 0.65,
@@ -1226,7 +1410,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 30,
     alignItems: "center",
   },
@@ -1244,12 +1428,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   emptyText: {
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     textAlign: "center",
     lineHeight: 17,
     marginTop: 5,
@@ -1265,7 +1449,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 13,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
@@ -1273,3 +1457,4 @@ const styles = StyleSheet.create({
     height: 20,
   },
 });
+

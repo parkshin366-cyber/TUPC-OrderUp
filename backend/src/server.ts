@@ -15,11 +15,15 @@ import path from "path";
 // =====================================================
 
 import authRoutes from "./routes/auth";
+import adminRoutes from "./routes/admin";
 import captchaRoutes from "./routes/captcha";
 import orderRoutes from "./routes/orders";
 import productRoutes from "./routes/products";
 import storeRoutes from "./routes/stores";
 import userRoutes from "./routes/users";
+import voucherRoutes from "./routes/vouchers";
+import messageRoutes from "./routes/messages";
+import reviewRoutes from "./routes/reviews";
 
 // =====================================================
 // DATABASE
@@ -146,6 +150,19 @@ app.use(
   "/api/users",
   userRoutes
 );
+
+app.use(
+  "/api/admin",
+  adminRoutes
+);
+
+app.use(
+  "/api/vouchers",
+  voucherRoutes
+);
+
+app.use("/api/messages", messageRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 // =====================================================
 // STORES
@@ -317,27 +334,27 @@ async function startServer() {
         );
 
         console.log(
-          `🚀 TUPC-OrderUp API running on port ${PORT}`
+          `TUPC-OrderUp API running on port ${PORT}`
         );
 
         console.log(
-          `🌐 Local: http://localhost:${PORT}`
+          `Local: http://localhost:${PORT}`
         );
 
         console.log(
-          `❤️ Health: http://localhost:${PORT}/api/health`
+          `Health: http://localhost:${PORT}/api/health`
         );
 
         console.log(
-          `📦 Orders: http://localhost:${PORT}/api/orders`
+          `Orders: http://localhost:${PORT}/api/orders`
         );
 
         console.log(
-          `🛒 Seller Orders: http://localhost:${PORT}/api/orders/seller`
+          `Seller Orders: http://localhost:${PORT}/api/orders/seller`
         );
 
         console.log(
-          `🖼️ Uploads: http://localhost:${PORT}/uploads`
+          `Uploads: http://localhost:${PORT}/uploads`
         );
 
         console.log(
@@ -347,7 +364,7 @@ async function startServer() {
     );
   } catch (error) {
     console.error(
-      "❌ Failed to start server:",
+      "Failed to start server:",
       error
     );
 

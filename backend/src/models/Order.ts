@@ -12,12 +12,17 @@ export type PaymentMethod =
   | "cash"
   | "gcash";
 
+export type FulfillmentMethod = "pickup" | "delivery";
+
 export type OrderStatus =
   | "Pending"
   | "Preparing"
   | "Ready"
+  | "On the Way"
   | "Completed"
   | "Cancelled";
+
+export type CancellationStatus = "none" | "requested" | "rejected" | "approved";
 
 // =====================================================
 // ORDER ITEM
@@ -43,13 +48,29 @@ export interface IOrder extends Document {
   items: IOrderItem[];
 
   subtotal: number;
+  discount: number;
   total: number;
+  voucher?: Types.ObjectId;
+  voucherCode?: string;
 
   pickupLocation: string;
+  fulfillmentMethod: FulfillmentMethod;
+  deliveryAddress?: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
 
   paymentMethod: PaymentMethod;
 
   status: OrderStatus;
+  estimatedMinutes?: number;
+  estimatedReadyAt?: Date;
+  cancellationStatus: CancellationStatus;
+  cancellationReason?: string;
+  cancellationRequestedBy?: "client" | "seller";
+  cancellationRequestedAt?: Date;
+  cancellationReviewedAt?: Date;
+  cancellationRejectionReason?: string;
+  stockRestoredAt?: Date;
 
   createdAt: Date;
   updatedAt: Date;
@@ -166,6 +187,22 @@ const OrderSchema =
         min: 0,
       },
 
+      discount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      voucher: {
+        type: Schema.Types.ObjectId,
+        ref: "Voucher",
+      },
+
+      voucherCode: {
+        type: String,
+        trim: true,
+      },
+
       // =================================================
       // TOTAL
       // =================================================
@@ -186,6 +223,17 @@ const OrderSchema =
         trim: true,
         maxlength: 200,
       },
+
+      fulfillmentMethod: {
+        type: String,
+        enum: ["pickup", "delivery"],
+        default: "pickup",
+        required: true,
+      },
+
+      deliveryAddress: { type: String, trim: true, maxlength: 300 },
+      deliveryLatitude: { type: Number, min: -90, max: 90 },
+      deliveryLongitude: { type: Number, min: -180, max: 180 },
 
       // =================================================
       // PAYMENT METHOD
@@ -210,6 +258,7 @@ const OrderSchema =
           "Pending",
           "Preparing",
           "Ready",
+          "On the Way",
           "Completed",
           "Cancelled",
         ],
@@ -217,6 +266,21 @@ const OrderSchema =
         required: true,
         index: true,
       },
+
+      estimatedMinutes: { type: Number, min: 5, max: 180 },
+      estimatedReadyAt: { type: Date },
+      cancellationStatus: {
+        type: String,
+        enum: ["none", "requested", "rejected", "approved"],
+        default: "none",
+        index: true,
+      },
+      cancellationReason: { type: String, trim: true, maxlength: 300 },
+      cancellationRequestedBy: { type: String, enum: ["client", "seller"] },
+      cancellationRequestedAt: { type: Date },
+      cancellationReviewedAt: { type: Date },
+      cancellationRejectionReason: { type: String, trim: true, maxlength: 300 },
+      stockRestoredAt: { type: Date },
     },
     {
       timestamps: true,

@@ -3,8 +3,13 @@ import {
   ReactNode,
   useContext,
   useMemo,
+  useEffect,
   useState,
 } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const CART_STORAGE_KEY = "@tupc_orderup_cart";
+export type AddToCartResult = "added" | "different-store";
 
 export type CartItem = {
   id: string; // Product ID
@@ -17,6 +22,7 @@ export type CartItem = {
   store: string; // Store name for display
 
   image: string;
+  maxQuantity?: number;
 };
 
 type CartContextType = {
@@ -25,6 +31,11 @@ type CartContextType = {
   subtotal: number;
 
   addToCart: (
+    item: Omit<CartItem, "quantity">,
+    quantity?: number
+  ) => AddToCartResult;
+
+  replaceCart: (
     item: Omit<CartItem, "quantity">,
     quantity?: number
   ) => void;
@@ -51,6 +62,35 @@ export function CartProvider({
   children: ReactNode;
 }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [cartLoaded, setCartLoaded] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(CART_STORAGE_KEY)
+      .then((saved) => {
+        if (!mounted || !saved) return;
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const validItems = parsed.filter((item) => item && typeof item.id === "string" && typeof item.storeId === "string");
+          const firstStoreId = validItems[0]?.storeId;
+          setItems(
+            validItems
+              .filter((item) => item.storeId === firstStoreId)
+              .map((item) => ({ ...item, store: item.store || "Campus Store" }))
+          );
+        }
+      })
+      .catch((error) => console.error("Load cart error:", error))
+      .finally(() => { if (mounted) setCartLoaded(true); });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!cartLoaded) return;
+    AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items)).catch((error) =>
+      console.error("Save cart error:", error)
+    );
+  }, [cartLoaded, items]);
 
   // =====================================================
   // ADD TO CART
@@ -59,9 +99,13 @@ export function CartProvider({
   const addToCart = (
     item: Omit<CartItem, "quantity">,
     quantity = 1
-  ) => {
+  ): AddToCartResult => {
     if (quantity <= 0) {
-      return;
+      return "added";
+    }
+
+    if (items.length > 0 && items[0].storeId !== item.storeId) {
+      return "different-store";
     }
 
     setItems((currentItems) => {
@@ -76,8 +120,10 @@ export function CartProvider({
           currentItem.id === item.id
             ? {
                 ...currentItem,
-                quantity:
+                quantity: Math.min(
                   currentItem.quantity + quantity,
+                  item.maxQuantity ?? currentItem.maxQuantity ?? Number.MAX_SAFE_INTEGER
+                ),
               }
             : currentItem
         );
@@ -92,6 +138,13 @@ export function CartProvider({
         },
       ];
     });
+
+    return "added";
+  };
+
+  const replaceCart = (item: Omit<CartItem, "quantity">, quantity = 1) => {
+    if (quantity <= 0) return;
+    setItems([{ ...item, quantity }]);
   };
 
   // =====================================================
@@ -119,7 +172,7 @@ export function CartProvider({
         item.id === id
           ? {
               ...item,
-              quantity,
+              quantity: Math.min(quantity, item.maxQuantity ?? Number.MAX_SAFE_INTEGER),
             }
           : item
       )
@@ -184,6 +237,7 @@ export function CartProvider({
     itemCount,
     subtotal,
     addToCart,
+    replaceCart,
     updateQuantity,
     removeFromCart,
     clearCart,

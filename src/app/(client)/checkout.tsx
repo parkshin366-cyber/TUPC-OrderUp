@@ -1,23 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
+import CampusLocationPicker, { type CampusPin } from "../../components/campus-location-picker";
 
 import {
   createOrder,
+  getCustomerStoreVouchers,
+  getPublicStore,
   type PaymentMethod,
+  type Voucher,
 } from "../../services/api";
 
 // =====================================================
@@ -134,13 +141,35 @@ export default function CheckoutScreen() {
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("cash");
 
-  const [pickupLocation, setPickupLocation] =
-    useState<PickupLocation>(
-      pickupLocations[0]
-    );
+  const pickupLocation = pickupLocations[0];
 
   const [isPlacingOrder, setIsPlacingOrder] =
     useState(false);
+
+  const [appliedVoucher, setAppliedVoucher] =
+    useState<Voucher | null>(null);
+
+  const [voucherModalVisible, setVoucherModalVisible] = useState(false);
+  const [voucherOptions, setVoucherOptions] = useState<Voucher[]>([]);
+  const [loadingVouchers, setLoadingVouchers] = useState(false);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
+  const [orderConfirmVisible, setOrderConfirmVisible] = useState(false);
+  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<"pickup" | "delivery">("pickup");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryLatitude, setDeliveryLatitude] = useState<number | null>(null);
+  const [deliveryLongitude, setDeliveryLongitude] = useState<number | null>(null);
+  const [pinningLocation, setPinningLocation] = useState(false);
+  const [mapVisible, setMapVisible] = useState(false);
+  const [phoneLocation, setPhoneLocation] = useState<CampusPin | null>(null);
+
+  useEffect(() => {
+    const storeId = items[0]?.storeId;
+    if (!storeId) return;
+    void getPublicStore(storeId)
+      .then((store) => setDeliveryEnabled(store.deliveryEnabled === true))
+      .catch(() => setDeliveryEnabled(false));
+  }, [items]);
 
   // ===================================================
   // TOTAL
@@ -148,9 +177,25 @@ export default function CheckoutScreen() {
 
   const deliveryFee = 0;
 
+  const voucherDiscount = useMemo(() => {
+    if (!appliedVoucher || subtotal < appliedVoucher.minimumOrder) {
+      return 0;
+    }
+
+    const eligibleSubtotal = appliedVoucher.productIds?.length
+      ? items
+        .filter((item) => appliedVoucher.productIds?.includes(item.id))
+        .reduce((amount, item) => amount + item.price * item.quantity, 0)
+      : subtotal;
+
+    return Number(
+      (eligibleSubtotal * appliedVoucher.discountPercent / 100).toFixed(2)
+    );
+  }, [appliedVoucher, items, subtotal]);
+
   const total = useMemo(() => {
-    return subtotal + deliveryFee;
-  }, [subtotal]);
+    return Math.max(0, subtotal - voucherDiscount + deliveryFee);
+  }, [subtotal, voucherDiscount]);
 
   // ===================================================
   // EMPTY CART
@@ -239,6 +284,81 @@ export default function CheckoutScreen() {
     return firstStoreId;
   };
 
+  const handleChooseVoucher = async () => {
+    setVoucherModalVisible(true);
+    setVoucherError(null);
+
+    if (!token) {
+      setVoucherOptions([]);
+      setVoucherError("Please log in again to use a voucher.");
+      return;
+    }
+
+    const storeId = getStoreId();
+    if (!storeId) {
+      setVoucherOptions([]);
+      setVoucherError("Vouchers can only be used for one store per order.");
+      return;
+    }
+
+    try {
+      setLoadingVouchers(true);
+      const vouchers = await getCustomerStoreVouchers(
+        token,
+        storeId,
+        items.map((item) => item.id)
+      );
+      setVoucherOptions(vouchers);
+    } catch (error) {
+      setVoucherOptions([]);
+      setVoucherError(getErrorMessage(error));
+    } finally {
+      setLoadingVouchers(false);
+    }
+  };
+
+  const handlePinLocation = async () => {
+    setMapVisible(true);
+    try {
+      setPinningLocation(true);
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== "granted") {
+        Alert.alert("Location Permission", "Allow location access so the seller can find your delivery pin.");
+        return;
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      setPhoneLocation({ latitude, longitude });
+    } catch (error) {
+      Alert.alert("Location Error", error instanceof Error ? error.message : "Unable to get your current location.");
+    } finally {
+      setPinningLocation(false);
+    }
+  };
+
+  const handleConfirmCampusPin = async (pin: CampusPin) => {
+    setDeliveryLatitude(pin.latitude);
+    setDeliveryLongitude(pin.longitude);
+    setMapVisible(false);
+    try {
+      const places = await Location.reverseGeocodeAsync(pin);
+      const place = places[0];
+      if (place) {
+        const readable = [place.name, place.street, place.district, place.city]
+          .filter(Boolean)
+          .filter((part, index, all) => all.indexOf(part) === index)
+          .join(", ");
+        if (readable) setDeliveryAddress(readable);
+      }
+    } catch {
+      // The client can still enter a campus landmark manually.
+    }
+  };
+
   // ===================================================
   // HANDLE PLACE ORDER
   // ===================================================
@@ -307,32 +427,15 @@ export default function CheckoutScreen() {
       return;
     }
 
-    const paymentLabel =
-      paymentMethod === "cash"
-        ? "Cash on Pickup"
-        : "GCash";
+    if (
+      fulfillmentMethod === "delivery" &&
+      (!deliveryAddress.trim() || deliveryLatitude === null || deliveryLongitude === null)
+    ) {
+      Alert.alert("Pin Delivery Location", "Please pin your current location and add a delivery landmark before placing the order.");
+      return;
+    }
 
-    Alert.alert(
-      "Confirm Your Order",
-      [
-        `Pickup: ${pickupLocation.name}`,
-        `Payment: ${paymentLabel}`,
-        `Items: ${itemCount}`,
-        `Total: ₱${total.toFixed(2)}`,
-        "",
-        "Do you want to place this order?",
-      ].join("\n"),
-      [
-        {
-          text: "Review Again",
-          style: "cancel",
-        },
-        {
-          text: "Place Order",
-          onPress: confirmPlaceOrder,
-        },
-      ]
-    );
+    setOrderConfirmVisible(true);
   };
 
   // ===================================================
@@ -364,7 +467,7 @@ export default function CheckoutScreen() {
 
       if (!token) {
         console.error(
-          "❌ NO AUTH TOKEN"
+          "NO AUTH TOKEN"
         );
 
         Alert.alert(
@@ -383,7 +486,7 @@ export default function CheckoutScreen() {
       }
 
       console.log(
-        "✅ AUTH TOKEN EXISTS"
+        "AUTH TOKEN EXISTS"
       );
       console.log(
         "TOKEN LENGTH:",
@@ -403,7 +506,7 @@ export default function CheckoutScreen() {
       }
 
       console.log(
-        "✅ STORE ID:",
+        "STORE ID:",
         storeId
       );
 
@@ -429,7 +532,7 @@ export default function CheckoutScreen() {
       );
 
       console.log(
-        "✅ ORDER ITEMS:"
+        "ORDER ITEMS:"
       );
 
       console.log(
@@ -474,9 +577,13 @@ export default function CheckoutScreen() {
       const payload = {
         storeId,
         items: orderItems,
-        pickupLocation:
-          pickupLocation.name,
+        pickupLocation: fulfillmentMethod === "delivery" ? deliveryAddress.trim() : pickupLocation.name,
+        fulfillmentMethod,
+        deliveryAddress: fulfillmentMethod === "delivery" ? deliveryAddress.trim() : undefined,
+        deliveryLatitude: fulfillmentMethod === "delivery" ? deliveryLatitude ?? undefined : undefined,
+        deliveryLongitude: fulfillmentMethod === "delivery" ? deliveryLongitude ?? undefined : undefined,
         paymentMethod,
+        voucherCode: appliedVoucher?.code,
       };
 
       console.log(
@@ -506,7 +613,7 @@ export default function CheckoutScreen() {
       // -----------------------------------------------
 
       console.log(
-        "🚀 CALLING createOrder()..."
+        "CALLING createOrder()..."
       );
 
       const result =
@@ -523,7 +630,7 @@ export default function CheckoutScreen() {
         "========================================"
       );
       console.log(
-        "✅ ORDER CREATED SUCCESSFULLY"
+        "ORDER CREATED SUCCESSFULLY"
       );
       console.log(
         "========================================"
@@ -541,15 +648,26 @@ export default function CheckoutScreen() {
       // 9. CLEAR CART ONLY AFTER SUCCESS
       // -----------------------------------------------
 
+      const completedOrderId = result._id;
+      const completedStoreName = items[0]?.store ?? "Campus Store";
+      const completedItemCount = itemCount;
+      const completedTotal = result.total;
       clearCart();
+      setAppliedVoucher(null);
 
       // -----------------------------------------------
       // 10. SUCCESS SCREEN
       // -----------------------------------------------
 
-      router.replace(
-        "/order-success"
-      );
+      router.replace({
+        pathname: "/(client)/order-success",
+        params: {
+          orderId: completedOrderId,
+          storeName: completedStoreName,
+          itemCount: String(completedItemCount),
+          total: String(completedTotal),
+        },
+      });
     } catch (error: any) {
       // -----------------------------------------------
       // DETAILED ERROR
@@ -560,7 +678,7 @@ export default function CheckoutScreen() {
         "========================================"
       );
       console.log(
-        "❌ PLACE ORDER FAILED"
+        "PLACE ORDER FAILED"
       );
       console.log(
         "========================================"
@@ -894,7 +1012,7 @@ export default function CheckoutScreen() {
               <Text
                 style={styles.sectionTitle}
               >
-                Pickup Location
+                Receive Your Order
               </Text>
 
               <Text
@@ -902,26 +1020,36 @@ export default function CheckoutScreen() {
                   styles.sectionSubtitle
                 }
               >
-                Where will you collect your order?
+                Choose pickup or direct delivery.
               </Text>
             </View>
           </View>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.pickupCard,
-              pressed &&
-                styles.cardPressed,
-            ]}
-            onPress={() =>
-              Alert.alert(
-                "Pickup Location",
-                "TUPC Main Canteen is currently the available pickup location.",
-                [{ text: "OK" }]
-              )
-            }
-            disabled={isPlacingOrder}
-          >
+          <View style={styles.fulfillmentOptions}>
+            <Pressable
+              style={[styles.fulfillmentOption, fulfillmentMethod === "pickup" && styles.fulfillmentOptionActive]}
+              onPress={() => setFulfillmentMethod("pickup")}
+            >
+              <Ionicons name="bag-handle-outline" size={21} color={fulfillmentMethod === "pickup" ? CARDINAL : MUTED} />
+              <Text style={[styles.fulfillmentTitle, fulfillmentMethod === "pickup" && styles.fulfillmentTitleActive]}>Pickup</Text>
+              <Text style={styles.fulfillmentDescription}>Collect at the campus store</Text>
+            </Pressable>
+            <Pressable
+              disabled={!deliveryEnabled}
+              style={[
+                styles.fulfillmentOption,
+                fulfillmentMethod === "delivery" && styles.fulfillmentOptionActive,
+                !deliveryEnabled && styles.fulfillmentOptionDisabled,
+              ]}
+              onPress={() => setFulfillmentMethod("delivery")}
+            >
+              <Ionicons name="bicycle-outline" size={21} color={fulfillmentMethod === "delivery" ? CARDINAL : MUTED} />
+              <Text style={[styles.fulfillmentTitle, fulfillmentMethod === "delivery" && styles.fulfillmentTitleActive]}>Delivery</Text>
+              <Text style={styles.fulfillmentDescription}>{deliveryEnabled ? "Deliver to your pinned location" : "Seller has disabled delivery"}</Text>
+            </Pressable>
+          </View>
+
+          {fulfillmentMethod === "pickup" ? <View style={styles.pickupCard}>
             <View
               style={styles.pickupIcon}
             >
@@ -995,11 +1123,51 @@ export default function CheckoutScreen() {
             </View>
 
             <Ionicons
-              name="chevron-forward"
-              size={19}
-              color={MUTED}
+              name="checkmark-circle"
+              size={21}
+              color={SUCCESS}
             />
-          </Pressable>
+          </View> : (
+            <View style={styles.deliveryCard}>
+              <View style={styles.deliveryHeader}>
+                <View style={styles.pickupIcon}>
+                  <Ionicons name="location" size={23} color={CARDINAL} />
+                </View>
+                <View style={styles.deliveryHeaderCopy}>
+                  <Text style={styles.pickupTitle}>Delivery Pin</Text>
+                  <Text style={styles.pickupDescription}>Pin your exact position, then add a landmark.</Text>
+                </View>
+              </View>
+
+              <Pressable
+                style={[styles.pinButton, pinningLocation && styles.placeButtonDisabled]}
+                disabled={pinningLocation}
+                onPress={() => void handlePinLocation()}
+              >
+                {pinningLocation ? <ActivityIndicator size="small" color={WHITE} /> : <Ionicons name="locate" size={18} color={WHITE} />}
+                <Text style={styles.pinButtonText}>{pinningLocation ? "Getting phone location..." : deliveryLatitude !== null ? "Update Campus Pin" : "Open Campus Map"}</Text>
+              </Pressable>
+
+              {deliveryLatitude !== null && deliveryLongitude !== null ? (
+                <View style={styles.coordinatesBadge}>
+                  <Ionicons name="checkmark-circle" size={17} color={SUCCESS} />
+                  <Text style={styles.coordinatesText}>Pinned at {deliveryLatitude.toFixed(5)}, {deliveryLongitude.toFixed(5)}</Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.addressLabel}>Building, room, or landmark</Text>
+              <TextInput
+                value={deliveryAddress}
+                onChangeText={setDeliveryAddress}
+                placeholder="Example: CLA Building, Room 203"
+                placeholderTextColor="#9A9A9E"
+                multiline
+                maxLength={300}
+                style={styles.addressInput}
+              />
+              <Text style={styles.deliveryPrivacy}>Your pin is saved only with this order for delivery.</Text>
+            </View>
+          )}
 
           {/* PAYMENT */}
 
@@ -1383,6 +1551,29 @@ export default function CheckoutScreen() {
               </View>
             </View>
 
+            <Pressable
+              style={[
+                styles.voucherRow,
+                appliedVoucher && styles.voucherRowApplied,
+              ]}
+              onPress={() => void handleChooseVoucher()}
+            >
+              <View style={styles.voucherCopy}>
+                <Ionicons name="ticket-outline" size={18} color={CARDINAL} />
+                <View>
+                  <Text style={styles.summaryLabel}>Seller Voucher</Text>
+                  <Text style={styles.voucherHint}>
+                    {appliedVoucher
+                      ? `${appliedVoucher.code} · ${appliedVoucher.discountPercent}% off`
+                      : "View vouchers enabled by this seller"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.voucherValue}>
+                {voucherDiscount ? `-₱${voucherDiscount.toFixed(2)}` : "Choose"}
+              </Text>
+            </Pressable>
+
             <View
               style={styles.summaryDivider}
             />
@@ -1525,6 +1716,214 @@ export default function CheckoutScreen() {
             )}
           </Pressable>
         </View>
+
+        <CampusLocationPicker
+          visible={mapVisible}
+          initialPin={deliveryLatitude !== null && deliveryLongitude !== null ? { latitude: deliveryLatitude, longitude: deliveryLongitude } : null}
+          phoneLocation={phoneLocation}
+          onClose={() => setMapVisible(false)}
+          onConfirm={(pin) => void handleConfirmCampusPin(pin)}
+        />
+
+        <Modal
+          visible={voucherModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setVoucherModalVisible(false)}
+        >
+          <View style={styles.sheetOverlay}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setVoucherModalVisible(false)}
+            />
+            <View style={styles.voucherSheet}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetTitleCopy}>
+                  <Text style={styles.sheetTitle}>Choose a voucher</Text>
+                  <Text style={styles.sheetSubtitle}>
+                    Vouchers available for this store and order.
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.sheetCloseButton}
+                  onPress={() => setVoucherModalVisible(false)}
+                >
+                  <Ionicons name="close" size={21} color={TEXT} />
+                </Pressable>
+              </View>
+
+              <ScrollView
+                style={styles.voucherList}
+                contentContainerStyle={styles.voucherListContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <Pressable
+                  style={[
+                    styles.voucherOption,
+                    !appliedVoucher && styles.voucherOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setAppliedVoucher(null);
+                    setVoucherModalVisible(false);
+                  }}
+                >
+                  <View style={styles.noVoucherIcon}>
+                    <Ionicons name="close-circle-outline" size={22} color={MUTED} />
+                  </View>
+                  <View style={styles.voucherOptionCopy}>
+                    <Text style={styles.voucherOptionTitle}>No voucher</Text>
+                    <Text style={styles.voucherOptionDescription}>
+                      Continue without applying a discount.
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={!appliedVoucher ? "radio-button-on" : "radio-button-off"}
+                    size={22}
+                    color={!appliedVoucher ? CARDINAL : "#B7B7BA"}
+                  />
+                </Pressable>
+
+                {loadingVouchers ? (
+                  <View style={styles.voucherStatus}>
+                    <ActivityIndicator color={CARDINAL} />
+                    <Text style={styles.voucherStatusText}>Loading vouchers...</Text>
+                  </View>
+                ) : voucherError ? (
+                  <View style={styles.voucherStatus}>
+                    <Ionicons name="alert-circle-outline" size={28} color={CARDINAL} />
+                    <Text style={styles.voucherStatusTitle}>Unable to load vouchers</Text>
+                    <Text style={styles.voucherStatusText}>{voucherError}</Text>
+                  </View>
+                ) : voucherOptions.length === 0 ? (
+                  <View style={styles.voucherStatus}>
+                    <Ionicons name="ticket-outline" size={30} color={MUTED} />
+                    <Text style={styles.voucherStatusTitle}>No vouchers available</Text>
+                    <Text style={styles.voucherStatusText}>
+                      This seller has no enabled voucher for your cart yet.
+                    </Text>
+                  </View>
+                ) : (
+                  voucherOptions.map((voucher) => {
+                    const eligible = subtotal >= voucher.minimumOrder;
+                    const selected = appliedVoucher?._id === voucher._id;
+                    const eligibleSubtotal = voucher.productIds?.length
+                      ? items
+                        .filter((item) => voucher.productIds?.includes(item.id))
+                        .reduce((amount, item) => amount + item.price * item.quantity, 0)
+                      : subtotal;
+                    const savings = eligible
+                      ? eligibleSubtotal * voucher.discountPercent / 100
+                      : 0;
+
+                    return (
+                      <Pressable
+                        key={voucher._id}
+                        disabled={!eligible}
+                        style={[
+                          styles.voucherOption,
+                          selected && styles.voucherOptionSelected,
+                          !eligible && styles.voucherOptionDisabled,
+                        ]}
+                        onPress={() => {
+                          setAppliedVoucher(voucher);
+                          setVoucherModalVisible(false);
+                        }}
+                      >
+                        <View style={styles.discountBadge}>
+                          <Text style={styles.discountBadgeValue}>{voucher.discountPercent}%</Text>
+                          <Text style={styles.discountBadgeLabel}>OFF</Text>
+                        </View>
+                        <View style={styles.voucherOptionCopy}>
+                          <View style={styles.voucherCodeRow}>
+                            <Text style={styles.voucherCode}>{voucher.code}</Text>
+                            {eligible && savings > 0 ? (
+                              <Text style={styles.savingsText}>Save ₱{savings.toFixed(2)}</Text>
+                            ) : null}
+                          </View>
+                          <Text style={styles.voucherOptionTitle}>{voucher.title}</Text>
+                          <Text style={styles.voucherOptionDescription}>
+                            {eligible
+                              ? `Minimum spend ₱${voucher.minimumOrder.toFixed(2)}`
+                              : `Add ₱${Math.max(0, voucher.minimumOrder - subtotal).toFixed(2)} more to use`}
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name={eligible ? (selected ? "radio-button-on" : "radio-button-off") : "lock-closed"}
+                          size={22}
+                          color={selected ? CARDINAL : "#B7B7BA"}
+                        />
+                      </Pressable>
+                    );
+                  })
+                )}
+              </ScrollView>
+
+              <View style={styles.voucherNotice}>
+                <Ionicons name="information-circle-outline" size={17} color={CARDINAL} />
+                <Text style={styles.voucherNoticeText}>
+                  A used voucher is consumed after checkout, even if the order is cancelled.
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={orderConfirmVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setOrderConfirmVisible(false)}
+        >
+          <View style={styles.confirmOverlay}>
+            <View style={styles.confirmCard}>
+              <View style={styles.confirmIcon}>
+                <Ionicons name="receipt-outline" size={27} color={CARDINAL} />
+              </View>
+              <Text style={styles.confirmTitle}>Place your order?</Text>
+              <Text style={styles.confirmSubtitle}>
+                Check these details before sending your order to the seller.
+              </Text>
+              <View style={styles.confirmDetails}>
+                <View style={styles.confirmRow}>
+                  <Text style={styles.confirmLabel}>{fulfillmentMethod === "delivery" ? "Deliver to" : "Pickup"}</Text>
+                  <Text style={styles.confirmValue}>{fulfillmentMethod === "delivery" ? deliveryAddress : pickupLocation.name}</Text>
+                </View>
+                <View style={styles.confirmRow}>
+                  <Text style={styles.confirmLabel}>Payment</Text>
+                  <Text style={styles.confirmValue}>
+                    {paymentMethod === "cash" ? "Cash on Pickup" : "GCash"}
+                  </Text>
+                </View>
+                <View style={styles.confirmRow}>
+                  <Text style={styles.confirmLabel}>Items</Text>
+                  <Text style={styles.confirmValue}>{itemCount}</Text>
+                </View>
+                <View style={[styles.confirmRow, styles.confirmTotalRow]}>
+                  <Text style={styles.confirmTotalLabel}>Total</Text>
+                  <Text style={styles.confirmTotalValue}>₱{total.toFixed(2)}</Text>
+                </View>
+              </View>
+              <View style={styles.confirmActions}>
+                <Pressable
+                  style={styles.reviewButton}
+                  onPress={() => setOrderConfirmVisible(false)}
+                >
+                  <Text style={styles.reviewButtonText}>Review Again</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.confirmPlaceButton}
+                  onPress={() => {
+                    setOrderConfirmVisible(false);
+                    void confirmPlaceOrder();
+                  }}
+                >
+                  <Text style={styles.confirmPlaceButtonText}>Place Order</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -2069,6 +2468,167 @@ const styles = StyleSheet.create({
     color: SUCCESS,
   },
 
+  voucherRow: {
+    minHeight: 47,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "#FBECEF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  fulfillmentOptions: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 11,
+  },
+
+  fulfillmentOption: {
+    flex: 1,
+    minHeight: 104,
+    padding: 13,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: WHITE,
+  },
+
+  fulfillmentOptionActive: {
+    borderColor: CARDINAL,
+    backgroundColor: "#FFF7F8",
+  },
+
+  fulfillmentOptionDisabled: {
+    opacity: 0.5,
+    backgroundColor: "#F1F1F2",
+  },
+
+  fulfillmentTitle: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  fulfillmentTitleActive: {
+    color: CARDINAL,
+  },
+
+  fulfillmentDescription: {
+    marginTop: 3,
+    fontSize: 9,
+    lineHeight: 13,
+    color: MUTED,
+  },
+
+  deliveryCard: {
+    padding: 15,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: WHITE,
+  },
+
+  deliveryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  deliveryHeaderCopy: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  pinButton: {
+    height: 45,
+    marginTop: 14,
+    borderRadius: 13,
+    backgroundColor: CARDINAL,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  pinButtonText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: WHITE,
+  },
+
+  coordinatesBadge: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 11,
+    backgroundColor: SOFT_GREEN,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  coordinatesText: {
+    flex: 1,
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: SUCCESS,
+  },
+
+  addressLabel: {
+    marginTop: 14,
+    marginBottom: 7,
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: TEXT,
+  },
+
+  addressInput: {
+    minHeight: 72,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    backgroundColor: "#FAFAFB",
+    color: TEXT,
+    fontSize: 11,
+    textAlignVertical: "top",
+  },
+
+  deliveryPrivacy: {
+    marginTop: 7,
+    fontSize: 9,
+    lineHeight: 13,
+    color: MUTED,
+  },
+
+  voucherRowApplied: {
+    backgroundColor: "#FFF7F8",
+    borderWidth: 1,
+    borderColor: "#EDC4CB",
+  },
+
+  voucherCopy: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+
+  voucherHint: {
+    marginTop: 2,
+    fontSize: 9.5,
+    color: MUTED,
+  },
+
+  voucherValue: {
+    marginLeft: 8,
+    color: CARDINAL,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+
   summaryDivider: {
     height: 1,
     backgroundColor: BORDER,
@@ -2189,6 +2749,340 @@ const styles = StyleSheet.create({
 
   placeButtonText: {
     fontSize: 13,
+    fontWeight: "900",
+    color: WHITE,
+  },
+
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(16, 16, 18, 0.48)",
+  },
+
+  voucherSheet: {
+    maxHeight: "82%",
+    paddingTop: 9,
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    backgroundColor: WHITE,
+  },
+
+  sheetHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D4D4D6",
+    alignSelf: "center",
+    marginBottom: 15,
+  },
+
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 14,
+  },
+
+  sheetTitleCopy: {
+    flex: 1,
+    paddingRight: 12,
+  },
+
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  sheetSubtitle: {
+    marginTop: 4,
+    fontSize: 11.5,
+    lineHeight: 17,
+    color: MUTED,
+  },
+
+  sheetCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#F3F3F4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  voucherList: {
+    flexGrow: 0,
+  },
+
+  voucherListContent: {
+    gap: 10,
+    paddingBottom: 4,
+  },
+
+  voucherOption: {
+    minHeight: 82,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 16,
+    backgroundColor: WHITE,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  voucherOptionSelected: {
+    borderColor: CARDINAL,
+    backgroundColor: "#FFF8F9",
+  },
+
+  voucherOptionDisabled: {
+    opacity: 0.55,
+    backgroundColor: "#F7F7F8",
+  },
+
+  noVoucherIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: "#F1F1F2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  discountBadge: {
+    width: 58,
+    minHeight: 58,
+    borderRadius: 15,
+    backgroundColor: SOFT_RED,
+    borderWidth: 1,
+    borderColor: "#F1CBD2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  discountBadgeValue: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: CARDINAL,
+  },
+
+  discountBadgeLabel: {
+    marginTop: 1,
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    color: CARDINAL,
+  },
+
+  voucherOptionCopy: {
+    flex: 1,
+    marginHorizontal: 11,
+  },
+
+  voucherCodeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 7,
+    marginBottom: 3,
+  },
+
+  voucherCode: {
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    color: CARDINAL,
+  },
+
+  savingsText: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: "hidden",
+    backgroundColor: SOFT_GREEN,
+    fontSize: 8.5,
+    fontWeight: "900",
+    color: SUCCESS,
+  },
+
+  voucherOptionTitle: {
+    fontSize: 12.5,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  voucherOptionDescription: {
+    marginTop: 3,
+    fontSize: 10,
+    lineHeight: 14,
+    color: MUTED,
+  },
+
+  voucherStatus: {
+    minHeight: 142,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  voucherStatusTitle: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: "900",
+    color: TEXT,
+    textAlign: "center",
+  },
+
+  voucherStatusText: {
+    marginTop: 7,
+    fontSize: 10.5,
+    lineHeight: 16,
+    color: MUTED,
+    textAlign: "center",
+  },
+
+  voucherNotice: {
+    marginTop: 12,
+    padding: 11,
+    borderRadius: 12,
+    backgroundColor: "#FFF5F6",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 7,
+  },
+
+  voucherNoticeText: {
+    flex: 1,
+    fontSize: 9.5,
+    lineHeight: 14,
+    color: CARDINAL_DARK,
+  },
+
+  confirmOverlay: {
+    flex: 1,
+    paddingHorizontal: 24,
+    backgroundColor: "rgba(16, 16, 18, 0.52)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  confirmCard: {
+    width: "100%",
+    maxWidth: 410,
+    padding: 20,
+    borderRadius: 22,
+    backgroundColor: WHITE,
+    alignItems: "center",
+  },
+
+  confirmIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 17,
+    backgroundColor: SOFT_RED,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  confirmTitle: {
+    marginTop: 14,
+    fontSize: 19,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  confirmSubtitle: {
+    marginTop: 5,
+    paddingHorizontal: 8,
+    fontSize: 11,
+    lineHeight: 17,
+    color: MUTED,
+    textAlign: "center",
+  },
+
+  confirmDetails: {
+    width: "100%",
+    marginTop: 17,
+    padding: 14,
+    borderRadius: 15,
+    backgroundColor: "#F7F7F8",
+  },
+
+  confirmRow: {
+    minHeight: 27,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  confirmLabel: {
+    fontSize: 10.5,
+    color: MUTED,
+  },
+
+  confirmValue: {
+    flexShrink: 1,
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: TEXT,
+    textAlign: "right",
+  },
+
+  confirmTotalRow: {
+    marginTop: 8,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+  },
+
+  confirmTotalLabel: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  confirmTotalValue: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: CARDINAL,
+  },
+
+  confirmActions: {
+    width: "100%",
+    marginTop: 17,
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  reviewButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  reviewButtonText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: TEXT,
+  },
+
+  confirmPlaceButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 13,
+    backgroundColor: CARDINAL,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  confirmPlaceButtonText: {
+    fontSize: 11,
     fontWeight: "900",
     color: WHITE,
   },

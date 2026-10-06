@@ -1,4 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
     Alert,
     Pressable,
@@ -8,6 +10,9 @@ import {
     Text,
     View,
 } from "react-native";
+import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS, useAppTheme } from "../../context/ThemeContext";
+import { getAdminUsers, getPublicStores } from "../../services/api";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -20,32 +25,12 @@ const WHITE = "#FFFFFF";
 const GREEN = "#2E7D32";
 const ORANGE = "#B26A00";
 
-const platformStats = [
-  {
-    label: "Total Users",
-    value: "1,248",
-    detail: "+84 this month",
-    icon: "people-outline" as const,
-  },
-  {
-    label: "Active Users",
-    value: "864",
-    detail: "69.2% of users",
-    icon: "pulse-outline" as const,
-  },
-  {
-    label: "Sellers",
-    value: "86",
-    detail: "78 active stores",
-    icon: "storefront-outline" as const,
-  },
-  {
-    label: "Admins",
-    value: "5",
-    detail: "All verified",
-    icon: "shield-checkmark-outline" as const,
-  },
-];
+type DashboardStat = {
+  label: string;
+  value: string;
+  detail: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
 
 const systemHealth = [
   {
@@ -123,6 +108,35 @@ const storeActivity = [
 ];
 
 export default function AdminOverviewScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
+  const { token } = useAuth();
+  const [platformStats, setPlatformStats] = useState<DashboardStat[]>([
+    { label: "Total Users", value: "0", detail: "Live database total", icon: "people-outline" as const },
+    { label: "Active Users", value: "0", detail: "Approved accounts", icon: "pulse-outline" as const },
+    { label: "Sellers", value: "0", detail: "Approved seller accounts", icon: "storefront-outline" as const },
+    { label: "Active Stores", value: "0", detail: "Stores in the database", icon: "storefront-outline" as const },
+  ]);
+
+  const loadOverview = useCallback(async () => {
+    if (!token) return;
+    try {
+      const [users, stores] = await Promise.all([getAdminUsers(token), getPublicStores()]);
+      const approvedUsers = users.filter((user) => user.status === "approved");
+      const sellers = users.filter((user) => user.role === "seller" && user.status === "approved");
+      setPlatformStats([
+        { label: "Total Users", value: String(users.length), detail: "Live database total", icon: "people-outline" },
+        { label: "Active Users", value: String(approvedUsers.length), detail: "Approved accounts", icon: "pulse-outline" },
+        { label: "Sellers", value: String(sellers.length), detail: `${stores.length} active stores`, icon: "storefront-outline" },
+        { label: "Active Stores", value: String(stores.filter((store) => store.isOpen).length), detail: "Open for pickup", icon: "storefront-outline" },
+      ]);
+    } catch (error) {
+      console.error("LOAD ADMIN OVERVIEW ERROR:", error);
+    }
+  }, [token]);
+
+  useFocusEffect(useCallback(() => { loadOverview(); }, [loadOverview]));
+
   const handleQuickAction = (action: string) => {
     Alert.alert(action, `${action} module will be connected to the backend later.`);
   };
@@ -218,25 +232,31 @@ export default function AdminOverviewScreen() {
           <QuickAction
             icon="people-outline"
             label="Manage Users"
-            onPress={() => handleQuickAction("Manage Users")}
+            onPress={() => router.push("/(admin)/users")}
           />
 
           <QuickAction
             icon="storefront-outline"
             label="Review Sellers"
-            onPress={() => handleQuickAction("Review Sellers")}
+            onPress={() => router.push("/(admin)/users")}
+          />
+
+          <QuickAction
+            icon="wallet-outline"
+            label="Rent & Stalls"
+            onPress={() => router.push("/(admin)/finance")}
           />
 
           <QuickAction
             icon="shield-outline"
             label="Security"
-            onPress={() => handleQuickAction("Security")}
+            onPress={() => router.push("/(admin)/security")}
           />
 
           <QuickAction
             icon="cloud-download-outline"
             label="Backup"
-            onPress={() => handleQuickAction("Database Backup")}
+            onPress={() => router.push("/(admin)/database")}
           />
         </View>
 
@@ -482,15 +502,15 @@ function SecurityMetric({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.background,
   },
 
   container: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.background,
   },
 
   content: {
@@ -522,7 +542,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 30,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
     letterSpacing: -0.7,
   },
 
@@ -530,14 +550,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     lineHeight: 19,
-    color: MUTED,
+    color: colors.muted,
   },
 
   adminBadge: {
     width: 46,
     height: 46,
     borderRadius: 15,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: "#E2CFA4",
     alignItems: "center",
@@ -546,7 +566,7 @@ const styles = StyleSheet.create({
 
   statusBanner: {
     minHeight: 72,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderRadius: 17,
     borderWidth: 1,
     borderColor: "#DDE9DF",
@@ -574,13 +594,13 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   statusDescription: {
     marginTop: 3,
     fontSize: 10,
-    color: MUTED,
+    color: colors.muted,
   },
 
   liveBadge: {
@@ -617,30 +637,32 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   sectionSubtitle: {
     marginTop: 2,
     fontSize: 11,
-    color: MUTED,
+    color: colors.muted,
   },
 
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 9,
+    justifyContent: "space-between",
     marginBottom: 23,
   },
 
   statCard: {
-    width: "48.7%",
-    minHeight: 145,
-    backgroundColor: WHITE,
+    width: "48%",
+    height: 150,
+    backgroundColor: colors.surface,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 13,
+    justifyContent: "space-between",
+    marginBottom: 9,
   },
 
   statTop: {
@@ -662,14 +684,14 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 10,
     fontWeight: "600",
-    color: MUTED,
+    color: colors.muted,
   },
 
   statValue: {
     marginTop: 4,
     fontSize: 22,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   statDetail: {
@@ -686,10 +708,10 @@ const styles = StyleSheet.create({
 
   quickAction: {
     minHeight: 57,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -709,7 +731,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: "700",
-    color: TEXT,
+    color: colors.text,
   },
 
   pressed: {
@@ -736,10 +758,10 @@ const styles = StyleSheet.create({
   },
 
   healthCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     overflow: "hidden",
     marginBottom: 23,
   },
@@ -771,13 +793,13 @@ const styles = StyleSheet.create({
   healthName: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   healthDetail: {
     marginTop: 3,
     fontSize: 9,
-    color: MUTED,
+    color: colors.muted,
   },
 
   healthStatus: {
@@ -800,10 +822,10 @@ const styles = StyleSheet.create({
   },
 
   activityCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     overflow: "hidden",
     marginBottom: 23,
   },
@@ -836,14 +858,14 @@ const styles = StyleSheet.create({
   activityTitle: {
     fontSize: 11,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   activityDetail: {
     marginTop: 3,
     fontSize: 9,
     lineHeight: 13,
-    color: MUTED,
+    color: colors.muted,
   },
 
   activityTime: {
@@ -855,14 +877,14 @@ const styles = StyleSheet.create({
   viewAll: {
     fontSize: 11,
     fontWeight: "800",
-    color: CARDINAL,
+    color: colors.cardinal,
   },
 
   storeCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     overflow: "hidden",
     marginBottom: 23,
   },
@@ -894,13 +916,13 @@ const styles = StyleSheet.create({
   storeName: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   storeCategory: {
     marginTop: 3,
     fontSize: 9,
-    color: MUTED,
+    color: colors.muted,
   },
 
   storeSales: {
@@ -910,20 +932,20 @@ const styles = StyleSheet.create({
   storeSalesValue: {
     fontSize: 11,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   storeSalesLabel: {
     marginTop: 2,
     fontSize: 8,
-    color: MUTED,
+    color: colors.muted,
   },
 
   securityCard: {
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 14,
     marginBottom: 23,
   },
@@ -951,14 +973,14 @@ const styles = StyleSheet.create({
   securityTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   securityDescription: {
     marginTop: 3,
     fontSize: 9,
     lineHeight: 13,
-    color: MUTED,
+    color: colors.muted,
   },
 
   securePill: {
@@ -990,14 +1012,14 @@ const styles = StyleSheet.create({
   securityMetricValue: {
     fontSize: 14,
     fontWeight: "800",
-    color: CARDINAL_DARK,
+    color: colors.cardinalDark,
   },
 
   securityMetricLabel: {
     marginTop: 4,
     fontSize: 8,
     textAlign: "center",
-    color: MUTED,
+    color: colors.muted,
   },
 
   footer: {
@@ -1011,7 +1033,7 @@ const styles = StyleSheet.create({
     width: 35,
     height: 35,
     borderRadius: 10,
-    backgroundColor: CARDINAL,
+    backgroundColor: colors.cardinal,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 9,
@@ -1020,7 +1042,7 @@ const styles = StyleSheet.create({
   footerLogoText: {
     fontSize: 11,
     fontWeight: "900",
-    color: WHITE,
+    color: colors.surface,
   },
 
   footerInfo: {
@@ -1030,13 +1052,13 @@ const styles = StyleSheet.create({
   footerTitle: {
     fontSize: 10,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   footerText: {
     marginTop: 2,
     fontSize: 8,
-    color: MUTED,
+    color: colors.muted,
   },
 
   version: {
@@ -1050,3 +1072,4 @@ const styles = StyleSheet.create({
   },
 });
 
+let styles = createStyles(LIGHT_COLORS);

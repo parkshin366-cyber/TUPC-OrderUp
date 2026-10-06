@@ -1,9 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Print from "expo-print";
 import { useFocusEffect } from "expo-router";
+import * as Sharing from "expo-sharing";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -62,7 +66,7 @@ const getTrend = (percent: number | null): Trend => {
 };
 
 export default function SellerSalesScreen() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   const [period, setPeriod] = useState<Period>("Today");
 
@@ -71,6 +75,8 @@ export default function SellerSalesScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exportVisible, setExportVisible] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // =====================================================
   // LOAD ORDERS AND PRODUCTS
@@ -139,16 +145,60 @@ export default function SellerSalesScreen() {
   );
 
   const recentOrders = useMemo(() => getRecentOrders(orders, 5), [orders]);
+  const completedTransactions = useMemo(
+    () => getRecentOrders(orders.filter((order) => order.status === "Completed"), 10),
+    [orders]
+  );
 
   const trend = getTrend(sales.changePercent);
 
   const chartMax = Math.max(...sales.chart, 0);
 
   const handleExport = () => {
-    Alert.alert(
-      "Export Sales",
-      `Your ${period.toLowerCase()} sales report is ready to export.`
-    );
+    setExportVisible(true);
+  };
+
+  const escapeHtml = (value: unknown) => String(value ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  const exportPdf = async () => {
+    try {
+      setExporting(true);
+      const generatedAt = new Date();
+      const sellerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || "Seller";
+      const productsHtml = sales.topProducts.length
+        ? sales.topProducts.map((product, index) => `<tr><td>${index + 1}</td><td><strong>${escapeHtml(product.name)}</strong><br><span>${escapeHtml(product.category)}</span></td><td>${product.sold}</td><td>&#8369;${product.revenue.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td></tr>`).join("")
+        : `<tr><td colspan="4" class="empty">No completed product sales for this period.</td></tr>`;
+      const transactions = completedTransactions;
+      const transactionsHtml = transactions.length
+        ? transactions.map((order) => `<tr><td>${escapeHtml(formatOrderCode(order))}</td><td>${escapeHtml(getCustomerName(order))}</td><td>${escapeHtml(describeItems(order))}</td><td>${escapeHtml(order.paymentMethod === "gcash" ? "GCash" : "Cash")}</td><td>&#8369;${Number(order.total || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td></tr>`).join("")
+        : `<tr><td colspan="5" class="empty">No completed recent transactions.</td></tr>`;
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+        @page{size:A4;margin:34px}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;margin:0;font-size:11px}.header{background:#7D1021;color:#fff;padding:24px;border-radius:12px}.brand{font-size:10px;letter-spacing:1.5px;color:#E7C77C;font-weight:700}.title{font-size:25px;font-weight:800;margin:5px 0}.meta{color:"#F2DDE1"}.section{margin-top:22px}.section h2{font-size:15px;margin:0 0 9px;color:"#7D1021"}.cards{display:flex;gap:10px;margin-top:16px}.card{flex:1;border:1px solid #E4E4E4;border-radius:10px;padding:13px}.label{font-size:9px;color:#777;text-transform:uppercase;letter-spacing:.6px}.value{font-size:18px;font-weight:800;margin-top:5px}.sub{font-size:9px;color:#777;margin-top:3px}table{width:100%;border-collapse:collapse}th{background:#F7EEF0;color:#7D1021;text-align:left;padding:9px;font-size:9px;text-transform:uppercase}td{padding:9px;border-bottom:1px solid #ECECEC;vertical-align:top}td span{color:#777;font-size:9px}.empty{text-align:center;color:#777;padding:18px}.payments{display:flex;gap:10px}.payment{flex:1;padding:12px;border-radius:9px;background:"#F7F7F8"}.footer{margin-top:24px;padding-top:10px;border-top:1px solid #DDD;color:#777;font-size:9px;display:flex;justify-content:space-between}</style></head><body>
+        <div class="header"><div class="brand">TUPC-ORDERUP · SELLER CENTER</div><div class="title">Sales Report</div><div class="meta">${escapeHtml(period)} · ${escapeHtml(sellerName)} · Generated ${generatedAt.toLocaleString("en-PH")}</div></div>
+        <div class="cards"><div class="card"><div class="label">Total Sales</div><div class="value">&#8369;${sales.total.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</div><div class="sub">Completed orders only</div></div><div class="card"><div class="label">Orders</div><div class="value">${sales.orderCount}</div><div class="sub">Completed transactions</div></div><div class="card"><div class="label">Average Order</div><div class="value">&#8369;${sales.average.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</div><div class="sub">Per transaction</div></div></div>
+        <div class="section"><h2>Payment Summary</h2><div class="payments"><div class="payment"><div class="label">Cash · ${sales.payment.cashPercent}%</div><div class="value">&#8369;${sales.payment.cash.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</div></div><div class="payment"><div class="label">GCash · ${sales.payment.gcashPercent}%</div><div class="value">&#8369;${sales.payment.gcash.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</div></div></div></div>
+        <div class="section"><h2>Top Products</h2><table><thead><tr><th>#</th><th>Product</th><th>Sold</th><th>Revenue</th></tr></thead><tbody>${productsHtml}</tbody></table></div>
+        <div class="section"><h2>Recent Completed Transactions</h2><table><thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Payment</th><th>Total</th></tr></thead><tbody>${transactionsHtml}</tbody></table></div>
+        <div class="footer"><span>Sales exclude cancelled and non-completed orders.</span><span>TUPC-OrderUp</span></div>
+      </body></html>`;
+
+      const result = await Print.printToFileAsync({ html, base64: false });
+      const safePeriod = period.toLowerCase().replace(/\s+/g, "-");
+      const fileName = `TUPC-OrderUp-Sales-${safePeriod}-${generatedAt.toISOString().slice(0, 10)}.pdf`;
+      const finalUri = `${FileSystem.cacheDirectory}${fileName}`;
+      await FileSystem.copyAsync({ from: result.uri, to: finalUri });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(finalUri, { mimeType: "application/pdf", dialogTitle: "Save or share sales report", UTI: "com.adobe.pdf" });
+      } else {
+        Alert.alert("PDF Created", `The report was created at ${finalUri}`);
+      }
+      setExportVisible(false);
+    } catch (error) {
+      Alert.alert("Export Failed", error instanceof Error ? error.message : "Unable to create the PDF report.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   // =====================================================
@@ -511,6 +561,45 @@ export default function SellerSalesScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <Modal visible={exportVisible} transparent animationType="slide" onRequestClose={() => !exporting && setExportVisible(false)}>
+        <View style={styles.exportOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} disabled={exporting} onPress={() => setExportVisible(false)} />
+          <View style={styles.exportSheet}>
+            <View style={styles.exportHandle} />
+            <View style={styles.exportHeader}>
+              <View style={styles.exportHeaderIcon}><Ionicons name="document-text-outline" size={23} color={CARDINAL} /></View>
+              <View style={styles.exportHeaderCopy}><Text style={styles.exportTitle}>Sales Report Overview</Text><Text style={styles.exportSubtitle}>Review the information before creating your PDF.</Text></View>
+              <Pressable disabled={exporting} style={styles.exportClose} onPress={() => setExportVisible(false)}><Ionicons name="close" size={21} color={TEXT} /></Pressable>
+            </View>
+
+            <View style={styles.previewPeriod}><Text style={styles.previewPeriodLabel}>REPORT PERIOD</Text><Text style={styles.previewPeriodValue}>{period}</Text></View>
+            <View style={styles.previewGrid}>
+              <View style={styles.previewStat}><Text style={styles.previewLabel}>Total Sales</Text><Text style={styles.previewValue}>{formatCurrency(sales.total)}</Text></View>
+              <View style={styles.previewStat}><Text style={styles.previewLabel}>Orders</Text><Text style={styles.previewValue}>{sales.orderCount}</Text></View>
+              <View style={styles.previewStat}><Text style={styles.previewLabel}>Average</Text><Text style={styles.previewValue}>{formatCurrency(sales.average)}</Text></View>
+            </View>
+
+            <View style={styles.previewSection}>
+              <View style={styles.previewRow}><View style={styles.previewRowIcon}><Ionicons name="cash-outline" size={17} color={GREEN} /></View><Text style={styles.previewRowLabel}>Cash payments</Text><Text style={styles.previewRowValue}>{formatCurrency(sales.payment.cash)} · {sales.payment.cashPercent}%</Text></View>
+              <View style={styles.previewDivider} />
+              <View style={styles.previewRow}><View style={styles.previewRowIcon}><Ionicons name="phone-portrait-outline" size={17} color={CARDINAL} /></View><Text style={styles.previewRowLabel}>GCash payments</Text><Text style={styles.previewRowValue}>{formatCurrency(sales.payment.gcash)} · {sales.payment.gcashPercent}%</Text></View>
+            </View>
+
+            <View style={styles.previewIncludes}>
+              <Text style={styles.previewIncludesTitle}>PDF includes</Text>
+              <Text style={styles.previewIncludesText}>Sales summary, payment breakdown, top products, and recent completed transactions.</Text>
+            </View>
+
+            <View style={styles.exportActions}>
+              <Pressable disabled={exporting} style={styles.exportCancel} onPress={() => setExportVisible(false)}><Text style={styles.exportCancelText}>Cancel</Text></Pressable>
+              <Pressable disabled={exporting} style={[styles.exportPdfButton, exporting && styles.exportDisabled]} onPress={() => void exportPdf()}>
+                {exporting ? <ActivityIndicator size="small" color={WHITE} /> : <><Ionicons name="download-outline" size={17} color={WHITE} /><Text style={styles.exportPdfText}>Create PDF</Text></>}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -603,12 +692,12 @@ function PaymentRow({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
   },
 
   container: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
   },
 
   content: {
@@ -640,14 +729,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 30,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
     letterSpacing: -0.7,
   },
 
   subtitle: {
     marginTop: 4,
     fontSize: 13,
-    color: MUTED,
+    color: "#737373",
     lineHeight: 19,
   },
 
@@ -657,14 +746,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E2CFA4",
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
 
   exportText: {
-    color: CARDINAL,
+    color: "#A6192E",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -675,11 +764,11 @@ const styles = StyleSheet.create({
 
   periodCard: {
     flexDirection: "row",
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     padding: 4,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     marginBottom: 14,
   },
 
@@ -692,17 +781,17 @@ const styles = StyleSheet.create({
   },
 
   periodButtonActive: {
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
   },
 
   periodText: {
     fontSize: 12,
     fontWeight: "700",
-    color: MUTED,
+    color: "#737373",
   },
 
   periodTextActive: {
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   summaryGrid: {
@@ -714,11 +803,11 @@ const styles = StyleSheet.create({
   summaryCard: {
     flex: 1,
     minHeight: 146,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
   },
 
   summaryIcon: {
@@ -734,14 +823,14 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 10,
     fontWeight: "600",
-    color: MUTED,
+    color: "#737373",
   },
 
   summaryValue: {
     marginTop: 4,
     fontSize: 16,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   summaryDetailRow: {
@@ -753,7 +842,7 @@ const styles = StyleSheet.create({
 
   summaryDetail: {
     fontSize: 9,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
@@ -772,27 +861,27 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   sectionSubtitle: {
     marginTop: 2,
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
   },
 
   viewAll: {
-    color: CARDINAL,
+    color: "#A6192E",
     fontSize: 11,
     fontWeight: "800",
   },
 
   chartCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     marginBottom: 22,
   },
 
@@ -805,7 +894,7 @@ const styles = StyleSheet.create({
   chartAmount: {
     fontSize: 25,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   growthRow: {
@@ -873,21 +962,21 @@ const styles = StyleSheet.create({
   bar: {
     width: "100%",
     borderRadius: 8,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
   },
 
   barLabel: {
     marginTop: 7,
     fontSize: 8,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
   productsCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     marginBottom: 22,
     overflow: "hidden",
   },
@@ -919,7 +1008,7 @@ const styles = StyleSheet.create({
   rankText: {
     fontSize: 12,
     fontWeight: "800",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   productInfo: {
@@ -929,13 +1018,13 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 13,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
   },
 
   productCategory: {
     marginTop: 3,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
   },
 
   productRevenue: {
@@ -946,20 +1035,20 @@ const styles = StyleSheet.create({
   revenueText: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   revenueLabel: {
     marginTop: 2,
     fontSize: 9,
-    color: MUTED,
+    color: "#737373",
   },
 
   paymentCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 15,
     marginBottom: 22,
   },
@@ -995,12 +1084,12 @@ const styles = StyleSheet.create({
   paymentLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
   },
 
   paymentPercent: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "700",
   },
 
@@ -1014,7 +1103,7 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
     borderRadius: 4,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
   },
 
   paymentAmount: {
@@ -1022,7 +1111,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
     fontSize: 11,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   paymentDivider: {
@@ -1032,10 +1121,10 @@ const styles = StyleSheet.create({
   },
 
   transactionsCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     overflow: "hidden",
   },
 
@@ -1067,13 +1156,13 @@ const styles = StyleSheet.create({
   transactionCustomer: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   transactionItem: {
     marginTop: 2,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
   },
 
   transactionMeta: {
@@ -1090,7 +1179,7 @@ const styles = StyleSheet.create({
   transactionAmount: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   statusPill: {
@@ -1133,7 +1222,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 10,
     lineHeight: 15,
-    color: MUTED,
+    color: "#737373",
   },
 
   summaryNegative: {
@@ -1145,7 +1234,7 @@ const styles = StyleSheet.create({
   },
 
   growthTextFlat: {
-    color: MUTED,
+    color: "#737373",
   },
 
   loadingContainer: {
@@ -1157,15 +1246,15 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 13,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
   emptyCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     paddingVertical: 26,
     paddingHorizontal: 20,
     alignItems: "center",
@@ -1175,14 +1264,47 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   emptyText: {
     marginTop: 5,
     fontSize: 11,
     lineHeight: 16,
-    color: MUTED,
+    color: "#737373",
     textAlign: "center",
   },
+
+  exportOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(16,16,18,0.54)" },
+  exportSheet: { paddingTop: 9, paddingHorizontal: 18, paddingBottom: 22, borderTopLeftRadius: 26, borderTopRightRadius: 26, backgroundColor: "#FFFFFF" },
+  exportHandle: { width: 42, height: 4, marginBottom: 16, borderRadius: 2, backgroundColor: "#D3D3D5", alignSelf: "center" },
+  exportHeader: { flexDirection: "row", alignItems: "center" },
+  exportHeaderIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#FBECEF", alignItems: "center", justifyContent: "center" },
+  exportHeaderCopy: { flex: 1, marginLeft: 11, marginRight: 8 },
+  exportTitle: { fontSize: 17, fontWeight: "900", color: "#171717" },
+  exportSubtitle: { marginTop: 3, fontSize: 10, lineHeight: 14, color: "#737373" },
+  exportClose: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#F3F3F4", alignItems: "center", justifyContent: "center" },
+  previewPeriod: { marginTop: 17, padding: 12, borderRadius: 13, backgroundColor: "#7D1021", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  previewPeriodLabel: { fontSize: 9, fontWeight: "900", letterSpacing: .8, color: "#F4CDD4" },
+  previewPeriodValue: { fontSize: 12, fontWeight: "900", color: "#FFFFFF" },
+  previewGrid: { marginTop: 10, flexDirection: "row", gap: 8 },
+  previewStat: { flex: 1, minHeight: 72, padding: 10, borderRadius: 13, borderWidth: 1, borderColor: "#E7E7E8", backgroundColor: "#FAFAFB", justifyContent: "center" },
+  previewLabel: { fontSize: 8.5, fontWeight: "700", color: "#737373" },
+  previewValue: { marginTop: 5, fontSize: 13, fontWeight: "900", color: "#171717" },
+  previewSection: { marginTop: 10, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: "#E7E7E8" },
+  previewRow: { minHeight: 48, flexDirection: "row", alignItems: "center" },
+  previewRowIcon: { width: 31, height: 31, borderRadius: 10, backgroundColor: "#F6F6F7", alignItems: "center", justifyContent: "center" },
+  previewRowLabel: { flex: 1, marginLeft: 9, fontSize: 10.5, fontWeight: "700", color: "#171717" },
+  previewRowValue: { fontSize: 10, fontWeight: "900", color: "#A6192E" },
+  previewDivider: { height: 1, backgroundColor: "#E7E7E8" },
+  previewIncludes: { marginTop: 10, padding: 12, borderRadius: 13, backgroundColor: "#FFF8E7" },
+  previewIncludesTitle: { fontSize: 10, fontWeight: "900", color: "#8A650E" },
+  previewIncludesText: { marginTop: 3, fontSize: 9.5, lineHeight: 14, color: "#735E2A" },
+  exportActions: { marginTop: 14, flexDirection: "row", gap: 10 },
+  exportCancel: { flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: "#E7E7E8", alignItems: "center", justifyContent: "center" },
+  exportCancelText: { fontSize: 11, fontWeight: "900", color: "#171717" },
+  exportPdfButton: { flex: 1.35, height: 48, borderRadius: 14, backgroundColor: "#A6192E", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
+  exportPdfText: { fontSize: 11, fontWeight: "900", color: "#FFFFFF" },
+  exportDisabled: { opacity: .65 },
 });
+

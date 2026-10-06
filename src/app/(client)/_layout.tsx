@@ -1,24 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Platform, StyleSheet, View } from "react-native";
-
-// =====================================================
-// TUP CARDINAL THEME
-// =====================================================
-
-const CARDINAL = "#A6192E";
-const MUTED = "#737373";
-const BORDER = "#E7E7E8";
-const WHITE = "#FFFFFF";
-const ACTIVE_BACKGROUND = "#FBECEF";
+import ClientEtaBubble from "../../components/client-eta-bubble";
+import { useAppTheme } from "../../context/ThemeContext";
 
 // =====================================================
 // CLIENT LAYOUT
 // =====================================================
 
 export default function ClientLayout() {
+  const { colors, themeMode } = useAppTheme();
+
   return (
+    <View style={[styles.layout, { backgroundColor: colors.background }]}>
     <Tabs
+      key={themeMode}
       screenOptions={{
         headerShown: false,
 
@@ -26,8 +22,8 @@ export default function ClientLayout() {
         // TAB COLORS
         // =================================================
 
-        tabBarActiveTintColor: CARDINAL,
-        tabBarInactiveTintColor: MUTED,
+        tabBarActiveTintColor: colors.cardinal,
+        tabBarInactiveTintColor: colors.muted,
 
         // =================================================
         // BOTTOM NAVIGATION
@@ -38,10 +34,10 @@ export default function ClientLayout() {
           paddingTop: 7,
           paddingBottom: Platform.OS === "ios" ? 10 : 7,
 
-          backgroundColor: WHITE,
+          backgroundColor: colors.surface,
 
           borderTopWidth: 1,
-          borderTopColor: BORDER,
+          borderTopColor: colors.border,
 
           // Android shadow
           elevation: 10,
@@ -84,7 +80,7 @@ export default function ClientLayout() {
               <View
                 style={[
                   styles.iconContainer,
-                  focused && styles.activeIconContainer,
+                  focused && [styles.activeIconContainer, { backgroundColor: colors.softRed }],
                 ]}
               >
                 <Ionicons
@@ -116,7 +112,7 @@ export default function ClientLayout() {
               <View
                 style={[
                   styles.iconContainer,
-                  focused && styles.activeIconContainer,
+                  focused && [styles.activeIconContainer, { backgroundColor: colors.softRed }],
                 ]}
               >
                 <Ionicons
@@ -166,7 +162,7 @@ export default function ClientLayout() {
               <View
                 style={[
                   styles.iconContainer,
-                  focused && styles.activeIconContainer,
+                  focused && [styles.activeIconContainer, { backgroundColor: colors.softRed }],
                 ]}
               >
                 <Ionicons
@@ -194,7 +190,7 @@ export default function ClientLayout() {
               <View
                 style={[
                   styles.iconContainer,
-                  focused && styles.activeIconContainer,
+                  focused && [styles.activeIconContainer, { backgroundColor: colors.softRed }],
                 ]}
               >
                 <Ionicons
@@ -251,7 +247,12 @@ export default function ClientLayout() {
           href: null,
         }}
       />
+
+      <Tabs.Screen name="messages" options={{ href: null }} />
+      <Tabs.Screen name="reviews" options={{ href: null }} />
     </Tabs>
+    <ClientEtaBubble />
+    </View>
   );
 }
 
@@ -260,6 +261,7 @@ export default function ClientLayout() {
 // =====================================================
 
 const styles = StyleSheet.create({
+  layout: { flex: 1 },
   iconContainer: {
     width: 40,
     height: 30,
@@ -269,8 +271,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  activeIconContainer: {
-    backgroundColor: ACTIVE_BACKGROUND,
-  },
+  activeIconContainer: {},
 });
 

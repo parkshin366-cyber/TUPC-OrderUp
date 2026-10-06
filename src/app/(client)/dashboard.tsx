@@ -25,10 +25,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS, useAppTheme } from "../../context/ThemeContext";
 
 import {
-  STORES
-} from "../../data/stores";
+  CatalogFood,
+  ClientStore,
+  loadClientCatalog,
+} from "../../services/clientCatalog";
 
 // ============================================================
 // COLORS
@@ -93,6 +96,7 @@ type FavoriteFood = {
   image?: string;
   icon?: IconName;
   category?: string;
+  storeId?: string;
 };
 
 // ============================================================
@@ -171,24 +175,13 @@ const categories: Category[] = [
 // FALLBACK FOOD CATALOG
 // ============================================================
 
-const fallbackFoods: FavoriteFood[] = [
-  {
-    id: "chicken-rice-meal",
-    name: "Chicken Rice Meal",
-    store: "TUPC Main Canteen",
-    price: "₱89",
-    image:
-      "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=800&q=80",
-    icon: "restaurant",
-    category: "Meals",
-  },
-];
-
 // ============================================================
 // MAIN DASHBOARD
 // ============================================================
 
 export default function ClientDashboard() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { user } = useAuth();
 
   // ==========================================================
@@ -200,6 +193,8 @@ export default function ClientDashboard() {
 
   const [favoriteFoods, setFavoriteFoods] =
     useState<FavoriteFood[]>([]);
+  const [stores, setStores] = useState<ClientStore[]>([]);
+  const [catalogFoods, setCatalogFoods] = useState<CatalogFood[]>([]);
 
   const [searchText, setSearchText] =
     useState("");
@@ -225,13 +220,24 @@ export default function ClientDashboard() {
    * Only top 3 are displayed under
    * "Popular Stores".
    */
-  const popularStores = useMemo(() => {
-    return [...STORES]
-      .sort((a, b) => {
-        return b.rating - a.rating;
-      })
-      .slice(0, 3);
-  }, []);
+  const popularStores = useMemo(
+    () => stores.filter((store) => store.status === "Open").slice(0, 3),
+    [stores],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      loadClientCatalog()
+        .then((catalog) => {
+          if (!active) return;
+          setStores(catalog.stores);
+          setCatalogFoods(catalog.foods);
+        })
+        .catch((error) => console.error("LOAD CLIENT CATALOG ERROR:", error));
+      return () => { active = false; };
+    }, []),
+  );
 
   // ==========================================================
   // SEARCH RESULTS
@@ -251,7 +257,7 @@ export default function ClientDashboard() {
     if (!query) {
       return {
         foods: [] as SearchFood[],
-        stores: [] as typeof STORES,
+        stores: [] as ClientStore[],
         categories: [] as Category[],
       };
     }
@@ -263,14 +269,14 @@ export default function ClientDashboard() {
     // ----------------------------------------------------------
     const foodMap = new Map<string, SearchFood>();
 
-    [...fallbackFoods, ...favoriteFoods].forEach((food) => {
+    [...catalogFoods, ...favoriteFoods].forEach((food) => {
       foodMap.set(food.id, {
         ...food,
         kind: "food",
       });
     });
 
-    STORES.forEach((store) => {
+    stores.forEach((store) => {
       const rawStore = store as typeof store & {
         products?: unknown[];
         items?: unknown[];
@@ -366,7 +372,7 @@ export default function ClientDashboard() {
     // ----------------------------------------------------------
     // STORES
     // ----------------------------------------------------------
-    const stores = STORES.filter((store) => {
+    const matchingStores = stores.filter((store) => {
       const name =
         store.name?.toLowerCase() ?? "";
 
@@ -401,7 +407,7 @@ export default function ClientDashboard() {
 
     return {
       foods,
-      stores,
+      stores: matchingStores,
       categories: matchedCategories,
     };
   }, [searchText, favoriteFoods]);
@@ -452,7 +458,7 @@ export default function ClientDashboard() {
                   "string"
                 ) {
                   const fallback =
-                    fallbackFoods.find(
+                    catalogFoods.find(
                       (food) =>
                         food.id === item
                     );
@@ -489,7 +495,7 @@ export default function ClientDashboard() {
                 }
 
                 const fallback =
-                  fallbackFoods.find(
+                catalogFoods.find(
                     (food) =>
                       food.id === raw.id
                   );
@@ -816,7 +822,7 @@ export default function ClientDashboard() {
               <Text
                 style={styles.greeting}
               >
-                Welcome, {firstName} 👋
+                Welcome, {firstName}
               </Text>
 
               <Text
@@ -1869,19 +1875,19 @@ function SectionHeader({
 // STYLES
 // ============================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   // ==========================================================
   // SCREEN
   // ==========================================================
 
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.background,
   },
 
   container: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.background,
   },
 
   scrollContent: {
@@ -1910,32 +1916,32 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.5,
-    color: CARDINAL,
+    color: colors.cardinal,
   },
 
   greeting: {
     marginTop: 5,
     fontSize: 25,
     fontWeight: "900",
-    color: CARDINAL_DARK,
+    color: colors.cardinalDark,
   },
 
   subtitle: {
     marginTop: 3,
     fontSize: 13,
-    color: MUTED,
+    color: colors.muted,
   },
 
   notificationButton: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent:
       "center",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
   },
 
   // ==========================================================
@@ -1953,16 +1959,16 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
     paddingRight: 7,
     borderRadius: 16,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
   },
 
   searchBoxFocused: {
-    borderColor: CARDINAL,
-    shadowColor: CARDINAL,
+    borderColor: colors.cardinal,
+    shadowColor: colors.cardinal,
     shadowOffset: {
       width: 0,
       height: 3,
@@ -1978,14 +1984,14 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     paddingVertical: 0,
     fontSize: 13,
-    color: TEXT,
+    color: colors.text,
   },
 
   searchClear: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#F4F4F5",
+    backgroundColor: "colors.input",
     alignItems: "center",
     justifyContent:
       "center",
@@ -1996,7 +2002,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 12,
     backgroundColor:
-      "#FCECEF",
+      "colors.softRed",
     alignItems: "center",
     justifyContent:
       "center",
@@ -2009,9 +2015,9 @@ const styles = StyleSheet.create({
   searchResults: {
     marginTop: 6,
     borderRadius: 18,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     overflow: "hidden",
 
     shadowColor: "#000000",
@@ -2054,7 +2060,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.1,
-    color: CARDINAL,
+    color: colors.cardinal,
   },
 
   searchSectionCount: {
@@ -2062,8 +2068,8 @@ const styles = StyleSheet.create({
     height: 20,
     paddingHorizontal: 5,
     borderRadius: 10,
-    backgroundColor: "#FCECEF",
-    color: CARDINAL,
+    backgroundColor: "colors.softRed",
+    color: colors.cardinal,
     textAlign: "center",
     textAlignVertical: "center",
     fontSize: 9,
@@ -2074,7 +2080,7 @@ const styles = StyleSheet.create({
     width: 43,
     height: 43,
     borderRadius: 13,
-    backgroundColor: "#FCECEF",
+    backgroundColor: "colors.softRed",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -2088,13 +2094,13 @@ const styles = StyleSheet.create({
   searchFoodCategory: {
     fontSize: 9,
     fontWeight: "700",
-    color: MUTED,
+    color: colors.muted,
   },
 
   searchFoodPrice: {
     fontSize: 9,
     fontWeight: "900",
-    color: CARDINAL,
+    color: colors.cardinal,
   },
 
   searchCategoryItem: {
@@ -2111,7 +2117,7 @@ const styles = StyleSheet.create({
     width: 43,
     height: 43,
     borderRadius: 13,
-    backgroundColor: "#FCECEF",
+    backgroundColor: "colors.softRed",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2119,7 +2125,7 @@ const styles = StyleSheet.create({
   searchResultTitle: {
     fontSize: 12,
     fontWeight: "900",
-    color: TEXT,
+    color: colors.text,
   },
 
   searchResultCount: {
@@ -2128,8 +2134,8 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     paddingHorizontal: 6,
     backgroundColor:
-      "#FCECEF",
-    color: CARDINAL,
+      "colors.softRed",
+    color: colors.cardinal,
     textAlign: "center",
     textAlignVertical: "center",
     fontSize: 10,
@@ -2147,7 +2153,7 @@ const styles = StyleSheet.create({
   },
 
   searchResultPressed: {
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "colors.surfaceSecondary",
   },
 
   searchResultIcon: {
@@ -2155,7 +2161,7 @@ const styles = StyleSheet.create({
     height: 43,
     borderRadius: 13,
     backgroundColor:
-      "#FCECEF",
+      "colors.softRed",
     alignItems: "center",
     justifyContent:
       "center",
@@ -2170,13 +2176,13 @@ const styles = StyleSheet.create({
   searchResultName: {
     fontSize: 13,
     fontWeight: "900",
-    color: TEXT,
+    color: colors.text,
   },
 
   searchResultDescription: {
     marginTop: 2,
     fontSize: 9.5,
-    color: MUTED,
+    color: colors.muted,
   },
 
   searchResultMeta: {
@@ -2189,7 +2195,7 @@ const styles = StyleSheet.create({
     marginLeft: 3,
     fontSize: 9,
     fontWeight: "800",
-    color: MUTED,
+    color: colors.muted,
   },
 
   searchResultDot: {
@@ -2204,7 +2210,7 @@ const styles = StyleSheet.create({
   searchResultType: {
     fontSize: 9,
     fontWeight: "700",
-    color: MUTED,
+    color: colors.muted,
   },
 
   viewAllSearch: {
@@ -2221,7 +2227,7 @@ const styles = StyleSheet.create({
   viewAllSearchText: {
     fontSize: 11,
     fontWeight: "900",
-    color: CARDINAL,
+    color: colors.cardinal,
   },
 
   noSearchResults: {
@@ -2236,7 +2242,7 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 13,
     backgroundColor:
-      "#F4F4F5",
+      "colors.input",
     alignItems: "center",
     justifyContent:
       "center",
@@ -2250,13 +2256,13 @@ const styles = StyleSheet.create({
   noSearchTitle: {
     fontSize: 12,
     fontWeight: "900",
-    color: TEXT,
+    color: colors.text,
   },
 
   noSearchDescription: {
     marginTop: 3,
     fontSize: 10,
-    color: MUTED,
+    color: colors.muted,
   },
 
   // ==========================================================
@@ -2318,7 +2324,7 @@ const styles = StyleSheet.create({
     fontSize: 25,
     lineHeight: 28,
     fontWeight: "900",
-    color: WHITE,
+    color: colors.surface,
   },
 
   carouselDescription: {
@@ -2344,7 +2350,7 @@ const styles = StyleSheet.create({
   carouselButtonText: {
     fontSize: 10.5,
     fontWeight: "900",
-    color: CARDINAL_DARK,
+    color: colors.cardinalDark,
   },
 
   // ==========================================================
@@ -2371,7 +2377,7 @@ const styles = StyleSheet.create({
 
   paginationDotActive: {
     width: 19,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
   },
 
   // ==========================================================
@@ -2390,13 +2396,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "900",
-    color: TEXT,
+    color: colors.text,
   },
 
   sectionAction: {
     fontSize: 12,
     fontWeight: "800",
-    color: CARDINAL,
+    color: colors.cardinal,
   },
 
   // ==========================================================
@@ -2418,9 +2424,9 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 18,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent:
       "center",
@@ -2430,7 +2436,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 11,
     fontWeight: "700",
-    color: TEXT,
+    color: colors.text,
     textAlign: "center",
   },
 
@@ -2446,9 +2452,9 @@ const styles = StyleSheet.create({
   favoriteCard: {
     width: 190,
     borderRadius: 18,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     overflow: "hidden",
   },
 
@@ -2471,7 +2477,7 @@ const styles = StyleSheet.create({
     justifyContent:
       "center",
     backgroundColor:
-      "#FCECEF",
+      "colors.softRed",
   },
 
   favoriteHeart: {
@@ -2495,13 +2501,13 @@ const styles = StyleSheet.create({
   favoriteName: {
     fontSize: 14,
     fontWeight: "900",
-    color: TEXT,
+    color: colors.text,
   },
 
   favoriteStore: {
     marginTop: 3,
     fontSize: 10.5,
-    color: MUTED,
+    color: colors.muted,
   },
 
   favoriteBottomRow: {
@@ -2515,7 +2521,7 @@ const styles = StyleSheet.create({
   favoritePrice: {
     fontSize: 14,
     fontWeight: "900",
-    color: CARDINAL,
+    color: colors.cardinal,
   },
 
   // ==========================================================
@@ -2526,9 +2532,9 @@ const styles = StyleSheet.create({
     minHeight: 92,
     padding: 13,
     borderRadius: 17,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -2538,7 +2544,7 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 15,
     backgroundColor:
-      "#FCECEF",
+      "colors.softRed",
     alignItems: "center",
     justifyContent:
       "center",
@@ -2553,21 +2559,21 @@ const styles = StyleSheet.create({
   emptyFavoriteTitle: {
     fontSize: 13,
     fontWeight: "900",
-    color: TEXT,
+    color: colors.text,
   },
 
   emptyFavoriteDescription: {
     marginTop: 3,
     fontSize: 10.5,
     lineHeight: 15,
-    color: MUTED,
+    color: colors.muted,
   },
 
   emptyFavoriteButton: {
     height: 36,
     paddingHorizontal: 13,
     borderRadius: 11,
-    backgroundColor: CARDINAL,
+    backgroundColor: colors.cardinal,
     alignItems: "center",
     justifyContent:
       "center",
@@ -2576,7 +2582,7 @@ const styles = StyleSheet.create({
   emptyFavoriteButtonText: {
     fontSize: 11,
     fontWeight: "900",
-    color: WHITE,
+    color: colors.surface,
   },
 
   // ==========================================================
@@ -2588,7 +2594,7 @@ const styles = StyleSheet.create({
     marginBottom: 11,
     fontSize: 10.5,
     fontWeight: "600",
-    color: MUTED,
+    color: colors.muted,
   },
 
   storeCard: {
@@ -2596,9 +2602,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     padding: 12,
     borderRadius: 17,
-    backgroundColor: WHITE,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -2608,7 +2614,7 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 16,
     backgroundColor:
-      "#FCECEF",
+      "colors.softRed",
     alignItems: "center",
     justifyContent:
       "center",
@@ -2630,13 +2636,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "900",
-    color: TEXT,
+    color: colors.text,
   },
 
   storeType: {
     marginTop: 4,
     fontSize: 10.5,
-    color: MUTED,
+    color: colors.muted,
   },
 
   openBadge: {
@@ -2673,7 +2679,7 @@ const styles = StyleSheet.create({
   storeMetaText: {
     marginLeft: 4,
     fontSize: 10,
-    color: MUTED,
+    color: colors.muted,
     fontWeight: "700",
   },
 
@@ -2691,7 +2697,7 @@ const styles = StyleSheet.create({
     height: 29,
     borderRadius: 15,
     backgroundColor:
-      "#FCECEF",
+      "colors.softRed",
     alignItems: "center",
     justifyContent:
       "center",
@@ -2714,3 +2720,5 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 });
+
+let styles = createStyles(LIGHT_COLORS);

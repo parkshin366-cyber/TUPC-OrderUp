@@ -22,117 +22,31 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS as LIGHT, type ThemeMode, useAppTheme } from "../../context/ThemeContext";
+import LogoutConfirmModal from "../../components/logout-confirm-modal";
+import { changePassword } from "../../services/api";
 
 // =====================================================
 // STORAGE
 // =====================================================
 
-const THEME_STORAGE_KEY = "@tuporderup_theme";
 const NOTIFICATIONS_STORAGE_KEY =
   "@tuporderup_notifications";
 const PROFILE_IMAGE_STORAGE_KEY =
   "@tuporderup_profile_image";
 
 // =====================================================
-// TYPES
-// =====================================================
-
-type ThemeMode = "light" | "dark";
-
-// =====================================================
-// LIGHT THEME
-// =====================================================
-
-const LIGHT = {
-  cardinal: "#A6192E",
-  cardinalDark: "#7D1021",
-  cardinalDeep: "#570B17",
-
-  background: "#F7F7F8",
-  surface: "#FFFFFF",
-  surfaceSecondary: "#FAFAFA",
-  input: "#F4F4F5",
-
-  text: "#171717",
-  textSecondary: "#404040",
-  muted: "#737373",
-  lightMuted: "#9A9A9A",
-
-  border: "#E7E7E8",
-  borderStrong: "#DADADC",
-
-  softRed: "#FCECEF",
-  softRedBorder: "#F2D5DA",
-
-  success: "#238636",
-  successBg: "#F0F8F1",
-  successBorder: "#DCEFE0",
-
-  warning: "#B7791F",
-  warningBg: "#FFF8E7",
-
-  gold: "#D8B56A",
-
-  danger: "#C62828",
-  dangerBg: "#FFF3F3",
-  dangerBorder: "#F0CDD2",
-
-  overlay: "rgba(0,0,0,0.45)",
-};
-
-// =====================================================
-// DARK THEME
-// =====================================================
-
-const DARK = {
-  cardinal: "#D12B45",
-  cardinalDark: "#E24A61",
-  cardinalDeep: "#A6192E",
-
-  background: "#0F1012",
-  surface: "#18191C",
-  surfaceSecondary: "#202126",
-  input: "#24252A",
-
-  text: "#F5F5F5",
-  textSecondary: "#D4D4D8",
-  muted: "#A1A1AA",
-  lightMuted: "#71717A",
-
-  border: "#2D2E34",
-  borderStrong: "#3A3B42",
-
-  softRed: "#32151C",
-  softRedBorder: "#56232D",
-
-  success: "#43A85C",
-  successBg: "#14251A",
-  successBorder: "#23482D",
-
-  warning: "#D39B37",
-  warningBg: "#2C2413",
-
-  gold: "#D8B56A",
-
-  danger: "#E05252",
-  dangerBg: "#2A1717",
-  dangerBorder: "#542727",
-
-  overlay: "rgba(0,0,0,0.70)",
-};
-
-// =====================================================
 // MAIN SCREEN
 // =====================================================
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
-
-  const [themeMode, setThemeMode] =
-    useState<ThemeMode>("light");
+  const { user, token, logout } = useAuth();
+  const { colors, isDark, setThemeMode, themeMode } = useAppTheme();
 
   const [notificationsEnabled, setNotificationsEnabled] =
     useState(true);
+  const [logoutVisible, setLogoutVisible] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const [showAccountModal, setShowAccountModal] =
     useState(false);
@@ -170,15 +84,6 @@ export default function ProfileScreen() {
     useState<string | null>(null);
 
   // ===================================================
-  // THEME
-  // ===================================================
-
-  const colors =
-    themeMode === "dark" ? DARK : LIGHT;
-
-  const isDark = themeMode === "dark";
-
-  // ===================================================
   // LOAD SETTINGS
   // ===================================================
 
@@ -189,11 +94,9 @@ export default function ProfileScreen() {
   const loadSettings = async () => {
     try {
       const [
-        storedTheme,
         storedNotifications,
         storedProfileImage,
       ] = await Promise.all([
-        AsyncStorage.getItem(THEME_STORAGE_KEY),
         AsyncStorage.getItem(
           NOTIFICATIONS_STORAGE_KEY
         ),
@@ -201,13 +104,6 @@ export default function ProfileScreen() {
           PROFILE_IMAGE_STORAGE_KEY
         ),
       ]);
-
-      if (
-        storedTheme === "light" ||
-        storedTheme === "dark"
-      ) {
-        setThemeMode(storedTheme);
-      }
 
       if (storedNotifications !== null) {
         setNotificationsEnabled(
@@ -236,12 +132,7 @@ export default function ProfileScreen() {
     mode: ThemeMode
   ) => {
     try {
-      setThemeMode(mode);
-
-      await AsyncStorage.setItem(
-        THEME_STORAGE_KEY,
-        mode
-      );
+      await setThemeMode(mode);
 
       setShowAppearanceModal(false);
     } catch (error) {
@@ -450,37 +341,21 @@ export default function ProfileScreen() {
   // ===================================================
 
   const handleLogout = () => {
-    Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out of your TUPC-OrderUp account?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await logout();
+    setLogoutVisible(true);
+  };
 
-              router.replace("/");
-            } catch (error) {
-              console.error(
-                "Logout error:",
-                error
-              );
-
-              Alert.alert(
-                "Logout Failed",
-                "Unable to sign out right now. Please try again."
-              );
-            }
-          },
-        },
-      ]
-    );
+  const confirmLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await logout();
+      setLogoutVisible(false);
+      router.replace("/");
+    } catch (error) {
+      console.error("Logout error:", error);
+      Alert.alert("Logout Failed", "Unable to sign out right now. Please try again.");
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   // ===================================================
@@ -508,7 +383,7 @@ export default function ProfileScreen() {
   // CHANGE PASSWORD
   // ===================================================
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmNewPassword) {
       Alert.alert(
         "Incomplete Details",
@@ -525,23 +400,14 @@ export default function ProfileScreen() {
       return;
     }
 
-    // The UI and validation are ready. Connect this handler to your
-    // backend change-password endpoint when that endpoint is available.
-    Alert.alert(
-      "Password Ready",
-      "Your new password passed the required checks. Connect this action to the backend change-password endpoint to save it securely.",
-      [
-        {
-          text: "OK",
-          onPress: () => {
-            setCurrentPassword("");
-            setNewPassword("");
-            setConfirmNewPassword("");
-            setShowChangePasswordModal(false);
-          },
-        },
-      ]
-    );
+    if (!token) { Alert.alert("Session Required", "Please sign in again."); return; }
+    try {
+      await changePassword(token, currentPassword, newPassword);
+      setCurrentPassword(""); setNewPassword(""); setConfirmNewPassword(""); setShowChangePasswordModal(false);
+      Alert.alert("Password Updated", "Your password has been updated securely.");
+    } catch (error) {
+      Alert.alert("Password Update Failed", error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
   // ===================================================
@@ -1594,6 +1460,14 @@ export default function ProfileScreen() {
             </View>
           </View>
         </Modal>
+
+        <LogoutConfirmModal
+          visible={logoutVisible}
+          loading={loggingOut}
+          accountLabel={user?.email || user?.username || "Client account"}
+          onCancel={() => setLogoutVisible(false)}
+          onConfirm={() => void confirmLogout()}
+        />
 
         {/* =================================================
             ACCOUNT MODAL

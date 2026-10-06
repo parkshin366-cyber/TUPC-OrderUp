@@ -159,7 +159,7 @@ export default function LoginScreen() {
 
     if (normalizedRole === "admin") {
       router.replace({
-        pathname: "/(admin)",
+        pathname: "/(admin)/dashboard",
       });
 
       return;

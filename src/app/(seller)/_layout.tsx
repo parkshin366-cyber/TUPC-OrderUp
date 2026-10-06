@@ -1,30 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-
-const CARDINAL = "#A6192E";
-const MUTED = "#737373";
-const BORDER = "#E7E7E8";
+import { useAppTheme } from "../../context/ThemeContext";
 
 export default function SellerLayout() {
+  const { colors, themeMode } = useAppTheme();
+
   return (
     <Tabs
+      key={themeMode}
       initialRouteName="dashboard"
       screenOptions={{
         headerShown: false,
 
         tabBarActiveTintColor:
-          CARDINAL,
+          colors.cardinal,
 
         tabBarInactiveTintColor:
-          MUTED,
+          colors.muted,
 
         tabBarStyle: {
           height: 72,
           paddingTop: 7,
           paddingBottom: 8,
-          backgroundColor: "#FFFFFF",
+          backgroundColor: colors.surface,
           borderTopWidth: 1,
-          borderTopColor: BORDER,
+          borderTopColor: colors.border,
         },
 
         tabBarLabelStyle: {
@@ -162,6 +162,10 @@ export default function SellerLayout() {
           ),
         }}
       />
+
+      <Tabs.Screen name="vouchers" options={{ href: null }} />
+      <Tabs.Screen name="messages" options={{ href: null }} />
+      <Tabs.Screen name="reviews" options={{ href: null }} />
 
       {/* =====================================================
           HIDDEN ROUTES

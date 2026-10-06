@@ -16,6 +16,7 @@ import {
 import {
   CartProvider,
 } from "../context/CartContext";
+import { ThemeProvider, useAppTheme } from "../context/ThemeContext";
 
 type UserRole =
   | "client"
@@ -62,23 +63,12 @@ function RouteGuard() {
     // LOGGED OUT
     // ===================================================
 
-    /*
-     * IMPORTANT:
-     *
-     * Do NOT automatically redirect here when logged out.
-     *
-     * Logout is handled explicitly by the profile/settings
-     * screen:
-     *
-     *   await logout();
-     *   router.replace("/");
-     *
-     * This prevents the RouteGuard from fighting with the
-     * explicit logout navigation while Expo Router is
-     * removing the protected navigator.
-     */
-
     if (!isAuthenticated || !user) {
+      // A cleared session must never remain inside a protected tab group.
+      // This also handles logout from nested admin tabs reliably.
+      if (inClientGroup || inSellerGroup || inAdminGroup) {
+        router.replace("/");
+      }
       return;
     }
 
@@ -156,7 +146,7 @@ function navigateByRole(role: UserRole) {
   // -----------------------------------------------------
 
   if (role === "admin") {
-    router.replace("/(admin)");
+    router.replace("/(admin)/dashboard");
     return;
   }
 
@@ -184,6 +174,8 @@ function navigateByRole(role: UserRole) {
 // =====================================================
 
 function AppNavigator() {
+  const { colors } = useAppTheme();
+
   return (
     <>
       <RouteGuard />
@@ -193,7 +185,7 @@ function AppNavigator() {
           headerShown: false,
           animation: "fade",
           contentStyle: {
-            backgroundColor: "#F7F7F8",
+            backgroundColor: colors.background,
           },
         }}
       >
@@ -248,13 +240,22 @@ function AppNavigator() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <CartProvider>
-        <StatusBar
-          style="dark"
-        />
-
-        <AppNavigator />
-      </CartProvider>
+      <ThemeProvider>
+        <CartProvider>
+          <ThemedApp />
+        </CartProvider>
+      </ThemeProvider>
     </AuthProvider>
+  );
+}
+
+function ThemedApp() {
+  const { isDark } = useAppTheme();
+
+  return (
+    <>
+      <StatusBar style={isDark ? "light" : "dark"} />
+      <AppNavigator />
+    </>
   );
 }

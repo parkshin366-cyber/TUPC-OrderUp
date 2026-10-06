@@ -1,4 +1,5 @@
 import { File } from "expo-file-system";
+import { NGROK_HEADERS } from "../constants/api";
 
 // =====================================================
 // API CONFIGURATION
@@ -7,6 +8,22 @@ import { File } from "expo-file-system";
 export const API_URL = (
   process.env.EXPO_PUBLIC_API_URL ?? ""
 ).replace(/\/$/, "");
+
+// The development API is exposed through ngrok. Every app API request needs
+// this header so ngrok returns the API response instead of its browser warning
+// page. Keeping it here also protects new endpoints automatically.
+async function fetch(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  return globalThis.fetch(input, {
+    ...init,
+    headers: {
+      ...NGROK_HEADERS,
+      ...init?.headers,
+    },
+  });
+}
 
 // =====================================================
 // TYPES
@@ -33,6 +50,7 @@ export type OtpPurpose =
 
 export type ApiUser = {
   id: string;
+  _id?: string;
   firstName: string;
   lastName: string;
   username: string;
@@ -1093,6 +1111,7 @@ export type Store = {
   closeTime: string;
   isOpen: boolean;
   pickupEnabled: boolean;
+  deliveryEnabled: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -1219,6 +1238,7 @@ export type OrderStatus =
   | "Pending"
   | "Preparing"
   | "Ready"
+  | "On the Way"
   | "Completed"
   | "Cancelled";
 
@@ -1263,14 +1283,55 @@ export type Order = {
   total: number;
 
   pickupLocation: string;
+  fulfillmentMethod?: "pickup" | "delivery";
+  deliveryAddress?: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
 
   paymentMethod:
     PaymentMethod;
 
   status: OrderStatus;
+  estimatedMinutes?: number;
+  estimatedReadyAt?: string;
+  cancellationStatus?: "none" | "requested" | "rejected" | "approved";
+  cancellationReason?: string;
+  cancellationRequestedBy?: "client" | "seller";
+  cancellationRequestedAt?: string;
+  cancellationReviewedAt?: string;
+  cancellationRejectionReason?: string;
 
   createdAt: string;
   updatedAt: string;
+};
+
+export type ConversationUser = Pick<ApiUser, "id" | "firstName" | "lastName" | "username"> & { _id?: string };
+export type Conversation = {
+  _id: string;
+  client: ConversationUser;
+  seller: ConversationUser;
+  lastMessage?: string;
+  lastMessageAt?: string;
+  createdAt: string;
+};
+
+export type ChatMessage = {
+  _id: string;
+  conversation: string;
+  sender: ConversationUser | string;
+  body: string;
+  readAt?: string;
+  createdAt: string;
+};
+
+export type SellerReview = {
+  _id: string;
+  order: string;
+  client?: ConversationUser;
+  seller?: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
 };
 
 export type CreateOrderItem = {
@@ -1282,7 +1343,12 @@ export type CreateOrderPayload = {
   storeId: string;
   items: CreateOrderItem[];
   pickupLocation: string;
+  fulfillmentMethod?: "pickup" | "delivery";
+  deliveryAddress?: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
   paymentMethod: PaymentMethod;
+  voucherCode?: string;
 };
 
 // =====================================================
@@ -1298,6 +1364,52 @@ function getAuthHeaders(
       "application/json",
     Authorization:
       `Bearer ${token}`,
+  };
+}
+
+async function authenticatedRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
+  if (!token) throw new Error("Authentication token is required.");
+  const response = await fetch(`${API_URL}${path}`, { ...init, headers: { ...getAuthHeaders(token), ...(init.headers ?? {}) } });
+  const data = await parseResponse(response);
+  if (!response.ok || data?.success === false) throw new Error(data?.message || "Unable to complete request.");
+  return data as T;
+}
+
+export function getConversations(token: string): Promise<Conversation[]> {
+  return authenticatedRequest<{ conversations: Conversation[] }>(token, "/api/messages/conversations").then((data) => data.conversations ?? []);
+}
+
+export function getConversationMessages(token: string, conversationId: string): Promise<{ conversation: Conversation; messages: ChatMessage[] }> {
+  return authenticatedRequest(token, `/api/messages/${encodeURIComponent(conversationId)}`);
+}
+
+export function sendChatMessage(token: string, recipientId: string, body: string): Promise<{ conversation: Conversation; message: ChatMessage }> {
+  return authenticatedRequest(token, "/api/messages", { method: "POST", body: JSON.stringify({ recipientId, body }) });
+}
+
+export function createSellerReview(token: string, orderId: string, rating: number, comment: string): Promise<SellerReview> {
+  return authenticatedRequest<{ review: SellerReview }>(token, "/api/reviews", { method: "POST", body: JSON.stringify({ orderId, rating, comment }) }).then((data) => data.review);
+}
+
+export function getMyReviews(token: string): Promise<SellerReview[]> {
+  return authenticatedRequest<{ reviews: SellerReview[] }>(token, "/api/reviews/my").then((data) => data.reviews ?? []);
+}
+
+export function getSellerReviews(token: string): Promise<{ reviews: SellerReview[]; averageRating: number; reviewCount: number }> {
+  return authenticatedRequest(token, "/api/reviews/seller/me");
+}
+
+export async function getPublicSellerReviews(sellerId: string): Promise<{ reviews: SellerReview[]; averageRating: number; reviewCount: number }> {
+  if (!sellerId) return { reviews: [], averageRating: 0, reviewCount: 0 };
+  const response = await fetch(`${API_URL}/api/reviews/seller/${encodeURIComponent(sellerId)}`, {
+    headers: { Accept: "application/json" },
+  });
+  const data = await parseResponse(response);
+  if (!response.ok || data?.success === false) throw new Error(data?.message || "Unable to load store reviews.");
+  return {
+    reviews: (data?.reviews ?? []) as SellerReview[],
+    averageRating: Number(data?.averageRating ?? 0),
+    reviewCount: Number(data?.reviewCount ?? 0),
   };
 }
 
@@ -1319,6 +1431,7 @@ export async function getMyStore(
       `${API_URL}/api/stores/me`,
       {
         method: "GET",
+        cache: "no-store",
         headers:
           getAuthHeaders(token),
       }
@@ -1369,6 +1482,7 @@ export async function saveMyStore(
     closeTime?: string;
     isOpen?: boolean;
     pickupEnabled?: boolean;
+    deliveryEnabled?: boolean;
   }
 ): Promise<Store> {
   if (!token) {
@@ -1407,6 +1521,9 @@ export async function saveMyStore(
           pickupEnabled:
             store.pickupEnabled ??
             true,
+          deliveryEnabled:
+            store.deliveryEnabled ??
+            false,
         }),
       }
     );
@@ -2396,6 +2513,7 @@ export async function getMyOrders(
       `${API_URL}/api/orders/my`,
       {
         method: "GET",
+        cache: "no-store",
         headers:
           getAuthHeaders(token),
       }
@@ -2576,6 +2694,7 @@ export async function updateOrderStatus(
       "Pending",
       "Preparing",
       "Ready",
+      "On the Way",
       "Completed",
       "Cancelled",
     ];
@@ -2632,3 +2751,114 @@ export async function updateOrderStatus(
     );
   }
 }
+
+export async function updateOrderEta(token: string, orderId: string, minutes: number): Promise<Order> {
+  const data = await authenticatedRequest<{ order: Order }>(token, `/api/orders/${encodeURIComponent(orderId)}/eta`, {
+    method: "PATCH",
+    body: JSON.stringify({ minutes }),
+  });
+  return data.order;
+}
+
+export async function requestOrderCancellation(token: string, orderId: string, reason: string): Promise<{ order: Order; immediate: boolean; message: string }> {
+  return authenticatedRequest(token, `/api/orders/${encodeURIComponent(orderId)}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function reviewOrderCancellation(token: string, orderId: string, action: "approve" | "reject", reason?: string): Promise<Order> {
+  const data = await authenticatedRequest<{ order: Order }>(token, `/api/orders/${encodeURIComponent(orderId)}/cancellation`, {
+    method: "PATCH",
+    body: JSON.stringify({ action, reason }),
+  });
+  return data.order;
+}
+
+export async function cancelOrderBySeller(token: string, orderId: string, reason: string): Promise<Order> {
+  const data = await authenticatedRequest<{ order: Order }>(token, `/api/orders/${encodeURIComponent(orderId)}/seller-cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+  return data.order;
+}
+
+// =====================================================
+// ADMIN USERS
+// =====================================================
+
+export async function getAdminUsers(token: string): Promise<ApiUser[]> {
+  if (!token) throw new Error("Authentication token is required.");
+  const response = await fetch(`${API_URL}/api/users`, {
+    method: "GET",
+    headers: getAuthHeaders(token),
+  });
+  const data = await parseResponse(response);
+  if (!response.ok || data?.success === false) {
+    throw new Error(data?.message || "Unable to load users.");
+  }
+  return (data?.users ?? []) as ApiUser[];
+}
+
+export async function updateAdminUserStatus(
+  token: string,
+  userId: string,
+  status: UserStatus,
+): Promise<ApiUser> {
+  if (!token || !userId) throw new Error("Authentication and user ID are required.");
+  const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(userId)}/status`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ status }),
+  });
+  const data = await parseResponse(response);
+  if (!response.ok || data?.success === false) {
+    throw new Error(data?.message || "Unable to update the account.");
+  }
+  return data.user as ApiUser;
+}
+
+export type AdminStall = { _id: string; code: string; location: string; monthlyRent: number; seller?: { _id: string; firstName: string; lastName: string } | null };
+export type AdminRent = { _id: string; amount: number; dueDate: string; status: "Paid" | "Due" | "Overdue" | "For verification"; seller: { _id: string; firstName: string; lastName: string }; stall?: { _id: string; code: string } | null };
+export type AdminFinance = { stalls: AdminStall[]; rents: AdminRent[]; pendingSellerCount: number };
+
+export async function getAdminFinance(token: string): Promise<AdminFinance> {
+  const response = await fetch(`${API_URL}/api/admin/finance`, { headers: getAuthHeaders(token) });
+  const data = await parseResponse(response);
+  if (!response.ok || data?.success === false) throw new Error(data?.message || "Unable to load finance data.");
+  return data as AdminFinance;
+}
+
+export async function updateAdminRentStatus(token: string, rentId: string, status: AdminRent["status"]): Promise<AdminRent> {
+  const response = await fetch(`${API_URL}/api/admin/rents/${encodeURIComponent(rentId)}/status`, { method: "PATCH", headers: getAuthHeaders(token), body: JSON.stringify({ status }) });
+  const data = await parseResponse(response);
+  if (!response.ok || data?.success === false) throw new Error(data?.message || "Unable to update rent.");
+  return data.rent as AdminRent;
+}
+
+export async function changePassword(token: string, currentPassword: string, newPassword: string): Promise<void> {
+  const response = await fetch(`${API_URL}/auth/change-password`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const data = await parseResponse(response);
+  if (!response.ok || data?.success === false) throw new Error(data?.message || "Unable to update password.");
+}
+
+export type Voucher = { _id: string; code: string; title: string; description?: string; discountPercent: number; minimumOrder: number; newUsersOnly: boolean; active: boolean; startsAt: string; endsAt?: string; productIds?: string[] };
+export type VoucherActivation = { _id: string; voucher: string; store: string; seller: string; productIds: string[]; enabled: boolean };
+
+async function voucherRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, { ...init, headers: { ...getAuthHeaders(token), ...(init.headers ?? {}) } });
+  const data = await parseResponse(response);
+  if (!response.ok || data?.success === false) throw new Error(data?.message || "Unable to complete voucher request.");
+  return data as T;
+}
+
+export function getAdminVouchers(token: string): Promise<Voucher[]> { return voucherRequest<{ vouchers: Voucher[] }>(token, "/api/admin/vouchers").then((data) => data.vouchers ?? []); }
+export function createAdminVoucher(token: string, payload: Pick<Voucher, "code" | "title" | "description" | "discountPercent" | "minimumOrder" | "newUsersOnly">): Promise<Voucher> { return voucherRequest<{ voucher: Voucher }>(token, "/api/admin/vouchers", { method: "POST", body: JSON.stringify(payload) }).then((data) => data.voucher); }
+export function updateAdminVoucher(token: string, voucherId: string, payload: Partial<Pick<Voucher, "active" | "title" | "description" | "discountPercent" | "minimumOrder" | "newUsersOnly">>): Promise<Voucher> { return voucherRequest<{ voucher: Voucher }>(token, `/api/admin/vouchers/${encodeURIComponent(voucherId)}`, { method: "PATCH", body: JSON.stringify(payload) }).then((data) => data.voucher); }
+export function getSellerVouchers(token: string): Promise<{ storeId: string; vouchers: Voucher[]; activations: VoucherActivation[]; products: Product[] }> { return voucherRequest(token, "/api/vouchers/seller"); }
+export function saveSellerVoucherActivation(token: string, voucherId: string, enabled: boolean, productIds: string[]): Promise<VoucherActivation> { return voucherRequest<{ activation: VoucherActivation }>(token, `/api/vouchers/seller/${encodeURIComponent(voucherId)}`, { method: "PUT", body: JSON.stringify({ enabled, productIds }) }).then((data) => data.activation); }
+export function getCustomerStoreVouchers(token: string, storeId: string, productIds: string[]): Promise<Voucher[]> { const query = productIds.length ? `?productIds=${encodeURIComponent(productIds.join(","))}` : ""; return voucherRequest<{ vouchers: Voucher[] }>(token, `/api/vouchers/store/${encodeURIComponent(storeId)}${query}`).then((data) => data.vouchers ?? []); }

@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   useCallback,
@@ -10,6 +9,7 @@ import {
 
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -19,11 +19,14 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useCart } from "../../../../context/CartContext";
 
 import {
   getPublicStore,
+  getPublicSellerReviews,
   getStoreProducts,
   type Product,
+  type SellerReview,
   type Store,
 } from "../../../../services/api";
 
@@ -43,25 +46,6 @@ const WHITE = "#FFFFFF";
 
 const SUCCESS = "#18864B";
 const SUCCESS_BG = "#EAF7EF";
-
-// =====================================================
-// STORAGE
-// =====================================================
-
-const CART_STORAGE_KEY = "@tupc_orderup_cart";
-
-// =====================================================
-// CART TYPE
-// =====================================================
-
-type CartItem = {
-  id: string;
-  storeId: string;
-  name: string;
-  price: number;
-  image: string;
-  quantity: number;
-};
 
 // =====================================================
 // HELPERS
@@ -93,6 +77,7 @@ const getProductIcon = (
 // =====================================================
 
 export default function StoreDetails() {
+  const { items: cartItems, addToCart: addCartItem, replaceCart } = useCart();
   const params = useLocalSearchParams<{
     id?: string | string[];
   }>();
@@ -117,20 +102,20 @@ export default function StoreDetails() {
   const [favorite, setFavorite] =
     useState(false);
 
-  const [cartItems, setCartItems] =
-    useState<CartItem[]>([]);
-
   const [loading, setLoading] =
     useState(true);
 
   const [refreshing, setRefreshing] =
     useState(false);
 
-  const [loadingCart, setLoadingCart] =
-    useState(true);
+  const loadingCart = false;
 
   const [addingProductId, setAddingProductId] =
     useState<string | null>(null);
+
+  const [reviews, setReviews] = useState<SellerReview[]>([]);
+  const [averageRating, setAverageRating] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
 
   // ===================================================
   // LOAD STORE + PRODUCTS
@@ -158,6 +143,23 @@ export default function StoreDetails() {
 
         setStore(storeResult);
         setProducts(productsResult);
+
+        try {
+          const sellerId = String(
+            typeof storeResult.seller === "object"
+              ? (storeResult.seller as any)?._id ?? (storeResult.seller as any)?.id ?? ""
+              : storeResult.seller ?? ""
+          );
+          const reviewResult = await getPublicSellerReviews(sellerId);
+          setReviews(reviewResult.reviews);
+          setAverageRating(reviewResult.averageRating);
+          setReviewCount(reviewResult.reviewCount);
+        } catch (reviewError) {
+          console.error("LOAD STORE REVIEWS ERROR:", reviewError);
+          setReviews([]);
+          setAverageRating(0);
+          setReviewCount(0);
+        }
 
         // If selected category no longer exists,
         // return to All.
@@ -211,73 +213,6 @@ export default function StoreDetails() {
       await loadStore(false);
     } finally {
       setRefreshing(false);
-    }
-  };
-
-  // ===================================================
-  // LOAD CART
-  // ===================================================
-
-  useEffect(() => {
-    let mounted = true;
-
-    const loadCart = async () => {
-      try {
-        const savedCart =
-          await AsyncStorage.getItem(
-            CART_STORAGE_KEY
-          );
-
-        if (!mounted) {
-          return;
-        }
-
-        if (savedCart) {
-          const parsed =
-            JSON.parse(savedCart);
-
-          setCartItems(
-            Array.isArray(parsed)
-              ? parsed
-              : []
-          );
-        }
-      } catch (error) {
-        console.log(
-          "Failed to load cart:",
-          error
-        );
-      } finally {
-        if (mounted) {
-          setLoadingCart(false);
-        }
-      }
-    };
-
-    loadCart();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  // ===================================================
-  // SAVE CART
-  // ===================================================
-
-  const saveCart = async (
-    items: CartItem[]
-  ) => {
-    try {
-      await AsyncStorage.setItem(
-        CART_STORAGE_KEY,
-        JSON.stringify(items)
-      );
-    } catch (error) {
-      console.log(
-        "Failed to save cart:",
-        error
-      );
     }
   };
 
@@ -397,46 +332,27 @@ export default function StoreDetails() {
         return;
       }
 
-      let updatedCart: CartItem[];
+      const cartProduct = {
+        id: product._id,
+        storeId: store._id,
+        store: store.name,
+        name: product.name,
+        price: product.price,
+        image: "",
+        maxQuantity: product.stock,
+      };
 
-      if (existingItem) {
-        updatedCart =
-          cartItems.map((item) =>
-            item.id ===
-            product._id
-              ? {
-                  ...item,
-                  quantity:
-                    item.quantity +
-                    1,
-                }
-              : item
-          );
-      } else {
-        const newItem: CartItem =
-          {
-            id: product._id,
-            storeId:
-              product.store,
-            name: product.name,
-            price: product.price,
-            image: "",
-            quantity: 1,
-          };
-
-        updatedCart = [
-          ...cartItems,
-          newItem,
-        ];
+      const result = addCartItem(cartProduct, 1);
+      if (result === "different-store") {
+        Alert.alert(
+          "Start a new cart?",
+          "Your cart contains food from another store. One order can contain items from only one store.",
+          [
+            { text: "Keep current cart", style: "cancel" },
+            { text: "Start new cart", style: "destructive", onPress: () => replaceCart(cartProduct, 1) },
+          ]
+        );
       }
-
-      setCartItems(
-        updatedCart
-      );
-
-      await saveCart(
-        updatedCart
-      );
     } catch (error) {
       console.log(
         "Failed to add to cart:",
@@ -1048,6 +964,58 @@ export default function StoreDetails() {
             </View>
           </View>
 
+          <View style={styles.reviewsSection}>
+            <View style={styles.reviewsHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Customer Reviews</Text>
+                <Text style={styles.sectionSubtitle}>Ratings from completed orders</Text>
+              </View>
+              <View style={styles.ratingSummary}>
+                <Ionicons name="star" size={17} color="#D59B00" />
+                <Text style={styles.ratingValue}>{reviewCount ? averageRating.toFixed(1) : "—"}</Text>
+                <Text style={styles.ratingCount}>({reviewCount})</Text>
+              </View>
+            </View>
+
+            {reviews.length > 0 ? (
+              reviews.map((review) => (
+                <View key={review._id} style={styles.reviewCard}>
+                  <View style={styles.reviewTop}>
+                    <Text style={styles.reviewerName}>
+                      {`${review.client?.firstName ?? "Customer"} ${review.client?.lastName ?? ""}`.trim()}
+                    </Text>
+                    <View style={styles.reviewStars}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Ionicons
+                          key={star}
+                          name={star <= review.rating ? "star" : "star-outline"}
+                          size={13}
+                          color="#D59B00"
+                        />
+                      ))}
+                    </View>
+                  </View>
+                  <Text style={styles.reviewComment}>{review.comment}</Text>
+                  <Text style={styles.reviewDate}>
+                    {new Date(review.createdAt).toLocaleDateString("en-PH", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <View style={styles.noReviews}>
+                <Ionicons name="star-outline" size={24} color={CARDINAL} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.noReviewsTitle}>No reviews yet</Text>
+                  <Text style={styles.noReviewsText}>Be the first to review this seller after a completed order.</Text>
+                </View>
+              </View>
+            )}
+          </View>
+
           {/* =================================================
               MENU
           ================================================= */}
@@ -1446,9 +1414,6 @@ export default function StoreDetails() {
                                 pressed,
                               }) => [
                                 styles.addButton,
-                                quantity >
-                                  0 &&
-                                  styles.addButtonActive,
                                 cannotAdd &&
                                   styles.addButtonDisabled,
                                 pressed &&
@@ -1473,12 +1438,7 @@ export default function StoreDetails() {
                                 />
                               ) : (
                                 <Ionicons
-                                  name={
-                                    quantity >
-                                    0
-                                      ? "checkmark"
-                                      : "add"
-                                  }
+                                  name="add"
                                   size={19}
                                   color={
                                     WHITE
@@ -2036,6 +1996,39 @@ const styles = StyleSheet.create({
     backgroundColor: BORDER,
     marginHorizontal: 6,
   },
+
+  reviewsSection: {
+    paddingHorizontal: 20,
+    paddingTop: 21,
+  },
+
+  reviewsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+
+  ratingSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: "#FFF8E7",
+  },
+
+  ratingValue: { marginLeft: 5, color: TEXT, fontSize: 13, fontWeight: "900" },
+  ratingCount: { marginLeft: 3, color: MUTED, fontSize: 10, fontWeight: "700" },
+  reviewCard: { marginBottom: 9, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: BORDER, backgroundColor: WHITE },
+  reviewTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  reviewerName: { flex: 1, color: TEXT, fontSize: 12, fontWeight: "900", marginRight: 8 },
+  reviewStars: { flexDirection: "row", gap: 2 },
+  reviewComment: { marginTop: 8, color: TEXT, fontSize: 12, lineHeight: 18 },
+  reviewDate: { marginTop: 9, color: MUTED, fontSize: 9, fontWeight: "700" },
+  noReviews: { padding: 15, borderRadius: 16, borderWidth: 1, borderColor: BORDER, backgroundColor: WHITE, flexDirection: "row", alignItems: "center", gap: 11 },
+  noReviewsTitle: { color: TEXT, fontSize: 12, fontWeight: "900" },
+  noReviewsText: { color: MUTED, fontSize: 10, lineHeight: 15, marginTop: 2 },
 
   // ===================================================
   // MENU

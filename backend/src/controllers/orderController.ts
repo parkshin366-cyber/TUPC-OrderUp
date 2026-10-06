@@ -9,6 +9,19 @@ import Order, {
 import Product from "../models/Product";
 import Store from "../models/Store";
 import User from "../models/User";
+import VoucherRedemption from "../models/VoucherRedemption";
+import { calculateVoucherForOrder } from "./voucherController";
+
+async function restoreOrderStock(order: any) {
+  if (order.stockRestoredAt) return;
+  for (const item of order.items) {
+    await Product.findByIdAndUpdate(item.product, {
+      $inc: { stock: item.quantity },
+      $set: { available: true },
+    });
+  }
+  order.stockRestoredAt = new Date();
+}
 
 /**
  * =====================================================
@@ -33,6 +46,11 @@ export async function createOrder(
       items,
       pickupLocation,
       paymentMethod,
+      voucherCode,
+      fulfillmentMethod,
+      deliveryAddress,
+      deliveryLatitude,
+      deliveryLongitude,
     } = req.body;
 
     // ---------------------------------------------------
@@ -59,6 +77,8 @@ export async function createOrder(
         message: "Pickup location is required",
       });
     }
+
+    const resolvedFulfillment = fulfillmentMethod === "delivery" ? "delivery" : "pickup";
 
     if (
       paymentMethod !== "cash" &&
@@ -110,6 +130,19 @@ export async function createOrder(
         success: false,
         message: "This store is currently closed",
       });
+    }
+
+    if (resolvedFulfillment === "delivery") {
+      if (!store.deliveryEnabled) {
+        return res.status(400).json({ success: false, message: "This seller is not accepting delivery orders" });
+      }
+      if (
+        typeof deliveryAddress !== "string" || !deliveryAddress.trim() ||
+        !Number.isFinite(Number(deliveryLatitude)) ||
+        !Number.isFinite(Number(deliveryLongitude))
+      ) {
+        return res.status(400).json({ success: false, message: "Please pin a valid delivery location" });
+      }
     }
 
     // ---------------------------------------------------
@@ -239,17 +272,61 @@ export async function createOrder(
     // CREATE ORDER
     // ---------------------------------------------------
 
+    let voucherResult;
+    try {
+      voucherResult = await calculateVoucherForOrder(
+        customer._id.toString(),
+        store._id.toString(),
+        orderItems.map((item) => ({
+          productId: item.product.toString(),
+          total: item.price * item.quantity,
+        })),
+        subtotal,
+        typeof voucherCode === "string" ? voucherCode : undefined
+      );
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Voucher cannot be applied",
+      });
+    }
+    const discount = voucherResult?.discount ?? 0;
+
     const order = await Order.create({
       customer: customer._id,
       seller: seller._id,
       store: store._id,
       items: orderItems,
       subtotal,
-      total: subtotal,
+      discount,
+      total: Math.max(0, subtotal - discount),
+      voucher: voucherResult?.voucher._id,
+      voucherCode: voucherResult?.voucher.code,
       pickupLocation: String(pickupLocation).trim(),
+      fulfillmentMethod: resolvedFulfillment,
+      deliveryAddress: resolvedFulfillment === "delivery" ? String(deliveryAddress).trim() : undefined,
+      deliveryLatitude: resolvedFulfillment === "delivery" ? Number(deliveryLatitude) : undefined,
+      deliveryLongitude: resolvedFulfillment === "delivery" ? Number(deliveryLongitude) : undefined,
       paymentMethod: paymentMethod as PaymentMethod,
       status: "Pending" as OrderStatus,
     });
+
+    if (voucherResult?.voucher) {
+      try {
+        await VoucherRedemption.create({
+          voucher: voucherResult.voucher._id,
+          customer: customer._id,
+          store: store._id,
+          order: order._id,
+        });
+      } catch (redemptionError: any) {
+        await Order.findByIdAndDelete(order._id);
+        if (redemptionError?.code === 11000) {
+          return res.status(409).json({ success: false, message: "This voucher has already been used" });
+        }
+        throw redemptionError;
+      }
+    }
 
     // ---------------------------------------------------
     // REDUCE STOCK
@@ -287,7 +364,7 @@ export async function createOrder(
       )
       .populate(
         "store",
-        "name description location openTime closeTime isOpen pickupEnabled"
+        "name description location openTime closeTime isOpen pickupEnabled deliveryEnabled"
       )
       .populate(
         "items.product",
@@ -336,7 +413,7 @@ export async function getMyOrders(
       )
       .populate(
         "store",
-        "name description location openTime closeTime isOpen pickupEnabled"
+        "name description location openTime closeTime isOpen pickupEnabled deliveryEnabled"
       )
       .populate(
         "items.product",
@@ -410,7 +487,7 @@ export async function getSellerOrders(
       )
       .populate(
         "store",
-        "name description location openTime closeTime isOpen pickupEnabled"
+        "name description location openTime closeTime isOpen pickupEnabled deliveryEnabled"
       )
       .populate(
         "items.product",
@@ -470,7 +547,7 @@ export async function getOrderById(
       )
       .populate(
         "store",
-        "name description location openTime closeTime isOpen pickupEnabled"
+        "name description location openTime closeTime isOpen pickupEnabled deliveryEnabled"
       )
       .populate(
         "items.product",
@@ -569,6 +646,7 @@ export async function updateOrderStatus(
       "Pending",
       "Preparing",
       "Ready",
+      "On the Way",
       "Completed",
       "Cancelled",
     ];
@@ -642,6 +720,13 @@ export async function updateOrderStatus(
       });
     }
 
+    if (order.cancellationStatus === "requested") {
+      return res.status(409).json({
+        success: false,
+        message: "Review the customer's cancellation request before updating this order",
+      });
+    }
+
     // ---------------------------------------------------
     // STATUS TRANSITIONS
     // ---------------------------------------------------
@@ -652,11 +737,13 @@ export async function updateOrderStatus(
       OrderStatus,
       OrderStatus[]
     > = {
-      Pending: ["Preparing", "Cancelled"],
+      Pending: ["Preparing"],
 
-      Preparing: ["Ready", "Cancelled"],
+      Preparing: ["Ready"],
 
-      Ready: ["Completed"],
+      Ready: order.fulfillmentMethod === "delivery" ? ["On the Way"] : ["Completed"],
+
+      "On the Way": ["Completed"],
 
       Completed: [],
 
@@ -699,7 +786,7 @@ export async function updateOrderStatus(
       )
       .populate(
         "store",
-        "name description location openTime closeTime isOpen pickupEnabled"
+        "name description location openTime closeTime isOpen pickupEnabled deliveryEnabled"
       )
       .populate(
         "items.product",
@@ -721,5 +808,112 @@ export async function updateOrderStatus(
       success: false,
       message: "Failed to update order status",
     });
+  }
+}
+
+export async function updateOrderEta(req: AuthRequest, res: Response) {
+  try {
+    const orderId = String(req.params.orderId);
+    const minutes = Number(req.body?.minutes);
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ success: false, message: "Invalid order ID" });
+    if (!Number.isInteger(minutes) || minutes < 5 || minutes > 180) return res.status(400).json({ success: false, message: "Estimated time must be between 5 and 180 minutes" });
+    const order = await Order.findOne({ _id: orderId, seller: req.userId });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    if (["Ready", "On the Way", "Completed", "Cancelled"].includes(order.status)) return res.status(400).json({ success: false, message: "Estimated time can no longer be changed" });
+    order.estimatedMinutes = minutes;
+    order.estimatedReadyAt = new Date(Date.now() + minutes * 60_000);
+    await order.save();
+    return res.json({ success: true, message: "Estimated preparation time updated", order });
+  } catch (error) {
+    console.error("Update order ETA error:", error);
+    return res.status(500).json({ success: false, message: "Unable to update estimated time" });
+  }
+}
+
+export async function requestOrderCancellation(req: AuthRequest, res: Response) {
+  try {
+    const orderId = String(req.params.orderId);
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ success: false, message: "Invalid order ID" });
+    if (reason.length < 3 || reason.length > 300) return res.status(400).json({ success: false, message: "Cancellation reason must be 3 to 300 characters" });
+    const order = await Order.findOne({ _id: orderId, customer: req.userId });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    if (order.status === "Pending") {
+      order.status = "Cancelled";
+      order.cancellationStatus = "approved";
+      order.cancellationReason = reason;
+      order.cancellationRequestedBy = "client";
+      order.cancellationRequestedAt = new Date();
+      order.cancellationReviewedAt = new Date();
+      await restoreOrderStock(order);
+      await order.save();
+      return res.json({ success: true, message: "Order cancelled", immediate: true, order });
+    }
+    if (order.status === "Preparing") {
+      if (order.cancellationStatus === "requested") return res.status(409).json({ success: false, message: "Cancellation request is already pending" });
+      order.cancellationStatus = "requested";
+      order.cancellationReason = reason;
+      order.cancellationRequestedBy = "client";
+      order.cancellationRequestedAt = new Date();
+      order.cancellationReviewedAt = undefined;
+      order.cancellationRejectionReason = undefined;
+      await order.save();
+      return res.json({ success: true, message: "Cancellation request sent to seller", immediate: false, order });
+    }
+    return res.status(400).json({ success: false, message: "This order can no longer be cancelled" });
+  } catch (error) {
+    console.error("Request cancellation error:", error);
+    return res.status(500).json({ success: false, message: "Unable to process cancellation" });
+  }
+}
+
+export async function reviewCancellationRequest(req: AuthRequest, res: Response) {
+  try {
+    const orderId = String(req.params.orderId);
+    const action = String(req.body?.action || "");
+    const rejectionReason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ success: false, message: "Invalid order ID" });
+    if (!["approve", "reject"].includes(action)) return res.status(400).json({ success: false, message: "Choose approve or reject" });
+    const order = await Order.findOne({ _id: orderId, seller: req.userId, cancellationStatus: "requested" });
+    if (!order) return res.status(404).json({ success: false, message: "Cancellation request not found" });
+    if (action === "approve") {
+      order.status = "Cancelled";
+      order.cancellationStatus = "approved";
+      order.cancellationReviewedAt = new Date();
+      await restoreOrderStock(order);
+    } else {
+      if (rejectionReason.length < 3) return res.status(400).json({ success: false, message: "Give a reason for rejecting the request" });
+      order.cancellationStatus = "rejected";
+      order.cancellationRejectionReason = rejectionReason;
+      order.cancellationReviewedAt = new Date();
+    }
+    await order.save();
+    return res.json({ success: true, message: action === "approve" ? "Cancellation approved" : "Cancellation rejected", order });
+  } catch (error) {
+    console.error("Review cancellation error:", error);
+    return res.status(500).json({ success: false, message: "Unable to review cancellation" });
+  }
+}
+
+export async function cancelOrderBySeller(req: AuthRequest, res: Response) {
+  try {
+    const orderId = String(req.params.orderId);
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ success: false, message: "Invalid order ID" });
+    if (reason.length < 3 || reason.length > 300) return res.status(400).json({ success: false, message: "Cancellation reason must be 3 to 300 characters" });
+    const order = await Order.findOne({ _id: orderId, seller: req.userId, status: { $in: ["Pending", "Preparing"] } });
+    if (!order) return res.status(404).json({ success: false, message: "Order cannot be cancelled" });
+    order.status = "Cancelled";
+    order.cancellationStatus = "approved";
+    order.cancellationReason = reason;
+    order.cancellationRequestedBy = "seller";
+    order.cancellationRequestedAt = new Date();
+    order.cancellationReviewedAt = new Date();
+    await restoreOrderStock(order);
+    await order.save();
+    return res.json({ success: true, message: "Order cancelled", order });
+  } catch (error) {
+    console.error("Seller cancellation error:", error);
+    return res.status(500).json({ success: false, message: "Unable to cancel order" });
   }
 }

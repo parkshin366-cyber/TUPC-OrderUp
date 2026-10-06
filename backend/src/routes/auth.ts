@@ -2,6 +2,7 @@ import express from "express";
 
 import {
   checkUsernameAvailability,
+  changePassword,
   forgotPassword,
   getMe,
   login,
@@ -66,6 +67,12 @@ router.post(
 router.post(
   "/login",
   login
+);
+
+router.post(
+  "/change-password",
+  authenticate,
+  changePassword
 );
 
 // =========================================================

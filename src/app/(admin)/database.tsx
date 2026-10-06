@@ -837,7 +837,7 @@ function DatabaseDetail({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
   },
 
   container: {
@@ -876,21 +876,21 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
     letterSpacing: -0.7,
   },
 
   subtitle: {
     marginTop: 4,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
   },
 
   refreshButton: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     elevation: 4,
@@ -900,9 +900,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     padding: 15,
     borderRadius: 19,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     flexDirection: "row",
     alignItems: "center",
   },
@@ -930,7 +930,7 @@ const styles = StyleSheet.create({
   connectionTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   onlineBadge: {
@@ -959,14 +959,14 @@ const styles = StyleSheet.create({
 
   connectionDetail: {
     fontSize: 11,
-    color: TEXT,
+    color: "#171717",
     fontWeight: "600",
     marginTop: 4,
   },
 
   connectionTime: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     marginTop: 2,
   },
 
@@ -976,7 +976,7 @@ const styles = StyleSheet.create({
     marginBottom: 9,
     fontSize: 10,
     fontWeight: "900",
-    color: MUTED,
+    color: "#737373",
     letterSpacing: 1.1,
   },
 
@@ -992,7 +992,7 @@ const styles = StyleSheet.create({
   sectionSubtitle: {
     marginTop: 3,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
   },
 
   metricGrid: {
@@ -1006,10 +1006,10 @@ const styles = StyleSheet.create({
     width: "48%",
     flexGrow: 1,
     minHeight: 119,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 14,
   },
 
@@ -1025,7 +1025,7 @@ const styles = StyleSheet.create({
 
   metricLabel: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "700",
   },
 
@@ -1033,7 +1033,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 21,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   metricDetail: {
@@ -1047,9 +1047,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 16,
     borderRadius: 18,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
   },
 
   storageHeader: {
@@ -1061,19 +1061,19 @@ const styles = StyleSheet.create({
   storageTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   storageSubtitle: {
     marginTop: 3,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
   },
 
   storagePercentage: {
     fontSize: 20,
     fontWeight: "900",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   progressTrack: {
@@ -1087,7 +1087,7 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
     borderRadius: 5,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
   },
 
   storageFooter: {
@@ -1098,13 +1098,13 @@ const styles = StyleSheet.create({
 
   storageUsed: {
     fontSize: 10,
-    color: TEXT,
+    color: "#171717",
     fontWeight: "700",
   },
 
   storageLimit: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
   },
 
   collectionCount: {
@@ -1119,15 +1119,15 @@ const styles = StyleSheet.create({
   collectionCountText: {
     fontSize: 11,
     fontWeight: "900",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   collectionsCard: {
     marginHorizontal: 20,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     overflow: "hidden",
   },
 
@@ -1162,7 +1162,7 @@ const styles = StyleSheet.create({
   collectionName: {
     fontSize: 13,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   healthPill: {
@@ -1202,7 +1202,7 @@ const styles = StyleSheet.create({
 
   collectionDescription: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1216,12 +1216,12 @@ const styles = StyleSheet.create({
   collectionDocuments: {
     fontSize: 9,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
   },
 
   collectionSize: {
     fontSize: 9,
-    color: MUTED,
+    color: "#737373",
   },
 
   collectionDivider: {
@@ -1246,7 +1246,7 @@ const styles = StyleSheet.create({
     width: 43,
     height: 43,
     borderRadius: 14,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1260,14 +1260,14 @@ const styles = StyleSheet.create({
   indexTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   indexDescription: {
     marginTop: 3,
     fontSize: 10,
     lineHeight: 15,
-    color: MUTED,
+    color: "#737373",
   },
 
   indexStatus: {
@@ -1287,7 +1287,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     height: 32,
     borderRadius: 10,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -1297,15 +1297,15 @@ const styles = StyleSheet.create({
   viewButtonText: {
     fontSize: 10,
     fontWeight: "800",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   activityCard: {
     marginHorizontal: 20,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     paddingHorizontal: 14,
   },
 
@@ -1331,13 +1331,13 @@ const styles = StyleSheet.create({
   activityAction: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   activityDetail: {
     marginTop: 2,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
   },
 
   activityMeta: {
@@ -1358,7 +1358,7 @@ const styles = StyleSheet.create({
   collectionTagText: {
     fontSize: 8,
     fontWeight: "800",
-    color: MUTED,
+    color: "#737373",
   },
 
   activityTime: {
@@ -1376,9 +1376,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     padding: 15,
     borderRadius: 19,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
   },
 
   backupTop: {
@@ -1404,12 +1404,12 @@ const styles = StyleSheet.create({
   backupTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   backupDescription: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1440,7 +1440,7 @@ const styles = StyleSheet.create({
   backupLabel: {
     fontSize: 8,
     fontWeight: "900",
-    color: MUTED,
+    color: "#737373",
     letterSpacing: 0.5,
   },
 
@@ -1448,14 +1448,14 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 11,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
   },
 
   backupButton: {
     marginTop: 14,
     height: 46,
     borderRadius: 14,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1463,7 +1463,7 @@ const styles = StyleSheet.create({
   },
 
   backupButtonText: {
-    color: WHITE,
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "800",
   },
@@ -1481,7 +1481,7 @@ const styles = StyleSheet.create({
     width: 39,
     height: 39,
     borderRadius: 12,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1494,14 +1494,14 @@ const styles = StyleSheet.create({
   noticeTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   noticeText: {
     marginTop: 4,
     fontSize: 10,
     lineHeight: 15,
-    color: MUTED,
+    color: "#737373",
   },
 
   footer: {
@@ -1527,7 +1527,7 @@ const styles = StyleSheet.create({
 
   modalSheet: {
     maxHeight: "86%",
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: 9,
@@ -1563,7 +1563,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 20,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   closeButton: {
@@ -1598,7 +1598,7 @@ const styles = StyleSheet.create({
   modalCollectionName: {
     fontSize: 20,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   modalCollectionDescription: {
@@ -1607,7 +1607,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     textAlign: "center",
-    color: MUTED,
+    color: "#737373",
   },
 
   detailGrid: {
@@ -1623,8 +1623,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: WHITE,
+    borderColor: "#E7E7E8",
+    backgroundColor: "#FFFFFF",
   },
 
   databaseDetailIcon: {
@@ -1639,14 +1639,14 @@ const styles = StyleSheet.create({
   databaseDetailLabel: {
     marginTop: 8,
     fontSize: 9,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
   databaseDetailValue: {
     marginTop: 2,
     fontSize: 14,
-    color: TEXT,
+    color: "#171717",
     fontWeight: "900",
   },
 
@@ -1665,14 +1665,14 @@ const styles = StyleSheet.create({
     marginLeft: 9,
     fontSize: 10,
     lineHeight: 15,
-    color: MUTED,
+    color: "#737373",
   },
 
   modalAction: {
     marginTop: 13,
     height: 48,
     borderRadius: 14,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1680,7 +1680,7 @@ const styles = StyleSheet.create({
   },
 
   modalActionText: {
-    color: WHITE,
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "800",
   },

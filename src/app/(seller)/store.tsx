@@ -53,6 +53,7 @@ export default function SellerStore() {
   const [storeOpen, setStoreOpen] = useState(true);
   const [pickupEnabled, setPickupEnabled] =
     useState(true);
+  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
 
   // =====================================================
   // UI STATE
@@ -100,6 +101,7 @@ export default function SellerStore() {
         setPickupEnabled(
           result.pickupEnabled ?? true
         );
+        setDeliveryEnabled(result.deliveryEnabled ?? false);
       } else {
         // No store yet.
         // Start with blank fields.
@@ -214,6 +216,7 @@ export default function SellerStore() {
           closeTime: trimmedCloseTime,
           isOpen: storeOpen,
           pickupEnabled,
+          deliveryEnabled,
         }
       );
 
@@ -242,6 +245,7 @@ export default function SellerStore() {
       setPickupEnabled(
         savedStore.pickupEnabled ?? true
       );
+      setDeliveryEnabled(savedStore.deliveryEnabled ?? false);
 
       setHasChanges(false);
 
@@ -281,6 +285,11 @@ export default function SellerStore() {
     value: boolean
   ) => {
     setPickupEnabled(value);
+    markChanged();
+  };
+
+  const toggleDelivery = (value: boolean) => {
+    setDeliveryEnabled(value);
     markChanged();
   };
 
@@ -826,6 +835,27 @@ export default function SellerStore() {
             style={styles.settingDivider}
           />
 
+          <View style={styles.settingRow}>
+            <View style={styles.settingIcon}>
+              <Ionicons name="bicycle-outline" size={20} color={CARDINAL} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Deliver to Customer</Text>
+              <Text style={styles.settingDescription}>
+                Allow delivery to a location pinned by the customer.
+              </Text>
+            </View>
+            <Switch
+              value={deliveryEnabled}
+              onValueChange={toggleDelivery}
+              disabled={saving}
+              trackColor={{ false: "#D4D4D8", true: "#DFAAB3" }}
+              thumbColor={deliveryEnabled ? CARDINAL : "#F4F4F5"}
+            />
+          </View>
+
+          <View style={styles.settingDivider} />
+
           {/* CASH */}
 
           <View style={styles.settingRow}>
@@ -981,7 +1011,7 @@ export default function SellerStore() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
   },
 
   content: {
@@ -1011,13 +1041,13 @@ const styles = StyleSheet.create({
     marginTop: 15,
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   loadingText: {
     marginTop: 5,
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     textAlign: "center",
   },
 
@@ -1037,21 +1067,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.2,
-    color: CARDINAL,
+    color: "#A6192E",
     marginBottom: 4,
   },
 
   title: {
     fontSize: 28,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
     letterSpacing: -0.5,
   },
 
   subtitle: {
     marginTop: 3,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
     lineHeight: 17,
   },
 
@@ -1084,17 +1114,17 @@ const styles = StyleSheet.create({
   },
 
   previewCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     overflow: "hidden",
     marginBottom: 22,
   },
 
   previewCover: {
     height: 105,
-    backgroundColor: CARDINAL_DARK,
+    backgroundColor: "#7D1021",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -1126,7 +1156,7 @@ const styles = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: 19,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
@@ -1152,7 +1182,7 @@ const styles = StyleSheet.create({
   previewName: {
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   verifiedRow: {
@@ -1165,7 +1195,7 @@ const styles = StyleSheet.create({
   verifiedText: {
     fontSize: 10,
     fontWeight: "700",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   ratingBadge: {
@@ -1181,14 +1211,14 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 11,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   previewDescription: {
     marginTop: 9,
     fontSize: 11,
     lineHeight: 16,
-    color: MUTED,
+    color: "#737373",
   },
 
   previewInfoRow: {
@@ -1205,7 +1235,7 @@ const styles = StyleSheet.create({
   previewInfoText: {
     flex: 1,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
@@ -1216,21 +1246,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   sectionSubtitle: {
     marginTop: 3,
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     lineHeight: 16,
   },
 
   statusCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -1254,21 +1284,21 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   statusDescription: {
     marginTop: 3,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     lineHeight: 15,
   },
 
   formCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 15,
     marginBottom: 22,
   },
@@ -1276,7 +1306,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 11,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
     marginBottom: 7,
     marginTop: 2,
   },
@@ -1286,7 +1316,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFAFA",
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
@@ -1296,7 +1326,7 @@ const styles = StyleSheet.create({
 
   input: {
     flex: 1,
-    color: TEXT,
+    color: "#171717",
     fontSize: 13,
     paddingVertical: 11,
   },
@@ -1338,13 +1368,13 @@ const styles = StyleSheet.create({
   hoursTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   hoursSubtitle: {
     marginTop: 2,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
   },
 
   timeRow: {
@@ -1359,7 +1389,7 @@ const styles = StyleSheet.create({
 
   timeLabel: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "700",
     marginBottom: 6,
   },
@@ -1369,7 +1399,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFAFA",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 10,
@@ -1378,7 +1408,7 @@ const styles = StyleSheet.create({
 
   timeTextInput: {
     flex: 1,
-    color: TEXT,
+    color: "#171717",
     fontSize: 12,
     paddingVertical: 0,
   },
@@ -1393,7 +1423,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: BORDER,
+    borderTopColor: "#E7E7E8",
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
@@ -1415,13 +1445,13 @@ const styles = StyleSheet.create({
   closedDayTitle: {
     fontSize: 11,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   closedDaySubtitle: {
     marginTop: 2,
     fontSize: 9,
-    color: MUTED,
+    color: "#737373",
   },
 
   closedBadge: {
@@ -1434,14 +1464,14 @@ const styles = StyleSheet.create({
   closedBadgeText: {
     fontSize: 8,
     fontWeight: "800",
-    color: MUTED,
+    color: "#737373",
   },
 
   settingCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     paddingHorizontal: 14,
     marginBottom: 16,
   },
@@ -1477,19 +1507,19 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   settingDescription: {
     marginTop: 3,
     fontSize: 9,
     lineHeight: 14,
-    color: MUTED,
+    color: "#737373",
   },
 
   settingDivider: {
     height: 1,
-    backgroundColor: BORDER,
+    backgroundColor: "#E7E7E8",
   },
 
   enabledBadge: {
@@ -1529,7 +1559,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 11,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1541,7 +1571,7 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 11,
     fontWeight: "800",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   infoText: {
@@ -1554,7 +1584,7 @@ const styles = StyleSheet.create({
   saveButton: {
     height: 50,
     borderRadius: 14,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1567,8 +1597,9 @@ const styles = StyleSheet.create({
   },
 
   saveButtonText: {
-    color: WHITE,
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
   },
 });
+

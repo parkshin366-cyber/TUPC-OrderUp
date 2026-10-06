@@ -44,59 +44,59 @@ import { SafeAreaView } from "react-native-safe-area-context";
   type CategoryOption = {
     value: string;
     label: string;
-    emoji: string;
+    icon: keyof typeof Ionicons.glyphMap;
   };
 
   const CATEGORY_OPTIONS: CategoryOption[] = [
     {
       value: "Meals",
       label: "Meals",
-      emoji: "🍔",
+      icon: "restaurant-outline",
     },
     {
       value: "Snacks",
       label: "Snacks",
-      emoji: "🍟",
+      icon: "fast-food-outline",
     },
     {
       value: "Drinks",
       label: "Drinks",
-      emoji: "🥤",
+      icon: "cafe-outline",
     },
     {
       value: "Desserts",
       label: "Desserts",
-      emoji: "🍰",
+      icon: "ice-cream-outline",
     },
     {
       value: "Clothing",
       label: "Clothing",
-      emoji: "👕",
+      icon: "shirt-outline",
     },
     {
       value: "Accessories",
       label: "Accessories",
-      emoji: "👜",
+      icon: "bag-handle-outline",
     },
     {
       value: "School Supplies",
       label: "School Supplies",
-      emoji: "✏️",
+      icon: "pencil-outline",
     },
     {
       value: "Gadgets and Electronics",
       label: "Gadgets and Electronics",
-      emoji: "📱",
+      icon: "phone-portrait-outline",
     },
     {
       value: "Gifts and Souvenirs",
       label: "Gifts and Souvenirs",
-      emoji: "🎁",
+      icon: "gift-outline",
     },
     {
       value: "Others",
       label: "Others",
-      emoji: "📦",
+      icon: "cube-outline",
     },
   ];
 
@@ -1144,13 +1144,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
                     ]}
                   >
                     {categoryOption && (
-                      <Text
-                        style={
-                          styles.categoryEmoji
-                        }
-                      >
-                        {categoryOption.emoji}
-                      </Text>
+                      <Ionicons name={categoryOption.icon} size={15} color={active ? WHITE : MUTED} />
                     )}
 
                     <Text
@@ -1355,15 +1349,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
                               }
                             >
                               {categoryOption && (
-                                <Text
-                                  style={
-                                    styles.productCategoryEmoji
-                                  }
-                                >
-                                  {
-                                    categoryOption.emoji
-                                  }
-                                </Text>
+                                <Ionicons name={categoryOption.icon} size={13} color={MUTED} />
                               )}
 
                               <Text
@@ -2003,17 +1989,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
                       styles.dropdownSelectedLeft
                     }
                   >
-                    <Text
-                      style={
-                        styles.dropdownEmoji
-                      }
-                    >
-                      {
-                        getCategoryOption(
-                          selectedCategory
-                        )?.emoji
-                      }
-                    </Text>
+                    <Ionicons name={getCategoryOption(selectedCategory)?.icon ?? "cube-outline"} size={18} color={CARDINAL} />
 
                     <Text
                       style={
@@ -2064,13 +2040,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
                             }
                             disabled={saving}
                           >
-                            <Text
-                              style={
-                                styles.dropdownItemEmoji
-                              }
-                            >
-                              {item.emoji}
-                            </Text>
+                            <Ionicons name={item.icon} size={17} color={active ? CARDINAL : MUTED} />
 
                             <Text
                               style={[
@@ -2191,7 +2161,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
   const styles = StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: BG,
+      backgroundColor: "#F7F7F8",
     },
 
     content: {
@@ -2217,30 +2187,30 @@ import { SafeAreaView } from "react-native-safe-area-context";
       fontSize: 10,
       fontWeight: "800",
       letterSpacing: 1.2,
-      color: CARDINAL,
+      color: "#A6192E",
       marginBottom: 4,
     },
 
     title: {
       fontSize: 28,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
       letterSpacing: -0.5,
     },
 
     subtitle: {
       marginTop: 3,
       fontSize: 13,
-      color: MUTED,
+      color: "#737373",
     },
 
     refreshButton: {
       width: 42,
       height: 42,
       borderRadius: 13,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       alignItems: "center",
       justifyContent: "center",
     },
@@ -2249,14 +2219,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
-      backgroundColor: CARDINAL,
+      backgroundColor: "#A6192E",
       borderRadius: 13,
       paddingHorizontal: 14,
       height: 44,
     },
 
     addButtonText: {
-      color: WHITE,
+      color: "#FFFFFF",
       fontSize: 13,
       fontWeight: "800",
     },
@@ -2269,11 +2239,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
     summaryCard: {
       flex: 1,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 16,
       padding: 13,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
     },
 
     summaryIcon: {
@@ -2289,22 +2259,22 @@ import { SafeAreaView } from "react-native-safe-area-context";
     summaryNumber: {
       fontSize: 20,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
     },
 
     summaryLabel: {
       marginTop: 2,
       fontSize: 10,
-      color: MUTED,
+      color: "#737373",
       fontWeight: "600",
     },
 
     searchBox: {
       height: 48,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: 14,
@@ -2315,7 +2285,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     searchInput: {
       flex: 1,
       fontSize: 14,
-      color: TEXT,
+      color: "#171717",
       paddingVertical: 0,
     },
 
@@ -2328,9 +2298,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
       height: 38,
       paddingHorizontal: 13,
       borderRadius: 19,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       justifyContent: "center",
       alignItems: "center",
       flexDirection: "row",
@@ -2338,8 +2308,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
     },
 
     categoryButtonActive: {
-      backgroundColor: CARDINAL,
-      borderColor: CARDINAL,
+      backgroundColor: "#A6192E",
+      borderColor: "#A6192E",
     },
 
     categoryEmoji: {
@@ -2349,11 +2319,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
     categoryText: {
       fontSize: 12,
       fontWeight: "700",
-      color: MUTED,
+      color: "#737373",
     },
 
     categoryTextActive: {
-      color: WHITE,
+      color: "#FFFFFF",
     },
 
     sectionHeader: {
@@ -2363,20 +2333,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
     sectionTitle: {
       fontSize: 18,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
     },
 
     sectionSubtitle: {
       marginTop: 2,
       fontSize: 11,
-      color: MUTED,
+      color: "#737373",
     },
 
     loadingCard: {
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       alignItems: "center",
       paddingVertical: 45,
       paddingHorizontal: 25,
@@ -2386,13 +2356,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
       marginTop: 14,
       fontSize: 16,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
     },
 
     loadingText: {
       marginTop: 5,
       fontSize: 12,
-      color: MUTED,
+      color: "#737373",
       textAlign: "center",
     },
 
@@ -2401,10 +2371,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
     },
 
     productCard: {
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       padding: 14,
       flexDirection: "row",
       gap: 12,
@@ -2451,7 +2421,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     productName: {
       fontSize: 15,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
     },
 
     productCategoryRow: {
@@ -2467,14 +2437,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
     productCategory: {
       fontSize: 11,
-      color: MUTED,
+      color: "#737373",
       fontWeight: "600",
     },
 
     productPrice: {
       fontSize: 15,
       fontWeight: "800",
-      color: CARDINAL,
+      color: "#A6192E",
     },
 
     productInfoRow: {
@@ -2529,7 +2499,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
     noStockText: {
       fontSize: 10,
-      color: MUTED,
+      color: "#737373",
       fontWeight: "600",
     },
 
@@ -2563,7 +2533,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
     divider: {
       height: 1,
-      backgroundColor: BORDER,
+      backgroundColor: "#E7E7E8",
       marginVertical: 12,
     },
 
@@ -2591,11 +2561,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
     availabilityText: {
       fontSize: 11,
       fontWeight: "700",
-      color: MUTED,
+      color: "#737373",
     },
 
     availabilityTextActive: {
-      color: CARDINAL,
+      color: "#A6192E",
     },
 
     editButton: {
@@ -2612,7 +2582,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     editText: {
       fontSize: 11,
       fontWeight: "800",
-      color: CARDINAL,
+      color: "#A6192E",
     },
 
     deleteButton: {
@@ -2633,10 +2603,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
     },
 
     emptyCard: {
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       alignItems: "center",
       paddingVertical: 45,
       paddingHorizontal: 25,
@@ -2655,13 +2625,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
     emptyTitle: {
       fontSize: 16,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
     },
 
     emptyText: {
       marginTop: 5,
       fontSize: 12,
-      color: MUTED,
+      color: "#737373",
       textAlign: "center",
     },
 
@@ -2670,7 +2640,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
       height: 42,
       paddingHorizontal: 16,
       borderRadius: 12,
-      backgroundColor: CARDINAL,
+      backgroundColor: "#A6192E",
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
@@ -2678,7 +2648,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     },
 
     emptyAddButtonText: {
-      color: WHITE,
+      color: "#FFFFFF",
       fontSize: 12,
       fontWeight: "800",
     },
@@ -2694,7 +2664,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     },
 
     modalCard: {
-      backgroundColor: BG,
+      backgroundColor: "#F7F7F8",
       borderTopLeftRadius: 26,
       borderTopRightRadius: 26,
       paddingHorizontal: 20,
@@ -2713,24 +2683,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
     modalTitle: {
       fontSize: 22,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
     },
 
     modalSubtitle: {
       marginTop: 3,
       fontSize: 12,
-      color: MUTED,
+      color: "#737373",
     },
 
     closeButton: {
       width: 38,
       height: 38,
       borderRadius: 12,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
     },
 
     // =====================================================
@@ -2739,10 +2709,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
     imagePickerCard: {
       height: 190,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       borderStyle: "dashed",
       overflow: "hidden",
       marginBottom: 8,
@@ -2766,13 +2736,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
       marginTop: 8,
       fontSize: 14,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
     },
 
     imagePlaceholderText: {
       marginTop: 4,
       fontSize: 11,
-      color: MUTED,
+      color: "#737373",
       textAlign: "center",
     },
 
@@ -2783,14 +2753,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
       height: 34,
       paddingHorizontal: 11,
       borderRadius: 10,
-      backgroundColor: CARDINAL,
+      backgroundColor: "#A6192E",
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
     },
 
     imagePickerOverlayText: {
-      color: WHITE,
+      color: "#FFFFFF",
       fontSize: 11,
       fontWeight: "800",
     },
@@ -2817,17 +2787,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
     inputLabel: {
       fontSize: 12,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
       marginBottom: 7,
       marginTop: 4,
     },
 
     inputWrapper: {
       minHeight: 48,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 13,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: 13,
@@ -2837,7 +2807,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
     input: {
       flex: 1,
-      color: TEXT,
+      color: "#171717",
       fontSize: 14,
       paddingVertical: 11,
     },
@@ -2845,7 +2815,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     currency: {
       fontSize: 17,
       fontWeight: "800",
-      color: CARDINAL,
+      color: "#A6192E",
     },
 
     twoColumn: {
@@ -2860,10 +2830,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
     compactAvailability: {
       minHeight: 48,
       flexDirection: "row",
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 13,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       overflow: "hidden",
       marginBottom: 15,
     },
@@ -2876,7 +2846,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
       flexDirection: "row",
       gap: 4,
       paddingHorizontal: 6,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
     },
 
     compactAvailabilityOptionActive: {
@@ -2890,7 +2860,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     compactAvailabilityText: {
       fontSize: 10,
       fontWeight: "800",
-      color: MUTED,
+      color: "#737373",
     },
 
     compactAvailabilityTextActive: {
@@ -2907,10 +2877,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
     dropdownButton: {
       minHeight: 52,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 13,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       paddingHorizontal: 14,
       flexDirection: "row",
       alignItems: "center",
@@ -2919,7 +2889,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     },
 
     dropdownButtonActive: {
-      borderColor: CARDINAL,
+      borderColor: "#A6192E",
     },
 
     dropdownSelectedLeft: {
@@ -2936,14 +2906,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
     dropdownSelectedText: {
       fontSize: 14,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
     },
 
     dropdownMenu: {
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderRadius: 13,
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       overflow: "hidden",
       marginBottom: 12,
     },
@@ -2972,11 +2942,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
       flex: 1,
       fontSize: 13,
       fontWeight: "700",
-      color: TEXT,
+      color: "#171717",
     },
 
     dropdownItemTextActive: {
-      color: CARDINAL,
+      color: "#A6192E",
       fontWeight: "800",
     },
 
@@ -2991,9 +2961,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
     availabilityOption: {
       minHeight: 64,
-      backgroundColor: WHITE,
+      backgroundColor: "#FFFFFF",
       borderWidth: 1,
-      borderColor: BORDER,
+      borderColor: "#E7E7E8",
       borderRadius: 14,
       paddingHorizontal: 12,
       paddingVertical: 10,
@@ -3036,7 +3006,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     availabilityOptionTitle: {
       fontSize: 13,
       fontWeight: "800",
-      color: TEXT,
+      color: "#171717",
     },
 
     availabilityOptionTitleActive: {
@@ -3050,13 +3020,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
     availabilityOptionSubtitle: {
       marginTop: 2,
       fontSize: 10,
-      color: MUTED,
+      color: "#737373",
     },
 
     foodAvailabilityHint: {
       fontSize: 10,
       lineHeight: 15,
-      color: MUTED,
+      color: "#737373",
       marginBottom: 18,
       marginTop: 3,
     },
@@ -3064,7 +3034,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     stockHint: {
       fontSize: 10,
       lineHeight: 15,
-      color: MUTED,
+      color: "#737373",
       marginBottom: 18,
       marginTop: 0,
     },
@@ -3076,7 +3046,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     saveButton: {
       height: 50,
       borderRadius: 14,
-      backgroundColor: CARDINAL,
+      backgroundColor: "#A6192E",
       alignItems: "center",
       justifyContent: "center",
       flexDirection: "row",
@@ -3088,7 +3058,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     },
 
     saveButtonText: {
-      color: WHITE,
+      color: "#FFFFFF",
       fontSize: 14,
       fontWeight: "800",
     },
@@ -3100,7 +3070,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
     },
 
     cancelButtonText: {
-      color: MUTED,
+      color: "#737373",
       fontSize: 13,
       fontWeight: "700",
     },

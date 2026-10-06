@@ -899,7 +899,7 @@ function DetailRow({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
   },
 
   container: {
@@ -930,24 +930,24 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 27,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
     letterSpacing: -0.7,
   },
 
   subtitle: {
     marginTop: 4,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
   },
 
   headerButton: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: CARDINAL,
+    shadowColor: "#A6192E",
     shadowOpacity: 0.2,
     shadowRadius: 8,
     shadowOffset: {
@@ -966,10 +966,10 @@ const styles = StyleSheet.create({
   statCard: {
     width: 126,
     minHeight: 104,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 14,
     justifyContent: "space-between",
   },
@@ -985,23 +985,23 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 23,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
     marginTop: 7,
   },
 
   statLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: MUTED,
+    color: "#737373",
   },
 
   searchBox: {
     marginHorizontal: 20,
     height: 50,
     borderRadius: 15,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 15,
@@ -1011,7 +1011,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
     fontSize: 14,
-    color: TEXT,
+    color: "#171717",
     paddingVertical: 0,
   },
 
@@ -1027,26 +1027,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: WHITE,
+    borderColor: "#E7E7E8",
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
   },
 
   filterChipActive: {
-    backgroundColor: CARDINAL,
-    borderColor: CARDINAL,
+    backgroundColor: "#A6192E",
+    borderColor: "#A6192E",
   },
 
   filterText: {
     fontSize: 12,
     fontWeight: "700",
-    color: MUTED,
+    color: "#737373",
   },
 
   filterTextActive: {
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   filterCount: {
@@ -1066,11 +1066,11 @@ const styles = StyleSheet.create({
   filterCountText: {
     fontSize: 10,
     fontWeight: "800",
-    color: MUTED,
+    color: "#737373",
   },
 
   filterCountTextActive: {
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   resultHeader: {
@@ -1085,12 +1085,12 @@ const styles = StyleSheet.create({
   resultTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   resultSubtitle: {
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     marginTop: 2,
   },
 
@@ -1117,9 +1117,9 @@ const styles = StyleSheet.create({
   },
 
   userCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     borderRadius: 18,
     padding: 15,
     marginBottom: 11,
@@ -1144,7 +1144,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 14,
     fontWeight: "900",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   userMain: {
@@ -1163,19 +1163,19 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 15,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   username: {
     fontSize: 11,
-    color: CARDINAL,
+    color: "#A6192E",
     fontWeight: "600",
     marginTop: 2,
   },
 
   email: {
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1192,7 +1192,7 @@ const styles = StyleSheet.create({
   adminBadgeText: {
     fontSize: 8,
     fontWeight: "900",
-    color: CARDINAL,
+    color: "#A6192E",
     letterSpacing: 0.4,
   },
 
@@ -1217,7 +1217,7 @@ const styles = StyleSheet.create({
 
   metaText: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
@@ -1249,7 +1249,7 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     fontSize: 10,
     fontWeight: "800",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   storeRow: {
@@ -1265,7 +1265,7 @@ const styles = StyleSheet.create({
   storeText: {
     fontSize: 11,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
   },
 
   emptyState: {
@@ -1287,13 +1287,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   emptyText: {
     marginTop: 6,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
     textAlign: "center",
     lineHeight: 18,
   },
@@ -1314,7 +1314,7 @@ const styles = StyleSheet.create({
 
   modalSheet: {
     maxHeight: "91%",
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: 9,
@@ -1342,7 +1342,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 19,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   closeButton: {
@@ -1368,7 +1368,7 @@ const styles = StyleSheet.create({
     width: 82,
     height: 82,
     borderRadius: 27,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -1379,20 +1379,20 @@ const styles = StyleSheet.create({
   profileAvatarText: {
     fontSize: 24,
     fontWeight: "900",
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   profileName: {
     fontSize: 21,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
     textAlign: "center",
   },
 
   profileUsername: {
     marginTop: 3,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
   },
 
   profileBadges: {
@@ -1404,7 +1404,7 @@ const styles = StyleSheet.create({
 
   detailSection: {
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     borderRadius: 18,
     paddingHorizontal: 15,
     paddingTop: 14,
@@ -1414,7 +1414,7 @@ const styles = StyleSheet.create({
   detailSectionTitle: {
     fontSize: 9,
     fontWeight: "900",
-    color: MUTED,
+    color: "#737373",
     letterSpacing: 1,
     marginBottom: 5,
   },
@@ -1443,13 +1443,13 @@ const styles = StyleSheet.create({
 
   detailLabel: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
   detailValue: {
     fontSize: 13,
-    color: TEXT,
+    color: "#171717",
     fontWeight: "700",
     marginTop: 2,
   },
@@ -1467,7 +1467,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 13,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1481,13 +1481,13 @@ const styles = StyleSheet.create({
   securityTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   securityText: {
     fontSize: 10,
     lineHeight: 15,
-    color: MUTED,
+    color: "#737373",
     marginTop: 2,
   },
 
@@ -1495,7 +1495,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     height: 23,
     borderRadius: 12,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1511,7 +1511,7 @@ const styles = StyleSheet.create({
     height: 50,
     marginTop: 15,
     borderRadius: 15,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1519,7 +1519,7 @@ const styles = StyleSheet.create({
   },
 
   primaryActionText: {
-    color: WHITE,
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
   },

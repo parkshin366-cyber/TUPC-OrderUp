@@ -3,18 +3,20 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
-import { getMyOrders } from "../../services/api";
+import { getMyOrders, requestOrderCancellation } from "../../services/api";
 
 // =====================================================
 // COLORS
@@ -46,6 +48,7 @@ type OrderStatus =
   | "Pending"
   | "Preparing"
   | "Ready for Pickup"
+  | "On the Way"
   | "Completed"
   | "Cancelled";
 
@@ -61,6 +64,7 @@ type OrderItem = {
 type Order = {
   id: string;
   store: string;
+  sellerId?: string;
   items: OrderItem[];
   total: number;
   status: OrderStatus;
@@ -68,8 +72,15 @@ type Order = {
   time: string;
   createdAt?: string;
   pickupMethod?: string;
+  fulfillmentMethod?: "pickup" | "delivery";
+  deliveryAddress?: string;
   paymentMethod?: string;
   notes?: string;
+  estimatedMinutes?: number;
+  estimatedReadyAt?: string;
+  cancellationStatus?: "none" | "requested" | "rejected" | "approved";
+  cancellationReason?: string;
+  cancellationRejectionReason?: string;
 };
 
 // =====================================================
@@ -106,6 +117,10 @@ const normalizeStatus = (status: unknown): OrderStatus => {
     value === "ready_for_pickup"
   ) {
     return "Ready for Pickup";
+  }
+
+  if (value === "on the way" || value === "on_the_way") {
+    return "On the Way";
   }
 
   if (value === "completed" || value === "complete") {
@@ -245,6 +260,10 @@ const normalizeOrders = (raw: unknown): Order[] => {
         item.sellerName ??
         "Campus Store";
 
+      const sellerId = String(
+        item.seller?._id ?? item.seller?.id ?? item.sellerId ?? ""
+      );
+
       // =================================================
       // TOTAL
       // =================================================
@@ -261,6 +280,7 @@ const normalizeOrders = (raw: unknown): Order[] => {
         id: orderId,
 
         store: String(store),
+        sellerId: sellerId || undefined,
 
         items: normalizedItems,
 
@@ -280,12 +300,19 @@ const normalizeOrders = (raw: unknown): Order[] => {
           item.pickupMethod ??
           item.deliveryMethod ??
           "Campus Pickup",
+        fulfillmentMethod: item.fulfillmentMethod ?? "pickup",
+        deliveryAddress: item.deliveryAddress,
 
         paymentMethod:
           item.paymentMethod ??
           "Cash on Pickup",
 
         notes: item.notes ?? "",
+        estimatedMinutes: item.estimatedMinutes,
+        estimatedReadyAt: item.estimatedReadyAt,
+        cancellationStatus: item.cancellationStatus ?? "none",
+        cancellationReason: item.cancellationReason,
+        cancellationRejectionReason: item.cancellationRejectionReason,
       };
     })
     .filter(Boolean) as Order[];
@@ -322,6 +349,14 @@ const getStatusConfig = (status: OrderStatus) => {
         background: SOFT_GREEN,
         description:
           "Your order is ready for pickup.",
+      };
+
+    case "On the Way":
+      return {
+        icon: "bicycle-outline" as const,
+        color: "#2867A8",
+        background: "#E8F0FF",
+        description: "Your delivery is on the way.",
       };
 
     case "Completed":
@@ -383,6 +418,31 @@ export default function OrdersScreen() {
 
   const [errorMessage, setErrorMessage] =
     useState<string | null>(null);
+
+  const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+
+  const submitCancellation = async () => {
+    if (!cancelOrder || !token) return;
+    if (cancelReason.trim().length < 3) {
+      Alert.alert("Reason required", "Please enter why you want to cancel the order.");
+      return;
+    }
+    try {
+      setCancelling(true);
+      const result = await requestOrderCancellation(token, cancelOrder.id, cancelReason.trim());
+      setCancelOrder(null);
+      setSelectedOrder(null);
+      setCancelReason("");
+      await loadOrders(false);
+      Alert.alert(result.immediate ? "Order cancelled" : "Request submitted", result.message);
+    } catch (error) {
+      Alert.alert("Cancellation failed", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   // ===================================================
   // LOAD ORDERS FROM BACKEND
@@ -505,7 +565,8 @@ export default function OrdersScreen() {
         (order) =>
           order.status === "Pending" ||
           order.status === "Preparing" ||
-          order.status === "Ready for Pickup"
+          order.status === "Ready for Pickup" ||
+          order.status === "On the Way"
       );
     }
 
@@ -525,7 +586,8 @@ export default function OrdersScreen() {
         (order) =>
           order.status === "Pending" ||
           order.status === "Preparing" ||
-          order.status === "Ready for Pickup"
+          order.status === "Ready for Pickup" ||
+          order.status === "On the Way"
       ).length,
     [orders]
   );
@@ -565,6 +627,11 @@ export default function OrdersScreen() {
         key: "Ready for Pickup",
         title: "Ready for Pickup",
         icon: "bag-check-outline",
+      },
+      {
+        key: "On the Way",
+        title: "On the Way",
+        icon: "bicycle-outline",
       },
       {
         key: "Completed",
@@ -1153,6 +1220,68 @@ export default function OrdersScreen() {
                 </View>
               </View>
 
+              <View style={styles.orderActions}>
+                {!!selectedOrder.sellerId && (
+                  <Pressable
+                    onPress={() => {
+                      const destination = selectedOrder;
+                      setSelectedOrder(null);
+                      router.push({ pathname: "/(client)/messages", params: { recipientId: destination.sellerId, recipientName: destination.store } } as any);
+                    }}
+                    style={styles.messageAction}
+                  >
+                    <Ionicons name="chatbubble-ellipses-outline" size={17} color={CARDINAL} />
+                    <Text style={styles.messageActionText}>Message seller</Text>
+                  </Pressable>
+                )}
+                {selectedOrder.status === "Completed" && (
+                  <Pressable
+                    onPress={() => {
+                      setSelectedOrder(null);
+                      router.push("/(client)/reviews" as any);
+                    }}
+                    style={styles.reviewAction}
+                  >
+                    <Ionicons name="star-outline" size={17} color="#A86616" />
+                    <Text style={styles.reviewActionText}>Rate seller</Text>
+                  </Pressable>
+                )}
+                {(selectedOrder.status === "Pending" || selectedOrder.status === "Preparing") && selectedOrder.cancellationStatus !== "requested" && (
+                  <Pressable
+                    onPress={() => {
+                      setCancelOrder(selectedOrder);
+                      setCancelReason("");
+                    }}
+                    style={styles.cancelAction}
+                  >
+                    <Ionicons name="close-circle-outline" size={17} color={DANGER} />
+                    <Text style={styles.cancelActionText}>
+                      {selectedOrder.status === "Pending" ? "Cancel order" : "Request cancellation"}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {!!selectedOrder.estimatedReadyAt && selectedOrder.status !== "Completed" && selectedOrder.status !== "Cancelled" && (
+                <View style={styles.etaCard}>
+                  <Ionicons name="time-outline" size={20} color={CARDINAL} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.etaLabel}>Estimated ready time</Text>
+                    <Text style={styles.etaValue}>
+                      {new Date(selectedOrder.estimatedReadyAt).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" })}
+                      {selectedOrder.estimatedMinutes ? ` (${selectedOrder.estimatedMinutes} minutes)` : ""}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {selectedOrder.cancellationStatus === "requested" && (
+                <View style={styles.cancelNotice}><Text style={styles.cancelNoticeTitle}>Cancellation pending</Text><Text style={styles.cancelNoticeText}>The seller is reviewing your request.</Text></View>
+              )}
+              {selectedOrder.cancellationStatus === "rejected" && (
+                <View style={styles.cancelNotice}><Text style={styles.cancelNoticeTitle}>Cancellation declined</Text><Text style={styles.cancelNoticeText}>{selectedOrder.cancellationRejectionReason || "The seller continued preparing this order."}</Text></View>
+              )}
+
               {/* TIMELINE */}
 
               <View
@@ -1353,7 +1482,7 @@ export default function OrdersScreen() {
                           styles.infoLabel
                         }
                       >
-                        Pickup Method
+                        {selectedOrder.fulfillmentMethod === "delivery" ? "Delivery Location" : "Pickup Method"}
                       </Text>
 
                       <Text
@@ -1361,8 +1490,9 @@ export default function OrdersScreen() {
                           styles.infoValue
                         }
                       >
-                        {selectedOrder.pickupMethod ||
-                          "Campus Pickup"}
+                        {selectedOrder.fulfillmentMethod === "delivery"
+                          ? selectedOrder.deliveryAddress || "Pinned delivery location"
+                          : selectedOrder.pickupMethod || "Campus Pickup"}
                       </Text>
                     </View>
                   </View>
@@ -1879,7 +2009,29 @@ export default function OrdersScreen() {
         />
       </ScrollView>
 
+      <Pressable
+        accessibilityLabel="Open messages"
+        onPress={() => router.push("/(client)/messages" as any)}
+        style={styles.chatBubble}
+      >
+        <Ionicons name="chatbubbles" size={24} color={WHITE} />
+      </Pressable>
+
       {renderOrderModal()}
+
+      <Modal visible={!!cancelOrder} transparent animationType="fade" onRequestClose={() => setCancelOrder(null)}>
+        <View style={styles.cancelModalOverlay}>
+          <View style={styles.cancelModalCard}>
+            <Text style={styles.cancelModalTitle}>{cancelOrder?.status === "Pending" ? "Cancel order" : "Request cancellation"}</Text>
+            <Text style={styles.cancelModalText}>{cancelOrder?.status === "Pending" ? "This will cancel immediately." : "The seller must approve because food preparation has started."}</Text>
+            <TextInput value={cancelReason} onChangeText={setCancelReason} multiline maxLength={300} placeholder="Reason for cancellation" placeholderTextColor="#999" style={styles.cancelInput} />
+            <View style={styles.cancelModalActions}>
+              <Pressable onPress={() => setCancelOrder(null)} style={styles.keepButton}><Text style={styles.keepButtonText}>Keep order</Text></Pressable>
+              <Pressable disabled={cancelling} onPress={submitCancellation} style={[styles.confirmCancelButton, cancelling && { opacity: 0.6 }]}>{cancelling ? <ActivityIndicator color={WHITE} /> : <Text style={styles.confirmCancelText}>Confirm</Text>}</Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1893,6 +2045,73 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG,
   },
+
+  chatBubble: {
+    position: "absolute",
+    right: 20,
+    bottom: 18,
+    width: 55,
+    height: 55,
+    borderRadius: 28,
+    backgroundColor: CARDINAL,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 7,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 5,
+  },
+
+  orderActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 13,
+  },
+
+  messageAction: {
+    flex: 1,
+    height: 42,
+    borderWidth: 1,
+    borderColor: "#F0B7C2",
+    borderRadius: 12,
+    backgroundColor: "#FBECEF",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  messageActionText: { color: CARDINAL, fontSize: 11, fontWeight: "900" },
+  reviewAction: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#FFF8E7",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+  },
+  reviewActionText: { color: "#A86616", fontSize: 11, fontWeight: "900" },
+  cancelAction: { flex: 1, minHeight: 42, paddingHorizontal: 8, borderRadius: 12, backgroundColor: "#FDECEC", flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 5 },
+  cancelActionText: { color: DANGER, fontSize: 10, fontWeight: "900", textAlign: "center" },
+  etaCard: { marginTop: 12, padding: 13, borderRadius: 14, backgroundColor: "#FBECEF", flexDirection: "row", alignItems: "center", gap: 10 },
+  etaLabel: { color: MUTED, fontSize: 10, fontWeight: "700" },
+  etaValue: { color: CARDINAL_DARK, fontSize: 13, fontWeight: "900", marginTop: 2 },
+  cancelNotice: { marginTop: 10, padding: 12, borderRadius: 13, backgroundColor: "#FFF8E7" },
+  cancelNoticeTitle: { color: WARNING, fontSize: 11, fontWeight: "900" },
+  cancelNoticeText: { color: MUTED, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  cancelModalOverlay: { flex: 1, backgroundColor: "#00000070", alignItems: "center", justifyContent: "center", padding: 20 },
+  cancelModalCard: { width: "100%", maxWidth: 440, padding: 20, borderRadius: 21, backgroundColor: WHITE },
+  cancelModalTitle: { color: TEXT, fontSize: 19, fontWeight: "900" },
+  cancelModalText: { color: MUTED, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  cancelInput: { minHeight: 95, marginTop: 15, padding: 12, borderRadius: 13, borderWidth: 1, borderColor: BORDER, color: TEXT, textAlignVertical: "top" },
+  cancelModalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 9, marginTop: 14 },
+  keepButton: { height: 42, paddingHorizontal: 14, justifyContent: "center" },
+  keepButtonText: { color: MUTED, fontWeight: "800" },
+  confirmCancelButton: { height: 42, paddingHorizontal: 18, borderRadius: 11, backgroundColor: DANGER, justifyContent: "center" },
+  confirmCancelText: { color: WHITE, fontWeight: "900", fontSize: 12 },
 
   container: {
     paddingHorizontal: 20,

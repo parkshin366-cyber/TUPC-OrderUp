@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS, useAppTheme } from "../../context/ThemeContext";
 import {
   getMyProducts,
   getMyStore,
@@ -221,6 +222,8 @@ function OrderRow({
 // =====================================================
 
 export default function SellerDashboard() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { user, token } = useAuth();
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -425,7 +428,7 @@ export default function SellerDashboard() {
             </Text>
 
             <Text style={styles.title}>
-              Welcome to {storeName} 👋
+              Welcome to {storeName}
             </Text>
 
             <Text style={styles.subtitle}>
@@ -854,10 +857,10 @@ export default function SellerDashboard() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: colors.background,
   },
 
   content: {
@@ -886,20 +889,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.4,
-    color: CARDINAL,
+    color: colors.cardinal,
     marginBottom: 5,
   },
 
   title: {
     fontSize: 25,
     fontWeight: "900",
-    color: TEXT,
+    color: colors.text,
     letterSpacing: -0.5,
   },
 
   subtitle: {
     fontSize: 13,
-    color: MUTED,
+    color: colors.muted,
     marginTop: 5,
     lineHeight: 19,
   },
@@ -908,11 +911,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "colors.surface",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     position: "relative",
   },
 
@@ -923,9 +926,9 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: CARDINAL,
+    backgroundColor: colors.cardinal,
     borderWidth: 1.5,
-    borderColor: "#FFFFFF",
+    borderColor: "colors.surface",
   },
 
   // ===================================================
@@ -933,14 +936,14 @@ const styles = StyleSheet.create({
   // ===================================================
 
   accountStatus: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "colors.surface",
     borderRadius: 18,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     marginBottom: 12,
   },
 
@@ -967,12 +970,12 @@ const styles = StyleSheet.create({
   accountName: {
     fontSize: 14,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   accountUsername: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.muted,
     marginTop: 3,
   },
 
@@ -1004,14 +1007,14 @@ const styles = StyleSheet.create({
   // ===================================================
 
   storeStatus: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "colors.surface",
     borderRadius: 18,
     padding: 15,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     marginBottom: 24,
   },
 
@@ -1033,7 +1036,7 @@ const styles = StyleSheet.create({
   storeName: {
     fontSize: 15,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   onlineRow: {
@@ -1052,7 +1055,7 @@ const styles = StyleSheet.create({
 
   onlineText: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.muted,
     fontWeight: "600",
   },
 
@@ -1070,18 +1073,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   dateText: {
     fontSize: 12,
-    color: MUTED,
+    color: colors.muted,
     fontWeight: "700",
   },
 
   viewAll: {
     fontSize: 12,
-    color: CARDINAL,
+    color: colors.cardinal,
     fontWeight: "800",
   },
 
@@ -1098,11 +1101,11 @@ const styles = StyleSheet.create({
 
   statCard: {
     width: "48.5%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "colors.surface",
     borderRadius: 17,
     padding: 15,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     marginBottom: 10,
   },
 
@@ -1123,20 +1126,20 @@ const styles = StyleSheet.create({
 
   statLabel: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.muted,
     fontWeight: "700",
   },
 
   statValue: {
     fontSize: 23,
-    color: TEXT,
+    color: colors.text,
     fontWeight: "900",
     marginTop: 3,
   },
 
   statDetail: {
     fontSize: 10,
-    color: MUTED,
+    color: colors.muted,
     marginTop: 5,
     lineHeight: 14,
   },
@@ -1154,11 +1157,11 @@ const styles = StyleSheet.create({
 
   quickCard: {
     width: "48.5%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "colors.surface",
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     marginBottom: 10,
   },
 
@@ -1175,12 +1178,12 @@ const styles = StyleSheet.create({
   quickTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   quickSubtitle: {
     fontSize: 10,
-    color: MUTED,
+    color: colors.muted,
     marginTop: 3,
   },
 
@@ -1189,10 +1192,10 @@ const styles = StyleSheet.create({
   // ===================================================
 
   ordersCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "colors.surface",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     paddingHorizontal: 14,
     marginBottom: 25,
   },
@@ -1227,12 +1230,12 @@ const styles = StyleSheet.create({
   orderNumber: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   customer: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.muted,
     marginTop: 2,
   },
 
@@ -1250,7 +1253,7 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
     marginBottom: 6,
   },
 
@@ -1291,7 +1294,7 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: BORDER,
+    backgroundColor: colors.border,
   },
 
   // ===================================================
@@ -1299,10 +1302,10 @@ const styles = StyleSheet.create({
   // ===================================================
 
   performanceCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "colors.surface",
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     padding: 17,
   },
 
@@ -1314,13 +1317,13 @@ const styles = StyleSheet.create({
 
   performanceLabel: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.muted,
     fontWeight: "700",
   },
 
   performanceValue: {
     fontSize: 25,
-    color: TEXT,
+    color: colors.text,
     fontWeight: "900",
     marginTop: 4,
   },
@@ -1337,7 +1340,7 @@ const styles = StyleSheet.create({
   growthText: {
     fontSize: 11,
     fontWeight: "800",
-    color: CARDINAL,
+    color: colors.cardinal,
     marginLeft: 4,
   },
 
@@ -1360,13 +1363,13 @@ const styles = StyleSheet.create({
   chartBar: {
     width: 18,
     borderRadius: 7,
-    backgroundColor: CARDINAL,
+    backgroundColor: colors.cardinal,
     minHeight: 10,
   },
 
   chartLabel: {
     fontSize: 9,
-    color: MUTED,
+    color: colors.muted,
     fontWeight: "700",
     marginTop: 7,
   },
@@ -1404,15 +1407,15 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 13,
-    color: MUTED,
+    color: colors.muted,
     fontWeight: "600",
   },
 
   emptyCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "colors.surface",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: colors.border,
     paddingVertical: 26,
     paddingHorizontal: 20,
     alignItems: "center",
@@ -1422,14 +1425,16 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: TEXT,
+    color: colors.text,
   },
 
   emptyText: {
     marginTop: 5,
     fontSize: 11,
     lineHeight: 16,
-    color: MUTED,
+    color: colors.muted,
     textAlign: "center",
   },
 });
+
+let styles = createStyles(LIGHT_COLORS);

@@ -5,6 +5,7 @@ import fs from "fs/promises";
 import path from "path";
 
 import User from "../models/User";
+import { AuthRequest } from "../middleware/auth";
 import { sendOtpEmail } from "../services/emailService";
 import { generateToken } from "../utils/generateToken";
 import {
@@ -27,6 +28,26 @@ type UploadedFiles = {
 ========================================================= */
 
 const OTP_EXPIRATION_MINUTES = 10;
+
+export async function changePassword(req: AuthRequest, res: Response) {
+  try {
+    if (!req.userId) return res.status(401).json({ success: false, message: "Authentication required" });
+    const { currentPassword, newPassword } = req.body;
+    if (typeof currentPassword !== "string" || typeof newPassword !== "string" || newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: "Provide the current password and a new password with at least 8 characters" });
+    }
+    const user = await User.findById(req.userId).select("+password");
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) return res.status(400).json({ success: false, message: "Current password is incorrect" });
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    return res.json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    console.error("changePassword error:", error);
+    return res.status(500).json({ success: false, message: "Unable to update password" });
+  }
+}
 
 const UPLOAD_DIRECTORY = path.join(
   process.cwd(),

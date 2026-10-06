@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
+    ActivityIndicator,
     Alert,
     Pressable,
     ScrollView,
@@ -10,6 +12,8 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../context/AuthContext";
+import { getMyProducts, Product, updateProduct } from "../../services/api";
 
 const CARDINAL = "#A6192E";
 const GOLD = "#D8B56A";
@@ -32,55 +36,8 @@ type InventoryItem = {
   minimumStock: number;
   unit: string;
   price: number;
+  product: Product;
 };
-
-const INITIAL_INVENTORY: InventoryItem[] = [
-  {
-    id: "1",
-    name: "Chicken Rice Meal",
-    category: "Meals",
-    stock: 24,
-    minimumStock: 10,
-    unit: "servings",
-    price: 89,
-  },
-  {
-    id: "2",
-    name: "Beef Tapa Meal",
-    category: "Meals",
-    stock: 18,
-    minimumStock: 8,
-    unit: "servings",
-    price: 99,
-  },
-  {
-    id: "3",
-    name: "Iced Coffee",
-    category: "Drinks",
-    stock: 32,
-    minimumStock: 10,
-    unit: "cups",
-    price: 55,
-  },
-  {
-    id: "4",
-    name: "French Fries",
-    category: "Snacks",
-    stock: 7,
-    minimumStock: 10,
-    unit: "orders",
-    price: 45,
-  },
-  {
-    id: "5",
-    name: "Chocolate Cake",
-    category: "Desserts",
-    stock: 0,
-    minimumStock: 5,
-    unit: "slices",
-    price: 65,
-  },
-];
 
 const FILTERS = [
   "All",
@@ -92,11 +49,43 @@ const FILTERS = [
 type Filter = (typeof FILTERS)[number];
 
 export default function SellerInventory() {
-  const [inventory, setInventory] =
-    useState<InventoryItem[]>(INITIAL_INVENTORY);
+  const { token } = useAuth();
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
+
+  const mapProduct = (product: Product): InventoryItem => ({
+    id: product._id,
+    name: product.name,
+    category: product.category,
+    stock: product.stock,
+    minimumStock: 10,
+    unit: ["Meals", "Snacks", "Desserts"].includes(product.category) ? "servings" : "units",
+    price: product.price,
+    product,
+  });
+
+  const loadInventory = useCallback(async () => {
+    if (!token) {
+      setInventory([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const products = await getMyProducts(token);
+      setInventory(products.map(mapProduct));
+    } catch (error) {
+      console.error("LOAD INVENTORY ERROR:", error);
+      Alert.alert("Unable to Load Inventory", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useFocusEffect(useCallback(() => { loadInventory(); }, [loadInventory]));
 
   const getStatus = (item: InventoryItem): StockStatus => {
     if (item.stock <= 0) return "Out of Stock";
@@ -136,25 +125,26 @@ export default function SellerInventory() {
     (item) => getStatus(item) === "Out of Stock"
   ).length;
 
-  const adjustStock = (
+  const adjustStock = async (
     item: InventoryItem,
     amount: number
   ) => {
-    setInventory((current) =>
-      current.map((inventoryItem) => {
-        if (inventoryItem.id !== item.id) {
-          return inventoryItem;
-        }
-
-        return {
-          ...inventoryItem,
-          stock: Math.max(
-            0,
-            inventoryItem.stock + amount
-          ),
-        };
-      })
-    );
+    if (!token) return;
+    const stock = Math.max(0, item.stock + amount);
+    try {
+      const updated = await updateProduct(token, item.product._id, {
+        name: item.product.name,
+        category: item.product.category,
+        price: item.product.price,
+        stock,
+        available: stock > 0 && item.product.available,
+        nutrition: item.product.nutrition,
+      });
+      const mapped = mapProduct(updated);
+      setInventory((current) => current.map((entry) => entry.id === item.id ? mapped : entry));
+    } catch (error) {
+      Alert.alert("Inventory Update Failed", error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
   const addStock = (item: InventoryItem) => {
@@ -183,7 +173,7 @@ export default function SellerInventory() {
               return;
             }
 
-            adjustStock(item, quantity);
+            void adjustStock(item, quantity);
           },
         },
       ],
@@ -226,7 +216,7 @@ export default function SellerInventory() {
               return;
             }
 
-            adjustStock(item, -quantity);
+            void adjustStock(item, -quantity);
           },
         },
       ],
@@ -241,12 +231,9 @@ export default function SellerInventory() {
         1
       );
 
-    adjustStock(item, recommended);
+    void adjustStock(item, recommended);
 
-    Alert.alert(
-      "Inventory Updated",
-      `${recommended} ${item.unit} added to ${item.name}.`
-    );
+    Alert.alert("Inventory Updated", `${recommended} ${item.unit} will be added to ${item.name}.`);
   };
 
   const getStatusColor = (status: StockStatus) => {
@@ -274,6 +261,10 @@ export default function SellerInventory() {
 
     return "close-circle-outline";
   };
+
+  if (loading) {
+    return <SafeAreaView style={styles.safeArea}><View style={styles.loadingState}><ActivityIndicator size="large" color={CARDINAL} /><Text style={styles.loadingText}>Loading inventory...</Text></View></SafeAreaView>;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -741,7 +732,19 @@ export default function SellerInventory() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
+  },
+
+  loadingState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  loadingText: {
+    marginTop: 10,
+    color: "#737373",
+    fontSize: 12,
   },
 
   content: {
@@ -765,21 +768,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.2,
-    color: CARDINAL,
+    color: "#A6192E",
     marginBottom: 4,
   },
 
   title: {
     fontSize: 28,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
     letterSpacing: -0.5,
   },
 
   subtitle: {
     marginTop: 3,
     fontSize: 13,
-    color: MUTED,
+    color: "#737373",
   },
 
   headerIcon: {
@@ -800,11 +803,11 @@ const styles = StyleSheet.create({
 
   summaryCard: {
     width: "48%",
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     padding: 13,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
   },
 
   summaryTop: {
@@ -837,13 +840,13 @@ const styles = StyleSheet.create({
   summaryNumber: {
     fontSize: 21,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   summaryLabel: {
     marginTop: 9,
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "700",
   },
 
@@ -886,10 +889,10 @@ const styles = StyleSheet.create({
 
   searchBox: {
     height: 48,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
@@ -900,7 +903,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: TEXT,
+    color: "#171717",
     paddingVertical: 0,
   },
 
@@ -913,25 +916,25 @@ const styles = StyleSheet.create({
     height: 36,
     paddingHorizontal: 14,
     borderRadius: 18,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     justifyContent: "center",
   },
 
   filterButtonActive: {
-    backgroundColor: CARDINAL,
-    borderColor: CARDINAL,
+    backgroundColor: "#A6192E",
+    borderColor: "#A6192E",
   },
 
   filterText: {
     fontSize: 11,
     fontWeight: "700",
-    color: MUTED,
+    color: "#737373",
   },
 
   filterTextActive: {
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   sectionHeader: {
@@ -941,13 +944,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   sectionSubtitle: {
     marginTop: 2,
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
   },
 
   inventoryList: {
@@ -955,10 +958,10 @@ const styles = StyleSheet.create({
   },
 
   inventoryCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 14,
   },
 
@@ -985,13 +988,13 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 14,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   itemCategory: {
     marginTop: 4,
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
@@ -1021,7 +1024,7 @@ const styles = StyleSheet.create({
 
   stockLabel: {
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "700",
   },
 
@@ -1033,7 +1036,7 @@ const styles = StyleSheet.create({
   stockUnit: {
     fontSize: 10,
     fontWeight: "600",
-    color: MUTED,
+    color: "#737373",
   },
 
   progressTrack: {
@@ -1058,7 +1061,7 @@ const styles = StyleSheet.create({
 
   minimumText: {
     fontSize: 9,
-    color: MUTED,
+    color: "#737373",
   },
 
   restockText: {
@@ -1068,7 +1071,7 @@ const styles = StyleSheet.create({
 
   actionDivider: {
     height: 1,
-    backgroundColor: BORDER,
+    backgroundColor: "#E7E7E8",
     marginVertical: 13,
   },
 
@@ -1092,14 +1095,14 @@ const styles = StyleSheet.create({
   adjustText: {
     fontSize: 10,
     fontWeight: "800",
-    color: MUTED,
+    color: "#737373",
   },
 
   restockButton: {
     flex: 1,
     height: 37,
     borderRadius: 10,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -1109,14 +1112,14 @@ const styles = StyleSheet.create({
   restockButtonText: {
     fontSize: 10,
     fontWeight: "800",
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   emptyCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     alignItems: "center",
     paddingVertical: 45,
     paddingHorizontal: 25,
@@ -1135,13 +1138,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   emptyText: {
     marginTop: 5,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
     textAlign: "center",
   },
 });

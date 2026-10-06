@@ -11,6 +11,10 @@ import {
     getOrderById,
     getSellerOrders,
     updateOrderStatus,
+    updateOrderEta,
+    requestOrderCancellation,
+    reviewCancellationRequest,
+    cancelOrderBySeller,
 } from "../controllers/orderController";
 
 const router = Router();
@@ -37,6 +41,8 @@ router.get(
   getMyOrders
 );
 
+router.post("/:orderId/cancel", authenticate, requestOrderCancellation);
+
 /**
  * =====================================================
  * SELLER
@@ -60,6 +66,10 @@ router.patch(
   requireSeller,
   updateOrderStatus
 );
+
+router.patch("/:orderId/eta", authenticate, requireSeller, updateOrderEta);
+router.patch("/:orderId/cancellation", authenticate, requireSeller, reviewCancellationRequest);
+router.post("/:orderId/seller-cancel", authenticate, requireSeller, cancelOrderBySeller);
 
 /**
  * =====================================================

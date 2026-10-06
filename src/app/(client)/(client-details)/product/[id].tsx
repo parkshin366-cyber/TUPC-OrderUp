@@ -95,7 +95,7 @@ const getProductIcon = (
 // ============================================================
 
 export default function ProductDetails() {
-  const { addToCart } = useCart();
+  const { addToCart, replaceCart } = useCart();
 
   const params = useLocalSearchParams<{
     id?: string | string[];
@@ -602,8 +602,7 @@ export default function ProductDetails() {
     // the actual MongoDB Order.
     // ======================================================
 
-    addToCart(
-      {
+    const cartProduct = {
         id: product._id,
         name: product.name,
         price: product.price,
@@ -615,9 +614,29 @@ export default function ProductDetails() {
         store: store.name,
 
         image: "",
-      },
-      quantity
-    );
+        maxQuantity: product.stock,
+      };
+
+    const result = addToCart(cartProduct, quantity);
+
+    if (result === "different-store") {
+      Alert.alert(
+        "Start a new cart?",
+        `Your cart contains items from another store. Food orders can contain items from only one store at a time.`,
+        [
+          { text: "Keep current cart", style: "cancel" },
+          {
+            text: "Start new cart",
+            style: "destructive",
+            onPress: () => {
+              replaceCart(cartProduct, quantity);
+              Alert.alert("Added to Cart", `${quantity} × ${product.name} added to your new cart.`);
+            },
+          },
+        ]
+      );
+      return;
+    }
 
     Alert.alert(
       "Added to Cart",

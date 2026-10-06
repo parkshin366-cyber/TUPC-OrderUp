@@ -13,6 +13,9 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../context/AuthContext";
+import { useAppTheme } from "../../context/ThemeContext";
+import LogoutConfirmModal from "../../components/logout-confirm-modal";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -32,6 +35,8 @@ const RED = "#B42318";
 type IconName = keyof typeof Ionicons.glyphMap;
 
 export default function AdminSettings() {
+  const { user, logout } = useAuth();
+  const { isDark, setThemeMode } = useAppTheme();
   const [platformNotifications, setPlatformNotifications] = useState(true);
   const [securityAlerts, setSecurityAlerts] = useState(true);
   const [orderAlerts, setOrderAlerts] = useState(true);
@@ -54,6 +59,8 @@ export default function AdminSettings() {
   const [tempCampusName, setTempCampusName] = useState(campusName);
   const [tempCampusCode, setTempCampusCode] = useState(campusCode);
   const [tempSupportEmail, setTempSupportEmail] = useState(supportEmail);
+  const [logoutVisible, setLogoutVisible] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const savePlatformSettings = () => {
     setCampusName(tempCampusName.trim() || campusName);
@@ -97,18 +104,20 @@ export default function AdminSettings() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      "Sign Out",
-      "Are you sure you want to sign out of the Master Admin account?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: () => router.replace("/"),
-        },
-      ]
-    );
+    setLogoutVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await logout();
+      setLogoutVisible(false);
+      router.replace("/");
+    } catch {
+      Alert.alert("Unable to Log Out", "Please try again.");
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   const handleDangerAction = (
@@ -162,6 +171,23 @@ export default function AdminSettings() {
             </View>
 
             <View style={styles.onlineDot} />
+          </View>
+
+          <SectionTitle
+            icon="color-palette-outline"
+            title="Appearance"
+            subtitle="Choose the visual appearance of the app"
+          />
+
+          <View style={styles.card}>
+            <SettingRow
+              icon={isDark ? "moon-outline" : "sunny-outline"}
+              title="Dark Mode"
+              subtitle={isDark ? "Dark mode is enabled across TUPC-OrderUp" : "Use the brighter light appearance"}
+              type="switch"
+              value={isDark}
+              onValueChange={(value) => void setThemeMode(value ? "dark" : "light")}
+            />
           </View>
 
           {/* PLATFORM */}
@@ -776,6 +802,13 @@ export default function AdminSettings() {
             </View>
           </View>
         </Modal>
+        <LogoutConfirmModal
+          visible={logoutVisible}
+          loading={loggingOut}
+          accountLabel={user?.email || user?.username || "Administrator account"}
+          onCancel={() => setLogoutVisible(false)}
+          onConfirm={() => void confirmLogout()}
+        />
       </View>
     </SafeAreaView>
   );
@@ -930,21 +963,21 @@ function DangerRow({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
   },
 
   container: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
   },
 
   header: {
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 18,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomColor: "#E7E7E8",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -954,21 +987,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.4,
-    color: CARDINAL,
+    color: "#A6192E",
     marginBottom: 4,
   },
 
   title: {
     fontSize: 30,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
     letterSpacing: -0.7,
   },
 
   subtitle: {
     marginTop: 3,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "500",
   },
 
@@ -988,7 +1021,7 @@ const styles = StyleSheet.create({
   },
 
   statusCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#DDEBDD",
     borderRadius: 18,
@@ -1015,13 +1048,13 @@ const styles = StyleSheet.create({
   statusTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   statusText: {
     marginTop: 3,
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     lineHeight: 16,
   },
 
@@ -1057,20 +1090,20 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   sectionSubtitle: {
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     marginTop: 2,
   },
 
   card: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     marginBottom: 22,
     overflow: "hidden",
   },
@@ -1105,12 +1138,12 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
   },
 
   settingSubtitle: {
     fontSize: 10.5,
-    color: MUTED,
+    color: "#737373",
     lineHeight: 15,
     marginTop: 3,
   },
@@ -1175,12 +1208,12 @@ const styles = StyleSheet.create({
   maintenanceTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   maintenanceText: {
     fontSize: 10.5,
-    color: MUTED,
+    color: "#737373",
     lineHeight: 15,
     marginTop: 3,
   },
@@ -1225,7 +1258,7 @@ const styles = StyleSheet.create({
 
   dangerSubtitle: {
     fontSize: 10.5,
-    color: MUTED,
+    color: "#737373",
     lineHeight: 15,
     marginTop: 3,
   },
@@ -1237,7 +1270,7 @@ const styles = StyleSheet.create({
   },
 
   accountCard: {
-    backgroundColor: CARDINAL_DEEP,
+    backgroundColor: "#570B17",
     borderRadius: 20,
     padding: 18,
     flexDirection: "row",
@@ -1250,7 +1283,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -1263,7 +1296,7 @@ const styles = StyleSheet.create({
   },
 
   accountName: {
-    color: WHITE,
+    color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "900",
   },
@@ -1285,7 +1318,7 @@ const styles = StyleSheet.create({
   logoutButton: {
     height: 52,
     borderRadius: 15,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#F0D2CF",
     flexDirection: "row",
@@ -1310,14 +1343,14 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
   },
 
   footerLogoText: {
-    color: WHITE,
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "900",
     letterSpacing: 0.5,
@@ -1326,12 +1359,12 @@ const styles = StyleSheet.create({
   footerTitle: {
     fontSize: 14,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   footerText: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1353,11 +1386,11 @@ const styles = StyleSheet.create({
   },
 
   modalCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 22,
     padding: 20,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
   },
 
   modalHeader: {
@@ -1370,7 +1403,7 @@ const styles = StyleSheet.create({
   modalEyebrow: {
     fontSize: 9,
     fontWeight: "900",
-    color: CARDINAL,
+    color: "#A6192E",
     letterSpacing: 1.2,
     marginBottom: 4,
   },
@@ -1378,12 +1411,12 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   modalDescription: {
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     lineHeight: 17,
     marginBottom: 15,
   },
@@ -1392,7 +1425,7 @@ const styles = StyleSheet.create({
     width: 35,
     height: 35,
     borderRadius: 11,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1400,7 +1433,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 11,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
     marginBottom: 7,
   },
 
@@ -1408,25 +1441,25 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     backgroundColor: "#FAFAFA",
     paddingHorizontal: 13,
     fontSize: 13,
-    color: TEXT,
+    color: "#171717",
     marginBottom: 14,
   },
 
   primaryButton: {
     height: 50,
     borderRadius: 14,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     marginTop: 5,
   },
 
   primaryButtonText: {
-    color: WHITE,
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "900",
   },

@@ -16,7 +16,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
+import { useAppTheme } from "../../context/ThemeContext";
+import LogoutConfirmModal from "../../components/logout-confirm-modal";
 import {
+  changePassword,
   getMyStore,
   saveMyStore,
   type Store,
@@ -39,6 +42,7 @@ export default function SellerSettings() {
   // =====================================================
 
   const { token, logout } = useAuth();
+  const { isDark, setThemeMode } = useAppTheme();
 
   // =====================================================
   // STORE
@@ -64,6 +68,7 @@ export default function SellerSettings() {
   const [isOpen, setIsOpen] = useState(true);
   const [pickupEnabled, setPickupEnabled] =
     useState(true);
+  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
 
   // =====================================================
   // MODALS
@@ -74,6 +79,8 @@ export default function SellerSettings() {
 
   const [passwordModalVisible, setPasswordModalVisible] =
     useState(false);
+  const [logoutVisible, setLogoutVisible] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // =====================================================
   // PASSWORD UI
@@ -137,6 +144,7 @@ export default function SellerSettings() {
       setPickupEnabled(
         result.pickupEnabled ?? true
       );
+      setDeliveryEnabled(result.deliveryEnabled ?? false);
     } catch (error) {
       console.error(
         "Load seller store error:",
@@ -192,6 +200,7 @@ export default function SellerSettings() {
           closeTime: closeTime.trim(),
           isOpen,
           pickupEnabled,
+          deliveryEnabled,
         }
       );
 
@@ -212,6 +221,7 @@ export default function SellerSettings() {
       setPickupEnabled(
         savedStore.pickupEnabled
       );
+      setDeliveryEnabled(savedStore.deliveryEnabled ?? false);
 
       setStoreModalVisible(false);
 
@@ -261,6 +271,7 @@ export default function SellerSettings() {
           closeTime,
           isOpen: value,
           pickupEnabled,
+          deliveryEnabled,
         }
       );
 
@@ -309,6 +320,7 @@ export default function SellerSettings() {
           closeTime,
           isOpen,
           pickupEnabled: value,
+          deliveryEnabled,
         }
       );
 
@@ -334,11 +346,27 @@ export default function SellerSettings() {
     }
   };
 
+  const handleDeliveryToggle = async (value: boolean) => {
+    if (!token) return;
+    setDeliveryEnabled(value);
+    try {
+      const savedStore = await saveMyStore(token, {
+        name: storeName.trim(), description, location, openTime, closeTime,
+        isOpen, pickupEnabled, deliveryEnabled: value,
+      });
+      setStore(savedStore);
+      setDeliveryEnabled(savedStore.deliveryEnabled ?? false);
+    } catch (error) {
+      setDeliveryEnabled(!value);
+      Alert.alert("Update Failed", error instanceof Error ? error.message : "Unable to update delivery setting.");
+    }
+  };
+
   // =====================================================
   // PASSWORD
   // =====================================================
 
-  const handleSavePassword = () => {
+  const handleSavePassword = async () => {
     if (!currentPassword.trim()) {
       Alert.alert(
         "Required",
@@ -371,17 +399,14 @@ export default function SellerSettings() {
       return;
     }
 
-    /*
-     * IMPORTANT:
-     * We are not pretending this changed the database.
-     * Password API is not included in the current backend
-     * code we have connected.
-     */
-
-    Alert.alert(
-      "Not Connected Yet",
-      "Password change needs a backend password endpoint before it can safely update MongoDB."
-    );
+    if (!token) { Alert.alert("Session Required", "Please log in again."); return; }
+    try {
+      await changePassword(token, currentPassword, newPassword);
+      setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setPasswordModalVisible(false);
+      Alert.alert("Password Updated", "Your password has been updated securely.");
+    } catch (error) {
+      Alert.alert("Password Update Failed", error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
   // =====================================================
@@ -389,37 +414,21 @@ export default function SellerSettings() {
   // =====================================================
 
   const handleLogout = () => {
-    Alert.alert(
-      "Log Out",
-      "Are you sure you want to log out of your seller account?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Log Out",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await logout();
+    setLogoutVisible(true);
+  };
 
-              router.replace("/");
-            } catch (error) {
-              console.error(
-                "Seller logout error:",
-                error
-              );
-
-              Alert.alert(
-                "Logout Failed",
-                "Unable to sign out right now."
-              );
-            }
-          },
-        },
-      ]
-    );
+  const confirmLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await logout();
+      setLogoutVisible(false);
+      router.replace("/");
+    } catch (error) {
+      console.error("Seller logout error:", error);
+      Alert.alert("Logout Failed", "Unable to sign out right now.");
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   // =====================================================
@@ -560,6 +569,29 @@ export default function SellerSettings() {
             </Pressable>
           </View>
 
+          <SectionTitle
+            icon="color-palette-outline"
+            title="Appearance"
+          />
+
+          <View style={styles.card}>
+            <SettingRow
+              icon={isDark ? "moon-outline" : "sunny-outline"}
+              iconBackground={isDark ? "#EEE0E3" : "#FFF6E4"}
+              iconColor={isDark ? CARDINAL : "#B57A00"}
+              title="Dark Mode"
+              description={isDark ? "Dark mode is enabled across TUPC-OrderUp." : "Use the brighter light appearance."}
+              right={
+                <Switch
+                  value={isDark}
+                  onValueChange={(value) => void setThemeMode(value ? "dark" : "light")}
+                  trackColor={{ false: "#D6D6D6", true: "#D98A98" }}
+                  thumbColor={isDark ? CARDINAL : "#F4F4F4"}
+                />
+              }
+            />
+          </View>
+
           {/* =====================================================
               STORE STATUS
           ===================================================== */}
@@ -637,6 +669,25 @@ export default function SellerSettings() {
                 />
               }
             />
+
+            <Divider />
+
+            <SettingRow
+              icon="bicycle-outline"
+              iconBackground="#EAF3FF"
+              iconColor="#2867A8"
+              title="Deliver to Customer"
+              description={deliveryEnabled ? "Customers can request delivery to a pinned location." : "Direct delivery is currently disabled."}
+              right={
+                <Switch
+                  value={deliveryEnabled}
+                  onValueChange={handleDeliveryToggle}
+                  disabled={savingStore || !store}
+                  trackColor={{ false: "#D6D6D6", true: "#D98A98" }}
+                  thumbColor={deliveryEnabled ? CARDINAL : "#F4F4F4"}
+                />
+              }
+            />
           </View>
 
           {/* =====================================================
@@ -660,6 +711,24 @@ export default function SellerSettings() {
               onPress={() =>
                 setStoreModalVisible(true)
               }
+            />
+
+            <Divider />
+
+            <ActionRow
+              icon="ticket-outline"
+              title="Vouchers"
+              description="Enable platform vouchers for selected products"
+              onPress={() => router.push("/(seller)/vouchers")}
+            />
+
+            <Divider />
+
+            <ActionRow
+              icon="star-outline"
+              title="Customer Reviews"
+              description="View ratings and comments from completed orders"
+              onPress={() => router.push("/(seller)/reviews")}
             />
 
             <Divider />
@@ -999,6 +1068,22 @@ export default function SellerSettings() {
                 }
               />
 
+              <SettingRow
+                icon="bicycle-outline"
+                iconBackground="#EAF3FF"
+                iconColor="#2867A8"
+                title="Deliver to Customer"
+                description="Allow customers to pin a delivery location."
+                right={
+                  <Switch
+                    value={deliveryEnabled}
+                    onValueChange={setDeliveryEnabled}
+                    trackColor={{ false: "#D6D6D6", true: "#D98A98" }}
+                    thumbColor={deliveryEnabled ? CARDINAL : "#F4F4F4"}
+                  />
+                }
+              />
+
               <Pressable
                 style={({ pressed }) => [
                   styles.saveButton,
@@ -1157,6 +1242,13 @@ export default function SellerSettings() {
           </View>
         </View>
       </Modal>
+      <LogoutConfirmModal
+        visible={logoutVisible}
+        loading={loggingOut}
+        accountLabel="Seller account"
+        onCancel={() => setLogoutVisible(false)}
+        onConfirm={() => void confirmLogout()}
+      />
     </SafeAreaView>
   );
 }
@@ -1417,34 +1509,34 @@ function Divider() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BACKGROUND,
+    backgroundColor: "#F7F7F8",
   },
 
   container: {
     flex: 1,
-    backgroundColor: BACKGROUND,
+    backgroundColor: "#F7F7F8",
   },
 
   loadingContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: BACKGROUND,
+    backgroundColor: "#F7F7F8",
   },
 
   loadingText: {
     marginTop: 12,
     fontSize: 13,
-    color: MUTED,
+    color: "#737373",
   },
 
   header: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 17,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomColor: "#E7E7E8",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1454,14 +1546,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.5,
-    color: CARDINAL,
+    color: "#A6192E",
     marginBottom: 2,
   },
 
   title: {
     fontSize: 27,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
     letterSpacing: -0.5,
   },
 
@@ -1480,10 +1572,10 @@ const styles = StyleSheet.create({
   },
 
   accountCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
@@ -1494,7 +1586,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 18,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
@@ -1509,12 +1601,12 @@ const styles = StyleSheet.create({
   accountName: {
     fontSize: 16,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   accountUsername: {
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
     marginTop: 2,
   },
 
@@ -1550,15 +1642,15 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
     marginLeft: 7,
   },
 
   card: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     overflow: "hidden",
     marginBottom: 21,
   },
@@ -1594,13 +1686,13 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
   },
 
   settingDescription: {
     fontSize: 11,
     lineHeight: 16,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1634,13 +1726,13 @@ const styles = StyleSheet.create({
   actionTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
   },
 
   actionDescription: {
     fontSize: 11,
     lineHeight: 16,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1649,7 +1741,7 @@ const styles = StyleSheet.create({
   },
 
   dangerCard: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "#F0D9DC",
@@ -1683,13 +1775,13 @@ const styles = StyleSheet.create({
   logoutTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   dangerDescription: {
     fontSize: 11,
     lineHeight: 16,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1703,7 +1795,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 11,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 7,
@@ -1712,13 +1804,13 @@ const styles = StyleSheet.create({
   footerBrand: {
     fontSize: 13,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   footerVersion: {
     fontSize: 10,
     fontWeight: "600",
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1739,7 +1831,7 @@ const styles = StyleSheet.create({
   },
 
   storeModalContainer: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
@@ -1749,7 +1841,7 @@ const styles = StyleSheet.create({
   },
 
   modalContainer: {
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
@@ -1777,14 +1869,14 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 1.3,
-    color: CARDINAL,
+    color: "#A6192E",
     marginBottom: 3,
   },
 
   modalTitle: {
     fontSize: 23,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   closeButton: {
@@ -1803,19 +1895,19 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
     marginBottom: 7,
   },
 
   textInput: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     borderRadius: 14,
     backgroundColor: "#FAFAFA",
     paddingHorizontal: 14,
     fontSize: 13,
-    color: TEXT,
+    color: "#171717",
   },
 
   multilineInput: {
@@ -1838,7 +1930,7 @@ const styles = StyleSheet.create({
   saveButton: {
     minHeight: 49,
     borderRadius: 14,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1850,13 +1942,13 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 13,
     fontWeight: "700",
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   modalDescription: {
     fontSize: 12,
     lineHeight: 18,
-    color: MUTED,
+    color: "#737373",
     marginBottom: 17,
   },
 
@@ -1867,7 +1959,7 @@ const styles = StyleSheet.create({
   passwordInputWrapper: {
     height: 49,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     borderRadius: 14,
     backgroundColor: "#FAFAFA",
     flexDirection: "row",
@@ -1879,7 +1971,8 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     fontSize: 13,
-    color: TEXT,
+    color: "#171717",
     marginLeft: 9,
   },
 });
+

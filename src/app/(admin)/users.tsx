@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
     Alert,
+    ActivityIndicator,
     FlatList,
     Modal,
     Pressable,
@@ -12,6 +14,8 @@ import {
     TextInput,
     View,
 } from "react-native";
+import { useAuth } from "../../context/AuthContext";
+import { ApiUser, getAdminUsers, updateAdminUserStatus } from "../../services/api";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -50,118 +54,57 @@ type User = {
   initials: string;
 };
 
-const USERS: User[] = [
-  {
-    id: "USR-001",
-    firstName: "Joshua",
-    lastName: "Belen",
-    username: "@joshua.belen",
-    email: "joshua.belen@tup.edu.ph",
-    role: "Client",
-    status: "Active",
-    affiliation: "TUP Student",
-    joined: "September 10, 2026",
-    initials: "JB",
-  },
-  {
-    id: "USR-002",
-    firstName: "Maria",
-    lastName: "Santos",
-    username: "@maria.santos",
-    email: "maria.santos@tup.edu.ph",
-    role: "Seller",
-    status: "Active",
-    affiliation: "TUP Faculty",
-    joined: "September 8, 2026",
-    store: "Cardinal Café",
-    initials: "MS",
-  },
-  {
-    id: "USR-003",
-    firstName: "Kevin",
-    lastName: "Dela Cruz",
-    username: "@kevin.delacruz",
-    email: "kevin.delacruz@tup.edu.ph",
-    role: "Client",
-    status: "Active",
-    affiliation: "TUP Student",
-    joined: "September 7, 2026",
-    initials: "KD",
-  },
-  {
-    id: "USR-004",
-    firstName: "Angela",
-    lastName: "Reyes",
-    username: "@angela.reyes",
-    email: "angela.reyes@tup.edu.ph",
-    role: "Seller",
-    status: "Pending",
-    affiliation: "TUP Student",
-    joined: "September 6, 2026",
-    store: "Angela's Snacks",
-    initials: "AR",
-  },
-  {
-    id: "USR-005",
-    firstName: "Daniel",
-    lastName: "Garcia",
-    username: "@daniel.garcia",
-    email: "daniel.garcia@tup.edu.ph",
-    role: "Client",
-    status: "Suspended",
-    affiliation: "TUP Student",
-    joined: "September 4, 2026",
-    initials: "DG",
-  },
-  {
-    id: "USR-006",
-    firstName: "Patricia",
-    lastName: "Mendoza",
-    username: "@patricia.mendoza",
-    email: "patricia.mendoza@tup.edu.ph",
-    role: "Seller",
-    status: "Active",
-    affiliation: "TUP Faculty",
-    joined: "September 3, 2026",
-    store: "Pattie Food Hub",
-    initials: "PM",
-  },
-  {
-    id: "USR-007",
-    firstName: "Admin",
-    lastName: "Master",
-    username: "@master.admin",
-    email: "admin@tuporderup.com",
-    role: "Admin",
-    status: "Active",
-    affiliation: "System Administrator",
-    joined: "August 28, 2026",
-    initials: "MA",
-  },
-  {
-    id: "USR-008",
-    firstName: "Rafael",
-    lastName: "Torres",
-    username: "@rafael.torres",
-    email: "rafael.torres@tup.edu.ph",
-    role: "Client",
-    status: "Pending",
-    affiliation: "TUP Student",
-    joined: "August 26, 2026",
-    initials: "RT",
-  },
-];
+function mapApiUser(user: ApiUser): User {
+  const id = user.id || String((user as ApiUser & { _id?: string })._id ?? "");
+  const status: Status = user.status === "approved" ? "Active" : user.status === "pending" ? "Pending" : "Suspended";
+  const role: Role = user.role === "admin" ? "Admin" : user.role === "seller" ? "Seller" : "Client";
+  const firstName = user.firstName || "";
+  const lastName = user.lastName || "";
+  return {
+    id,
+    firstName,
+    lastName,
+    username: `@${user.username}`,
+    email: user.email,
+    role,
+    status,
+    affiliation: "TUP Account",
+    joined: user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" }) : "—",
+    initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || "U",
+  };
+}
 
 const FILTERS = ["All", "Client", "Seller", "Admin"] as const;
 
 type Filter = (typeof FILTERS)[number];
 
 export default function AdminUsersScreen() {
-  const [users, setUsers] = useState<User[]>(USERS);
+  const { token } = useAuth();
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
+
+  const loadUsers = useCallback(async () => {
+    if (!token) {
+      setUsers([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const records = await getAdminUsers(token);
+      setUsers(records.map(mapApiUser));
+    } catch (error) {
+      Alert.alert("Unable to Load Users", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useFocusEffect(useCallback(() => { loadUsers(); }, [loadUsers]));
 
   const stats = useMemo(() => {
     return {
@@ -205,19 +148,12 @@ export default function AdminUsersScreen() {
     setDetailsVisible(true);
   };
 
-  const toggleUserStatus = (userId: string) => {
-    setUsers((currentUsers) =>
-      currentUsers.map((user) => {
-        if (user.id !== userId) {
-          return user;
-        }
-
-        return {
-          ...user,
-          status: user.status === "Suspended" ? "Active" : "Suspended",
-        };
-      })
-    );
+  const updateStatus = async (user: User, status: "approved" | "rejected") => {
+    if (!token) return;
+    const updated = await updateAdminUserStatus(token, user.id, status);
+    const mapped = mapApiUser(updated);
+    setUsers((current) => current.map((item) => item.id === mapped.id ? mapped : item));
+    setSelectedUser((current) => current?.id === mapped.id ? mapped : current);
   };
 
   const handleStatusAction = (user: User) => {
@@ -236,17 +172,7 @@ export default function AdminUsersScreen() {
         {
           text: isSuspended ? "Activate" : "Suspend",
           style: isSuspended ? "default" : "destructive",
-          onPress: () => {
-            toggleUserStatus(user.id);
-            setSelectedUser((current) =>
-              current && current.id === user.id
-                ? {
-                    ...current,
-                    status: isSuspended ? "Active" : "Suspended",
-                  }
-                : current
-            );
-          },
+          onPress: () => void updateStatus(user, isSuspended ? "approved" : "rejected").catch((error) => Alert.alert("Update Failed", error instanceof Error ? error.message : "Please try again.")),
         },
       ]
     );
@@ -263,30 +189,22 @@ export default function AdminUsersScreen() {
         },
         {
           text: "Approve",
-          onPress: () => {
-            setUsers((currentUsers) =>
-              currentUsers.map((currentUser) =>
-                currentUser.id === user.id
-                  ? { ...currentUser, status: "Active" }
-                  : currentUser
-              )
-            );
-
-            setSelectedUser((current) =>
-              current && current.id === user.id
-                ? { ...current, status: "Active" }
-                : current
-            );
-
-            Alert.alert(
-              "Seller Approved",
-              `${user.firstName} ${user.lastName} is now an active seller.`
-            );
-          },
+          onPress: () => void updateStatus(user, "approved").then(() => Alert.alert("Seller Approved", `${user.firstName} ${user.lastName} is now an active seller.`)).catch((error) => Alert.alert("Approval Failed", error instanceof Error ? error.message : "Please try again.")),
         },
       ]
     );
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={CARDINAL} />
+          <Text style={styles.loadingText}>Loading users...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const renderUser = ({ item }: { item: User }) => (
     <Pressable
@@ -365,16 +283,19 @@ export default function AdminUsersScreen() {
         <StatusBadge status={item.status} />
       </View>
 
-      {item.store && (
-        <View style={styles.storeRow}>
-          <Ionicons
-            name="storefront-outline"
-            size={14}
-            color={GOLD}
-          />
-          <Text style={styles.storeText}>{item.store}</Text>
-        </View>
-      )}
+      <View style={styles.storeRow}>
+        <Ionicons
+          name="storefront-outline"
+          size={14}
+          color={item.store ? GOLD : "#A5A5A5"}
+        />
+        <Text
+          style={[styles.storeText, !item.store && styles.storeTextMuted]}
+          numberOfLines={1}
+        >
+          {item.store ?? "No linked store"}
+        </Text>
+      </View>
     </Pressable>
   );
 
@@ -383,10 +304,12 @@ export default function AdminUsersScreen() {
       <View style={styles.container}>
         {/* HEADER */}
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>MASTER ADMIN</Text>
-            <Text style={styles.title}>User Management</Text>
-            <Text style={styles.subtitle}>
+            <Text style={styles.title} numberOfLines={1}>
+              User Management
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={2}>
               Manage TUPC-OrderUp accounts and access.
             </Text>
           </View>
@@ -396,23 +319,14 @@ export default function AdminUsersScreen() {
               styles.headerButton,
               pressed && styles.pressed,
             ]}
-            onPress={() =>
-              Alert.alert(
-                "Add User",
-                "User creation will be connected to the backend later."
-              )
-            }
+            onPress={() => void loadUsers()}
           >
-            <Ionicons name="person-add-outline" size={20} color={WHITE} />
+            <Ionicons name="refresh-outline" size={20} color={WHITE} />
           </Pressable>
         </View>
 
         {/* STAT CARDS */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.statsContent}
-        >
+        <View style={styles.statsGrid}>
           <StatCard
             label="Total Users"
             value={stats.total}
@@ -440,7 +354,7 @@ export default function AdminUsersScreen() {
             icon="time-outline"
             accent={ORANGE}
           />
-        </ScrollView>
+        </View>
 
         {/* SEARCH */}
         <View style={styles.searchBox}>
@@ -472,11 +386,7 @@ export default function AdminUsersScreen() {
         </View>
 
         {/* FILTERS */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterContent}
-        >
+        <View style={styles.filterGrid}>
           {FILTERS.map((item) => {
             const active = filter === item;
 
@@ -519,7 +429,7 @@ export default function AdminUsersScreen() {
               </Pressable>
             );
           })}
-        </ScrollView>
+        </View>
 
         {/* RESULT HEADER */}
         <View style={styles.resultHeader}>
@@ -891,7 +801,19 @@ function DetailRow({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F7F7F8",
+  },
+
+  loadingState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  loadingText: {
+    marginTop: 10,
+    color: "#737373",
+    fontSize: 12,
   },
 
   container: {
@@ -911,6 +833,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 14,
+  },
+
   eyebrow: {
     fontSize: 10,
     fontWeight: "800",
@@ -920,26 +848,28 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 27,
+    fontSize: 25,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
     letterSpacing: -0.7,
+    flexShrink: 1,
   },
 
   subtitle: {
     marginTop: 4,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
   },
 
   headerButton: {
+    flexShrink: 0,
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: CARDINAL,
+    shadowColor: "#A6192E",
     shadowOpacity: 0.2,
     shadowRadius: 8,
     shadowOffset: {
@@ -949,21 +879,24 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  statsContent: {
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingBottom: 14,
-    gap: 10,
   },
 
   statCard: {
-    width: 126,
-    minHeight: 104,
-    backgroundColor: WHITE,
+    width: "48.5%",
+    height: 104,
+    backgroundColor: "#FFFFFF",
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     padding: 14,
     justifyContent: "space-between",
+    marginBottom: 10,
   },
 
   statIcon: {
@@ -977,23 +910,23 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 23,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
     marginTop: 7,
   },
 
   statLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: MUTED,
+    color: "#737373",
   },
 
   searchBox: {
     marginHorizontal: 20,
     height: 50,
     borderRadius: 15,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 15,
@@ -1003,11 +936,12 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
     fontSize: 14,
-    color: TEXT,
+    color: "#171717",
     paddingVertical: 0,
   },
 
-  filterContent: {
+  filterGrid: {
+    flexDirection: "row",
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 8,
@@ -1015,30 +949,32 @@ const styles = StyleSheet.create({
   },
 
   filterChip: {
-    minHeight: 36,
-    paddingHorizontal: 14,
+    flex: 1,
+    minWidth: 0,
+    height: 38,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: WHITE,
+    borderColor: "#E7E7E8",
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 7,
   },
 
   filterChipActive: {
-    backgroundColor: CARDINAL,
-    borderColor: CARDINAL,
+    backgroundColor: "#A6192E",
+    borderColor: "#A6192E",
   },
 
   filterText: {
     fontSize: 12,
     fontWeight: "700",
-    color: MUTED,
+    color: "#737373",
   },
 
   filterTextActive: {
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   filterCount: {
@@ -1058,11 +994,11 @@ const styles = StyleSheet.create({
   filterCountText: {
     fontSize: 10,
     fontWeight: "800",
-    color: MUTED,
+    color: "#737373",
   },
 
   filterCountTextActive: {
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   resultHeader: {
@@ -1077,12 +1013,12 @@ const styles = StyleSheet.create({
   resultTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   resultSubtitle: {
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     marginTop: 2,
   },
 
@@ -1109,9 +1045,10 @@ const styles = StyleSheet.create({
   },
 
   userCard: {
-    backgroundColor: WHITE,
+    height: 174,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     borderRadius: 18,
     padding: 15,
     marginBottom: 11,
@@ -1136,7 +1073,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 14,
     fontWeight: "900",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   userMain: {
@@ -1155,19 +1092,19 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 15,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   username: {
     fontSize: 11,
-    color: CARDINAL,
+    color: "#A6192E",
     fontWeight: "600",
     marginTop: 2,
   },
 
   email: {
     fontSize: 11,
-    color: MUTED,
+    color: "#737373",
     marginTop: 3,
   },
 
@@ -1184,7 +1121,7 @@ const styles = StyleSheet.create({
   adminBadgeText: {
     fontSize: 8,
     fontWeight: "900",
-    color: CARDINAL,
+    color: "#A6192E",
     letterSpacing: 0.4,
   },
 
@@ -1209,7 +1146,7 @@ const styles = StyleSheet.create({
 
   metaText: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
@@ -1241,7 +1178,7 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     fontSize: 10,
     fontWeight: "800",
-    color: CARDINAL,
+    color: "#A6192E",
   },
 
   storeRow: {
@@ -1257,7 +1194,13 @@ const styles = StyleSheet.create({
   storeText: {
     fontSize: 11,
     fontWeight: "700",
-    color: TEXT,
+    color: "#171717",
+    flex: 1,
+  },
+
+  storeTextMuted: {
+    color: "#737373",
+    fontWeight: "600",
   },
 
   emptyState: {
@@ -1279,13 +1222,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   emptyText: {
     marginTop: 6,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
     textAlign: "center",
     lineHeight: 18,
   },
@@ -1306,7 +1249,7 @@ const styles = StyleSheet.create({
 
   modalSheet: {
     maxHeight: "91%",
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: 9,
@@ -1334,7 +1277,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 19,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
   },
 
   closeButton: {
@@ -1360,7 +1303,7 @@ const styles = StyleSheet.create({
     width: 82,
     height: 82,
     borderRadius: 27,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -1371,20 +1314,20 @@ const styles = StyleSheet.create({
   profileAvatarText: {
     fontSize: 24,
     fontWeight: "900",
-    color: WHITE,
+    color: "#FFFFFF",
   },
 
   profileName: {
     fontSize: 21,
     fontWeight: "900",
-    color: TEXT,
+    color: "#171717",
     textAlign: "center",
   },
 
   profileUsername: {
     marginTop: 3,
     fontSize: 12,
-    color: MUTED,
+    color: "#737373",
   },
 
   profileBadges: {
@@ -1396,7 +1339,7 @@ const styles = StyleSheet.create({
 
   detailSection: {
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: "#E7E7E8",
     borderRadius: 18,
     paddingHorizontal: 15,
     paddingTop: 14,
@@ -1406,7 +1349,7 @@ const styles = StyleSheet.create({
   detailSectionTitle: {
     fontSize: 9,
     fontWeight: "900",
-    color: MUTED,
+    color: "#737373",
     letterSpacing: 1,
     marginBottom: 5,
   },
@@ -1435,13 +1378,13 @@ const styles = StyleSheet.create({
 
   detailLabel: {
     fontSize: 10,
-    color: MUTED,
+    color: "#737373",
     fontWeight: "600",
   },
 
   detailValue: {
     fontSize: 13,
-    color: TEXT,
+    color: "#171717",
     fontWeight: "700",
     marginTop: 2,
   },
@@ -1459,7 +1402,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 13,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1473,13 +1416,13 @@ const styles = StyleSheet.create({
   securityTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: TEXT,
+    color: "#171717",
   },
 
   securityText: {
     fontSize: 10,
     lineHeight: 15,
-    color: MUTED,
+    color: "#737373",
     marginTop: 2,
   },
 
@@ -1487,7 +1430,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     height: 23,
     borderRadius: 12,
-    backgroundColor: WHITE,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1503,7 +1446,7 @@ const styles = StyleSheet.create({
     height: 50,
     marginTop: 15,
     borderRadius: 15,
-    backgroundColor: CARDINAL,
+    backgroundColor: "#A6192E",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1511,7 +1454,7 @@ const styles = StyleSheet.create({
   },
 
   primaryActionText: {
-    color: WHITE,
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
   },

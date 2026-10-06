@@ -91,6 +91,7 @@ export async function saveMyStore(
       closeTime,
       isOpen,
       pickupEnabled,
+      deliveryEnabled,
     } = req.body;
 
     // =================================================
@@ -188,6 +189,11 @@ export async function saveMyStore(
             typeof pickupEnabled === "boolean"
               ? pickupEnabled
               : true,
+
+          deliveryEnabled:
+            typeof deliveryEnabled === "boolean"
+              ? deliveryEnabled
+              : false,
         },
       },
       {
@@ -281,6 +287,7 @@ export async function getPublicStores(
           closeTime: 1,
           isOpen: 1,
           pickupEnabled: 1,
+          deliveryEnabled: 1,
           createdAt: 1,
           updatedAt: 1,
         },
@@ -387,6 +394,7 @@ export async function getPublicStoreById(
           closeTime: 1,
           isOpen: 1,
           pickupEnabled: 1,
+          deliveryEnabled: 1,
           createdAt: 1,
           updatedAt: 1,
         },

@@ -37,5 +37,8 @@
     "@types/nodemailer": "^8.0.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "ngrok@4.3.3": true
   }
 }
