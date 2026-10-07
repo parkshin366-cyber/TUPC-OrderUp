@@ -10,6 +10,7 @@ import {
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,6 +21,8 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../../../../context/CartContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../../../utils/themeStyles";
 
 import {
   getPublicStore,
@@ -77,6 +80,8 @@ const getProductIcon = (
 // =====================================================
 
 export default function StoreDetails() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { items: cartItems, addToCart: addCartItem, replaceCart } = useCart();
   const params = useLocalSearchParams<{
     id?: string | string[];
@@ -641,18 +646,12 @@ export default function StoreDetails() {
               styles.coverContainer
             }
           >
-            <View
-              style={
-                styles.coverBackground
-              }
-            >
-              <Ionicons
-                name="storefront"
-                size={64}
-                color={
-                  CARDINAL
-                }
-              />
+            <View style={styles.coverBackground}>
+              {store.bannerImage ? (
+                <Image source={{ uri: store.bannerImage }} style={styles.coverImage} />
+              ) : (
+                <Ionicons name="storefront" size={64} color={CARDINAL} />
+              )}
             </View>
 
             <View
@@ -686,11 +685,11 @@ export default function StoreDetails() {
             <View
               style={styles.storeLogo}
             >
-              <Ionicons
-                name="storefront"
-                size={31}
-                color={CARDINAL}
-              />
+              {store.profileImage ? (
+                <Image source={{ uri: store.profileImage }} style={styles.storeLogoImage} resizeMode="contain" />
+              ) : (
+                <Ionicons name="storefront" size={31} color={CARDINAL} />
+              )}
             </View>
           </View>
 
@@ -1646,7 +1645,7 @@ export default function StoreDetails() {
 // STYLES
 // =====================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   // ===================================================
   // SCREEN
   // ===================================================
@@ -1775,7 +1774,8 @@ const styles = StyleSheet.create({
     height: 195,
     position: "relative",
     backgroundColor: "#FCECEF",
-    overflow: "hidden",
+    overflow: "visible",
+    zIndex: 2,
   },
 
   coverBackground: {
@@ -1784,6 +1784,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FCECEF",
+    overflow: "hidden",
+  },
+
+  coverImage: {
+    width: "100%",
+    height: "100%",
   },
 
   coverOverlay: {
@@ -1827,6 +1833,19 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+    zIndex: 20,
+    elevation: 8,
+    shadowColor: "#000000",
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+  },
+
+  storeLogoImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
   },
 
   // ===================================================
@@ -1838,6 +1857,7 @@ const styles = StyleSheet.create({
     paddingTop: 42,
     paddingBottom: 21,
     backgroundColor: WHITE,
+    zIndex: 1,
   },
 
   storeTitleRow: {
@@ -2378,8 +2398,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 8,
-    backgroundColor:
-      "rgba(247,247,248,0.96)",
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
 
   cartBar: {
@@ -2532,3 +2553,5 @@ const styles = StyleSheet.create({
     height: 25,
   },
 });
+
+let styles = createStyles(LIGHT_COLORS);

@@ -17,6 +17,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 import {
   getSellerOrders,
   cancelOrderBySeller,
@@ -255,6 +257,8 @@ function formatPaymentMethod(
 }
 
 export default function SellerOrders() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { token } = useAuth();
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -589,6 +593,21 @@ export default function SellerOrders() {
             </Text>
           </Text>
         </View>
+
+        {order.paymentMethod === "gcash" && (
+          <View style={styles.gcashPaymentCard}>
+            <View style={styles.gcashPaymentHeader}>
+              <Text style={styles.gcashPaymentTitle}>GCash payment</Text>
+              <Text style={[styles.gcashPaymentStatus, order.paymentStatus === "paid" && styles.gcashPaymentPaid]}>
+                {order.paymentStatus === "paid" ? "Verified" : order.paymentStatus === "failed" ? "Rejected" : "For verification"}
+              </Text>
+            </View>
+            <Text style={styles.gcashReference}>Reference: {order.gcashReference || "Not provided"}</Text>
+            {order.paymentStatus === "pending" && order.status === "Pending" && (
+              <Text style={styles.gcashReference}>PayMongo will update this automatically after the customer completes checkout.</Text>
+            )}
+          </View>
+        )}
 
         {/* FULFILLMENT LOCATION */}
         {!!order.pickupLocation && (
@@ -971,7 +990,7 @@ export default function SellerOrders() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: "#F7F7F8",
@@ -1285,6 +1304,25 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
 
+  gcashPaymentCard: {
+    padding: 12,
+    borderRadius: 13,
+    backgroundColor: "#EEF7FF",
+    borderWidth: 1,
+    borderColor: "#C9E5FA",
+    marginBottom: 13,
+  },
+  gcashPaymentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  gcashPaymentTitle: { color: "#171717", fontSize: 11, fontWeight: "900" },
+  gcashPaymentStatus: { color: "#A86616", fontSize: 9, fontWeight: "900", textTransform: "uppercase" },
+  gcashPaymentPaid: { color: "#18864B" },
+  gcashReference: { color: "#4B5563", fontSize: 10, fontWeight: "700", marginTop: 6 },
+  gcashActions: { flexDirection: "row", gap: 8, marginTop: 11 },
+  gcashRejectButton: { flex: 1, height: 35, borderRadius: 9, borderWidth: 1, borderColor: "#B42318", alignItems: "center", justifyContent: "center" },
+  gcashRejectText: { color: "#B42318", fontSize: 10, fontWeight: "900" },
+  gcashVerifyButton: { flex: 2, height: 35, borderRadius: 9, backgroundColor: "#0F7FBF", alignItems: "center", justifyContent: "center" },
+  gcashVerifyText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
+
   totalLabel: {
     fontSize: 10,
     color: "#737373",
@@ -1458,3 +1496,4 @@ const styles = StyleSheet.create({
   },
 });
 
+let styles = createStyles(LIGHT_COLORS);

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   StatusBar,
@@ -14,6 +15,8 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 
 import {
   getPublicStores,
@@ -44,6 +47,8 @@ const CLOSED_BG = "#F4F4F4";
 // =====================================================
 
 export default function StoreScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   // ===================================================
   // STATE
   // ===================================================
@@ -186,11 +191,11 @@ export default function StoreScreen() {
 
         <View style={styles.storeIconWrapper}>
           <View style={styles.storeIconCircle}>
-            <Ionicons
-              name="storefront-outline"
-              size={29}
-              color={CARDINAL}
-            />
+            {item.profileImage ? (
+              <Image source={{ uri: item.profileImage }} style={styles.storeProfileImage} resizeMode="contain" />
+            ) : (
+              <Ionicons name="storefront-outline" size={29} color={CARDINAL} />
+            )}
           </View>
 
           <View
@@ -561,7 +566,7 @@ export default function StoreScreen() {
 // STYLES
 // =====================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   // ===================================================
   // SCREEN
   // ===================================================
@@ -736,6 +741,13 @@ const styles = StyleSheet.create({
     borderColor: "#F2D5DA",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+
+  storeProfileImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
   },
 
   statusMiniBadge: {
@@ -981,3 +993,5 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 });
+
+let styles = createStyles(LIGHT_COLORS);

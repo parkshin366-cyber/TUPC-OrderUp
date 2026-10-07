@@ -15,7 +15,9 @@ import {
     requestOrderCancellation,
     reviewCancellationRequest,
     cancelOrderBySeller,
+    reviewGcashPayment,
 } from "../controllers/orderController";
+import { createGcashCheckout, verifyGcashCheckout } from "../controllers/paymentController";
 
 const router = Router();
 
@@ -42,6 +44,8 @@ router.get(
 );
 
 router.post("/:orderId/cancel", authenticate, requestOrderCancellation);
+router.post("/:orderId/payment/checkout", authenticate, createGcashCheckout);
+router.post("/:orderId/payment/verify", authenticate, verifyGcashCheckout);
 
 /**
  * =====================================================
@@ -66,6 +70,8 @@ router.patch(
   requireSeller,
   updateOrderStatus
 );
+
+router.patch("/:orderId/payment", authenticate, requireSeller, reviewGcashPayment);
 
 router.patch("/:orderId/eta", authenticate, requireSeller, updateOrderEta);
 router.patch("/:orderId/cancellation", authenticate, requireSeller, reviewCancellationRequest);

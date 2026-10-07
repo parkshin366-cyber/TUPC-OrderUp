@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import * as WebBrowser from "expo-web-browser";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -17,14 +18,19 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 import CampusLocationPicker, { type CampusPin } from "../../components/campus-location-picker";
 
 import {
   createOrder,
+  createGcashCheckout,
+  verifyGcashCheckout,
   getCustomerStoreVouchers,
   getPublicStore,
   type PaymentMethod,
   type Voucher,
+  type Store,
 } from "../../services/api";
 
 // =====================================================
@@ -117,6 +123,8 @@ function getErrorMessage(error: unknown): string {
 // =====================================================
 
 export default function CheckoutScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   // ===================================================
   // AUTH
   // ===================================================
@@ -155,6 +163,7 @@ export default function CheckoutScreen() {
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [orderConfirmVisible, setOrderConfirmVisible] = useState(false);
   const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  const [checkoutStore, setCheckoutStore] = useState<Store | null>(null);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<"pickup" | "delivery">("pickup");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryLatitude, setDeliveryLatitude] = useState<number | null>(null);
@@ -167,8 +176,16 @@ export default function CheckoutScreen() {
     const storeId = items[0]?.storeId;
     if (!storeId) return;
     void getPublicStore(storeId)
-      .then((store) => setDeliveryEnabled(store.deliveryEnabled === true))
-      .catch(() => setDeliveryEnabled(false));
+      .then((store) => {
+        setCheckoutStore(store);
+        setDeliveryEnabled(store.deliveryEnabled === true);
+        if (!store.gcashEnabled) setPaymentMethod("cash");
+      })
+      .catch(() => {
+        setCheckoutStore(null);
+        setDeliveryEnabled(false);
+        setPaymentMethod("cash");
+      });
   }, [items]);
 
   // ===================================================
@@ -621,6 +638,24 @@ export default function CheckoutScreen() {
           token,
           payload
         );
+
+      if (paymentMethod === "gcash") {
+        const checkoutUrl = await createGcashCheckout(token, result._id);
+        const paymentResult = await WebBrowser.openAuthSessionAsync(checkoutUrl, "tupcorderup://payment-result");
+        if (paymentResult.type !== "success") throw new Error("GCash checkout was not completed.");
+        let paymentVerified = false;
+        let verificationError: unknown;
+        for (let attempt = 0; attempt < 5 && !paymentVerified; attempt += 1) {
+          try {
+            await verifyGcashCheckout(token, result._id);
+            paymentVerified = true;
+          } catch (error) {
+            verificationError = error;
+            if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 1500));
+          }
+        }
+        if (!paymentVerified) throw verificationError instanceof Error ? verificationError : new Error("GCash payment could not be verified.");
+      }
 
       // -----------------------------------------------
       // 8. SUCCESS
@@ -1244,7 +1279,7 @@ export default function CheckoutScreen() {
                     styles.paymentTitle
                   }
                 >
-                  Cash on Pickup
+                  {fulfillmentMethod === "delivery" ? "Cash on Delivery" : "Cash on Pickup"}
                 </Text>
 
                 {paymentMethod ===
@@ -1270,7 +1305,7 @@ export default function CheckoutScreen() {
                   styles.paymentDescription
                 }
               >
-                Pay directly when you collect your order.
+                {fulfillmentMethod === "delivery" ? "Pay when your order is delivered." : "Pay directly when you collect your order."}
               </Text>
             </View>
 
@@ -1304,10 +1339,9 @@ export default function CheckoutScreen() {
               pressed &&
                 styles.cardPressed,
             ]}
-            onPress={() =>
-              setPaymentMethod("gcash")
-            }
-            disabled={isPlacingOrder}
+            onPress={() => setPaymentMethod("gcash")}
+            disabled={isPlacingOrder || !checkoutStore?.gcashEnabled}
+            accessibilityState={{ disabled: isPlacingOrder || !checkoutStore?.gcashEnabled }}
           >
             <View
               style={styles.paymentIcon}
@@ -1335,7 +1369,7 @@ export default function CheckoutScreen() {
                   styles.paymentDescription
                 }
               >
-                Pay using your GCash account.
+                {checkoutStore?.gcashEnabled ? "Pay securely through the official PayMongo GCash checkout." : "This seller has not enabled GCash."}
               </Text>
             </View>
 
@@ -1357,6 +1391,20 @@ export default function CheckoutScreen() {
               )}
             </View>
           </Pressable>
+
+          {paymentMethod === "gcash" && checkoutStore?.gcashEnabled && (
+            <View style={styles.gcashPaymentBox}>
+              <View style={styles.gcashMerchantRow}>
+                <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.gcashMerchantLabel}>SECURE PAYMENT</Text>
+                  <Text style={styles.gcashMerchantName}>PayMongo Checkout</Text>
+                  <Text style={styles.gcashMerchantNumber}>You will be redirected to GCash after placing the order.</Text>
+                </View>
+              </View>
+              <Text style={styles.gcashHelp}>The app confirms payment directly with PayMongo. No manual reference number is needed.</Text>
+            </View>
+          )}
 
           {/* ORDER ITEMS */}
 
@@ -1933,7 +1981,7 @@ export default function CheckoutScreen() {
 // STYLES
 // =====================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: BG,
@@ -2324,6 +2372,14 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     color: MUTED,
   },
+
+  gcashPaymentBox: { marginTop: 2, marginBottom: 12, padding: 14, borderRadius: 16, backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#BFDBFE" },
+  gcashMerchantRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  gcashMerchantLabel: { fontSize: 8, fontWeight: "900", letterSpacing: 1, color: "#2563EB" },
+  gcashMerchantName: { marginTop: 2, fontSize: 13, fontWeight: "900", color: TEXT },
+  gcashMerchantNumber: { marginTop: 1, fontSize: 12, fontWeight: "700", color: MUTED },
+  gcashReferenceInput: { height: 47, marginTop: 13, paddingHorizontal: 13, borderRadius: 12, borderWidth: 1, borderColor: "#93C5FD", backgroundColor: WHITE, color: TEXT, fontSize: 13, fontWeight: "700" },
+  gcashHelp: { marginTop: 8, fontSize: 9.5, lineHeight: 14, color: MUTED },
 
   recommendedBadge: {
     paddingHorizontal: 6,
@@ -3149,3 +3205,5 @@ const styles = StyleSheet.create({
     color: WHITE,
   },
 });
+
+let styles = createStyles(LIGHT_COLORS);

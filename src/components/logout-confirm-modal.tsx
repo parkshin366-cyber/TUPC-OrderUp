@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../context/ThemeContext";
+import { createThemedStyleSheet } from "../utils/themeStyles";
 
 type Props = {
   visible: boolean;
@@ -10,6 +12,8 @@ type Props = {
 };
 
 export default function LogoutConfirmModal({ visible, loading = false, accountLabel = "your account", onCancel, onConfirm }: Props) {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   return <Modal transparent animationType="fade" visible={visible} onRequestClose={loading ? undefined : onCancel}>
     <View style={styles.overlay}>
       <Pressable style={StyleSheet.absoluteFill} disabled={loading} onPress={onCancel} />
@@ -29,7 +33,7 @@ export default function LogoutConfirmModal({ visible, loading = false, accountLa
   </Modal>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   overlay: { flex: 1, paddingHorizontal: 24, backgroundColor: "rgba(16,16,18,0.56)", alignItems: "center", justifyContent: "center" },
   card: { width: "100%", maxWidth: 410, padding: 21, borderRadius: 23, backgroundColor: "#FFFFFF", alignItems: "center", shadowColor: "#000000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: .18, shadowRadius: 18, elevation: 15 },
   icon: { width: 58, height: 58, borderRadius: 19, backgroundColor: "#FFF0F0", alignItems: "center", justifyContent: "center" },
@@ -44,3 +48,4 @@ const styles = StyleSheet.create({
   logoutText: { fontSize: 11, fontWeight: "900", color: "#FFFFFF" },
   pressed: { opacity: .75 }, disabled: { opacity: .65 },
 });
+let styles = createStyles(LIGHT_COLORS);

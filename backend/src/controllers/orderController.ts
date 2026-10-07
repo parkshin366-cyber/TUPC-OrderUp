@@ -132,6 +132,13 @@ export async function createOrder(
       });
     }
 
+    if (paymentMethod === "gcash") {
+      if (!store.gcashEnabled || !store.gcashName || !store.gcashNumber) {
+        return res.status(400).json({ success: false, message: "GCash is not available for this store" });
+      }
+      if (!process.env.PAYMONGO_SECRET_KEY?.trim()) return res.status(503).json({ success: false, message: "Official GCash checkout is not configured yet" });
+    }
+
     if (resolvedFulfillment === "delivery") {
       if (!store.deliveryEnabled) {
         return res.status(400).json({ success: false, message: "This seller is not accepting delivery orders" });
@@ -308,6 +315,7 @@ export async function createOrder(
       deliveryLatitude: resolvedFulfillment === "delivery" ? Number(deliveryLatitude) : undefined,
       deliveryLongitude: resolvedFulfillment === "delivery" ? Number(deliveryLongitude) : undefined,
       paymentMethod: paymentMethod as PaymentMethod,
+      paymentStatus: "pending",
       status: "Pending" as OrderStatus,
     });
 
@@ -727,6 +735,13 @@ export async function updateOrderStatus(
       });
     }
 
+    if (order.paymentMethod === "gcash" && order.paymentStatus !== "paid") {
+      return res.status(409).json({
+        success: false,
+        message: "Verify the customer's GCash payment before preparing this order",
+      });
+    }
+
     // ---------------------------------------------------
     // STATUS TRANSITIONS
     // ---------------------------------------------------
@@ -808,6 +823,58 @@ export async function updateOrderStatus(
       success: false,
       message: "Failed to update order status",
     });
+  }
+}
+
+export async function reviewGcashPayment(req: AuthRequest, res: Response) {
+  try {
+    if (process.env.PAYMONGO_SECRET_KEY?.trim()) {
+      return res.status(403).json({ success: false, message: "GCash payments are verified automatically by PayMongo" });
+    }
+    const orderId = String(req.params.orderId);
+    const action = req.body?.action;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ success: false, message: "Invalid order ID" });
+    }
+    if (action !== "verify" && action !== "reject") {
+      return res.status(400).json({ success: false, message: "Action must be verify or reject" });
+    }
+
+    const order = await Order.findOne({ _id: orderId, seller: req.userId });
+    if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+    if (order.paymentMethod !== "gcash") {
+      return res.status(400).json({ success: false, message: "This is not a GCash order" });
+    }
+    if (order.status !== "Pending" || order.paymentStatus !== "pending") {
+      return res.status(409).json({ success: false, message: "This GCash payment has already been reviewed" });
+    }
+
+    if (action === "verify") {
+      order.paymentStatus = "paid";
+    } else {
+      order.paymentStatus = "failed";
+      order.status = "Cancelled";
+      order.cancellationStatus = "approved";
+      order.cancellationReason = "GCash payment could not be verified";
+      order.cancellationRequestedBy = "seller";
+      order.cancellationReviewedAt = new Date();
+      await restoreOrderStock(order);
+    }
+    await order.save();
+
+    const updatedOrder = await Order.findById(order._id)
+      .populate("customer", "firstName lastName username email contact")
+      .populate("seller", "firstName lastName username email contact")
+      .populate("store", "name description location")
+      .populate("items.product", "name category price stock available");
+    return res.json({
+      success: true,
+      message: action === "verify" ? "GCash payment verified" : "GCash payment rejected and order cancelled",
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error("Review GCash payment error:", error);
+    return res.status(500).json({ success: false, message: "Unable to review GCash payment" });
   }
 }
 

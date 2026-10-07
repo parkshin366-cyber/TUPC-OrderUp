@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 
 const CARDINAL = "#A6192E";
 const TEXT = "#171717";
@@ -9,6 +11,8 @@ const MUTED = "#737373";
 const BORDER = "#E7E7E8";
 
 export default function OrderSuccessScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const params = useLocalSearchParams<{ orderId?: string; storeName?: string; itemCount?: string; total?: string }>();
   const itemCount = Math.max(0, Number(params.itemCount) || 0);
   const total = Math.max(0, Number(params.total) || 0);
@@ -42,7 +46,7 @@ export default function OrderSuccessScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safe: { flex: 1, backgroundColor: "#F7F7F8" },
   content: { flex: 1, paddingHorizontal: 22, alignItems: "center", justifyContent: "center" },
   successIcon: { width: 84, height: 84, borderRadius: 42, backgroundColor: CARDINAL, alignItems: "center", justifyContent: "center", marginBottom: 22 },
@@ -62,3 +66,4 @@ const styles = StyleSheet.create({
   secondaryText: { color: CARDINAL, fontSize: 12, fontWeight: "900" },
   pressed: { opacity: 0.82 },
 });
+let styles = createStyles(LIGHT_COLORS);

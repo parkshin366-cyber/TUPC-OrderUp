@@ -69,6 +69,8 @@ export const DARK_COLORS: typeof LIGHT_COLORS = {
   overlay: "rgba(0,0,0,0.70)",
 };
 
+export type AppColors = typeof LIGHT_COLORS;
+
 type ThemeContextValue = {
   themeMode: ThemeMode;
   isDark: boolean;

@@ -10,6 +10,8 @@ import {
     Text,
     View
 } from "react-native";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -148,6 +150,8 @@ const ACTIVITIES: Activity[] = [
 ];
 
 export default function AdminDatabaseScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const [selectedCollection, setSelectedCollection] =
     useState<Collection | null>(null);
 
@@ -834,7 +838,7 @@ function DatabaseDetail({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: "#F7F7F8",
@@ -1685,4 +1689,4 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 });
-
+let styles = createStyles(LIGHT_COLORS);

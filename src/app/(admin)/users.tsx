@@ -15,6 +15,8 @@ import {
     View,
 } from "react-native";
 import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 import { ApiUser, getAdminUsers, updateAdminUserStatus } from "../../services/api";
 
 const CARDINAL = "#A6192E";
@@ -79,6 +81,8 @@ const FILTERS = ["All", "Client", "Seller", "Admin"] as const;
 type Filter = (typeof FILTERS)[number];
 
 export default function AdminUsersScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { token } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -798,7 +802,7 @@ function DetailRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: "#F7F7F8",
@@ -1497,3 +1501,4 @@ const styles = StyleSheet.create({
   },
 });
 
+let styles = createStyles(LIGHT_COLORS);

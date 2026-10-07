@@ -22,7 +22,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
-import { LIGHT_COLORS as LIGHT, type ThemeMode, useAppTheme } from "../../context/ThemeContext";
+import { LIGHT_COLORS as LIGHT, type AppColors, type ThemeMode, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 import LogoutConfirmModal from "../../components/logout-confirm-modal";
 import { changePassword } from "../../services/api";
 
@@ -42,6 +43,7 @@ const PROFILE_IMAGE_STORAGE_KEY =
 export default function ProfileScreen() {
   const { user, token, logout } = useAuth();
   const { colors, isDark, setThemeMode, themeMode } = useAppTheme();
+  styles = createStyles(colors);
 
   const [notificationsEnabled, setNotificationsEnabled] =
     useState(true);
@@ -2880,7 +2882,7 @@ function PasswordRequirements({
 // STYLES
 // =====================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
   },
@@ -3937,3 +3939,4 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
 });
+let styles = createStyles(LIGHT);

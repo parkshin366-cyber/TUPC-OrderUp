@@ -223,6 +223,14 @@ app.use(
   orderRoutes
 );
 
+app.get("/payment-success", (_req: Request, res: Response) => {
+  res.type("html").send(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment complete</title></head><body style="font-family:system-ui;text-align:center;padding:48px"><h2>Payment complete</h2><p>Returning to TUPC OrderUp...</p><a href="tupcorderup://payment-result?status=success">Return to app</a><script>location.replace('tupcorderup://payment-result?status=success')</script></body></html>`);
+});
+
+app.get("/payment-cancelled", (_req: Request, res: Response) => {
+  res.type("html").send(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment cancelled</title></head><body style="font-family:system-ui;text-align:center;padding:48px"><h2>Payment cancelled</h2><p>No GCash payment was completed.</p><a href="tupcorderup://payment-result?status=cancelled">Return to app</a><script>location.replace('tupcorderup://payment-result?status=cancelled')</script></body></html>`);
+});
+
 // =====================================================
 // HEALTH CHECK
 // =====================================================

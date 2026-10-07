@@ -28,6 +28,12 @@ export interface IStore extends Document {
 
   deliveryEnabled: boolean;
 
+  profileImage?: string;
+  bannerImage?: string;
+  gcashEnabled: boolean;
+  gcashName?: string;
+  gcashNumber?: string;
+
   createdAt: Date;
 
   updatedAt: Date;
@@ -95,6 +101,12 @@ const StoreSchema = new Schema<IStore>(
       type: Boolean,
       default: false,
     },
+
+    profileImage: { type: String, trim: true },
+    bannerImage: { type: String, trim: true },
+    gcashEnabled: { type: Boolean, default: false },
+    gcashName: { type: String, trim: true, maxlength: 100 },
+    gcashNumber: { type: String, trim: true, maxlength: 20 },
   },
   {
     timestamps: true,

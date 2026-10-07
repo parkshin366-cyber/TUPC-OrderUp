@@ -3,7 +3,9 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
 import LogoutConfirmModal from "../../components/logout-confirm-modal";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 
 const CARDINAL = "#A6192E";
 const GOLD = "#D8B56A";
@@ -14,6 +16,8 @@ const BG = "#F7F7F8";
 const WHITE = "#FFFFFF";
 
 export default function AdminProfileScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { user, logout } = useAuth();
   const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Administrator";
   const initials = `${user?.firstName?.[0] ?? "A"}${user?.lastName?.[0] ?? "D"}`.toUpperCase();
@@ -80,7 +84,7 @@ function ProfileRow({ icon, title, subtitle, onPress, last = false }: { icon: ke
   </Pressable>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: { flex: 1, backgroundColor: "#F7F7F8" }, content: { padding: 20, paddingBottom: 34 },
   eyebrow: { fontSize: 10, fontWeight: "800", color: GOLD, letterSpacing: 1.4, marginBottom: 4 },
   title: { fontSize: 28, fontWeight: "900", color: "#171717", letterSpacing: -0.7 },
@@ -100,3 +104,4 @@ const styles = StyleSheet.create({
   logoutText: { color: "#B42318", fontSize: 14, fontWeight: "900" }, pressed: { opacity: 0.75 },
 });
 
+let styles = createStyles(LIGHT_COLORS);

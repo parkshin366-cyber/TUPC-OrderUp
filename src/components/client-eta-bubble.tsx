@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { getMyOrders, type Order } from "../services/api";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../context/ThemeContext";
+import { createThemedStyleSheet } from "../utils/themeStyles";
 
 const CARDINAL = "#A6192E";
 const TEXT = "#171717";
@@ -18,6 +20,8 @@ function storeName(order: Order) {
 }
 
 export default function ClientEtaBubble() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { token } = useAuth();
   const { width, height } = useWindowDimensions();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -184,7 +188,7 @@ export default function ClientEtaBubble() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   container: { position: "absolute", backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E7E7E8", shadowColor: "#000000", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.18, shadowRadius: 10, elevation: 12, overflow: "hidden" },
   pressable: { flex: 1, flexDirection: "row", alignItems: "center", padding: 7 },
   clock: { width: 44, height: 44, borderRadius: 22, backgroundColor: CARDINAL, alignItems: "center", justifyContent: "center" },
@@ -201,3 +205,4 @@ const styles = StyleSheet.create({
   track: { height: 4, marginTop: 9, borderRadius: 2, backgroundColor: "#F0DCE0", overflow: "hidden" },
   progress: { height: 4, borderRadius: 2, backgroundColor: CARDINAL },
 });
+let styles = createStyles(LIGHT_COLORS);

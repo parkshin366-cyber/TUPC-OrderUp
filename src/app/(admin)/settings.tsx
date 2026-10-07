@@ -14,7 +14,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
-import { useAppTheme } from "../../context/ThemeContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 import LogoutConfirmModal from "../../components/logout-confirm-modal";
 
 const CARDINAL = "#A6192E";
@@ -36,7 +37,8 @@ type IconName = keyof typeof Ionicons.glyphMap;
 
 export default function AdminSettings() {
   const { user, logout } = useAuth();
-  const { isDark, setThemeMode } = useAppTheme();
+  const { colors, isDark, setThemeMode } = useAppTheme();
+  styles = createStyles(colors);
   const [platformNotifications, setPlatformNotifications] = useState(true);
   const [securityAlerts, setSecurityAlerts] = useState(true);
   const [orderAlerts, setOrderAlerts] = useState(true);
@@ -960,7 +962,17 @@ function DangerRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => {
+  const CARDINAL = colors.cardinal;
+  const CARDINAL_DARK = colors.cardinalDark;
+  const CARDINAL_DEEP = colors.cardinalDeep;
+  const TEXT = colors.text;
+  const MUTED = colors.muted;
+  const BORDER = colors.border;
+  const BG = colors.background;
+  const WHITE = colors.surface;
+
+  return createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: "#F7F7F8",
@@ -1467,5 +1479,7 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.8,
   },
-});
+  });
+};
 
+let styles = createStyles(LIGHT_COLORS);

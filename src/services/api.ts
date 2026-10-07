@@ -1112,6 +1112,11 @@ export type Store = {
   isOpen: boolean;
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
+  profileImage?: string;
+  bannerImage?: string;
+  gcashEnabled?: boolean;
+  gcashName?: string;
+  gcashNumber?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -1290,6 +1295,8 @@ export type Order = {
 
   paymentMethod:
     PaymentMethod;
+  paymentStatus?: "pending" | "paid" | "failed" | "refunded";
+  gcashReference?: string;
 
   status: OrderStatus;
   estimatedMinutes?: number;
@@ -1348,6 +1355,7 @@ export type CreateOrderPayload = {
   deliveryLatitude?: number;
   deliveryLongitude?: number;
   paymentMethod: PaymentMethod;
+  gcashReference?: string;
   voucherCode?: string;
 };
 
@@ -1483,6 +1491,11 @@ export async function saveMyStore(
     isOpen?: boolean;
     pickupEnabled?: boolean;
     deliveryEnabled?: boolean;
+    profileImage?: RegisterImage;
+    bannerImage?: RegisterImage;
+    gcashEnabled?: boolean;
+    gcashName?: string;
+    gcashNumber?: string;
   }
 ): Promise<Store> {
   if (!token) {
@@ -1498,13 +1511,7 @@ export async function saveMyStore(
   }
 
   try {
-    const response = await fetch(
-      `${API_URL}/api/stores/me`,
-      {
-        method: "PUT",
-        headers:
-          getAuthHeaders(token),
-        body: JSON.stringify({
+    const payload = {
           name: store.name.trim(),
           description:
             store.description ?? "",
@@ -1524,9 +1531,31 @@ export async function saveMyStore(
           deliveryEnabled:
             store.deliveryEnabled ??
             false,
-        }),
-      }
-    );
+          ...(store.gcashEnabled !== undefined ? { gcashEnabled: store.gcashEnabled } : {}),
+          ...(store.gcashName !== undefined ? { gcashName: store.gcashName } : {}),
+          ...(store.gcashNumber !== undefined ? { gcashNumber: store.gcashNumber } : {}),
+        };
+
+    const hasImages = Boolean(store.profileImage?.uri || store.bannerImage?.uri);
+    let response: Response;
+
+    if (hasImages) {
+      const formData = new FormData();
+      Object.entries(payload).forEach(([key, value]) => formData.append(key, String(value)));
+      if (store.profileImage) await appendImage(formData, "profileImage", store.profileImage);
+      if (store.bannerImage) await appendImage(formData, "bannerImage", store.bannerImage);
+      response = await fetch(`${API_URL}/api/stores/me`, {
+        method: "PUT",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+    } else {
+      response = await fetch(`${API_URL}/api/stores/me`, {
+        method: "PUT",
+        headers: getAuthHeaders(token),
+        body: JSON.stringify(payload),
+      });
+    }
 
     const data =
       await parseResponse(response);
@@ -2750,6 +2779,47 @@ export async function updateOrderStatus(
       "Unable to update order status."
     );
   }
+}
+
+export async function createGcashCheckout(token: string, orderId: string): Promise<string> {
+  const response = await fetch(`${API_URL}/api/orders/${encodeURIComponent(orderId)}/payment/checkout`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+  });
+  const data = await parseResponse(response);
+  if (!response.ok || !data.success || typeof data.checkoutUrl !== "string") {
+    throw new Error(data?.message || "Unable to start secure GCash checkout.");
+  }
+  return data.checkoutUrl;
+}
+
+export async function verifyGcashCheckout(token: string, orderId: string): Promise<Order> {
+  const response = await fetch(`${API_URL}/api/orders/${encodeURIComponent(orderId)}/payment/verify`, {
+    method: "POST",
+    headers: getAuthHeaders(token),
+  });
+  const data = await parseResponse(response);
+  if (!response.ok || !data.success) {
+    throw new Error(data?.message || "GCash payment is not complete yet.");
+  }
+  return data.order as Order;
+}
+
+export async function reviewGcashPayment(
+  token: string,
+  orderId: string,
+  action: "verify" | "reject"
+): Promise<Order> {
+  const response = await fetch(`${API_URL}/api/orders/${encodeURIComponent(orderId)}/payment`, {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ action }),
+  });
+  const data = await parseResponse(response);
+  if (!response.ok || !data.success) {
+    throw new Error(data?.message || "Failed to review GCash payment.");
+  }
+  return data.order as Order;
 }
 
 export async function updateOrderEta(token: string, orderId: string, minutes: number): Promise<Order> {

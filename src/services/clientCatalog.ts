@@ -19,6 +19,8 @@ export type ClientStore = {
   deliveryTime: string;
   status: "Open" | "Closed";
   featured?: boolean;
+  profileImage?: string;
+  bannerImage?: string;
 };
 
 export type CatalogFood = {
@@ -71,6 +73,8 @@ export async function loadClientCatalog(): Promise<ClientCatalog> {
       deliveryTime: store.pickupEnabled ? "Pickup available" : "Pickup unavailable",
       status: store.isOpen ? "Open" : "Closed",
       featured: store.isOpen,
+      profileImage: store.profileImage,
+      bannerImage: store.bannerImage,
     };
   });
 

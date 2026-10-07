@@ -20,6 +20,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useCart } from "../../../../context/CartContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../../../utils/themeStyles";
 
 import {
   getPublicProduct,
@@ -95,6 +97,8 @@ const getProductIcon = (
 // ============================================================
 
 export default function ProductDetails() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { addToCart, replaceCart } = useCart();
 
   const params = useLocalSearchParams<{
@@ -1311,7 +1315,7 @@ export default function ProductDetails() {
 // STYLES
 // ============================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: BG,
@@ -1778,3 +1782,5 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
 });
+
+let styles = createStyles(LIGHT_COLORS);

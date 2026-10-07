@@ -60,6 +60,10 @@ export interface IOrder extends Document {
   deliveryLongitude?: number;
 
   paymentMethod: PaymentMethod;
+  paymentStatus: "pending" | "paid" | "failed" | "refunded";
+  gcashReference?: string;
+  paymongoCheckoutSessionId?: string;
+  paymongoPaymentId?: string;
 
   status: OrderStatus;
   estimatedMinutes?: number;
@@ -247,6 +251,22 @@ const OrderSchema =
         ],
         required: true,
       },
+
+      paymentStatus: {
+        type: String,
+        enum: ["pending", "paid", "failed", "refunded"],
+        default: "pending",
+        required: true,
+      },
+
+      gcashReference: {
+        type: String,
+        trim: true,
+        maxlength: 30,
+      },
+
+      paymongoCheckoutSessionId: { type: String, trim: true, select: false },
+      paymongoPaymentId: { type: String, trim: true, select: false },
 
       // =================================================
       // ORDER STATUS

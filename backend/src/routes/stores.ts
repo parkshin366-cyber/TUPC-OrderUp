@@ -4,6 +4,7 @@ import {
   authenticate,
   requireSeller,
 } from "../middleware/auth";
+import { uploadStoreImages } from "../middleware/upload";
 
 import {
   getMyStore,
@@ -29,6 +30,10 @@ router.put(
   "/me",
   authenticate,
   requireSeller,
+  uploadStoreImages.fields([
+    { name: "profileImage", maxCount: 1 },
+    { name: "bannerImage", maxCount: 1 },
+  ]),
   saveMyStore
 );
 

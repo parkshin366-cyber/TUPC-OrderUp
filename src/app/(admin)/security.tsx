@@ -12,6 +12,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -157,6 +159,8 @@ const FILTERS = ["All", "Client", "Seller", "Admin"] as const;
 type Filter = (typeof FILTERS)[number];
 
 export default function AdminUsersScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const [users, setUsers] = useState<User[]>(USERS);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("All");
@@ -896,7 +900,7 @@ function DetailRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: "#F7F7F8",
@@ -1561,4 +1565,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
 });
-
+let styles = createStyles(LIGHT_COLORS);

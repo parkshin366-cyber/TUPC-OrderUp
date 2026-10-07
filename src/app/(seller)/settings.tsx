@@ -16,7 +16,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
-import { useAppTheme } from "../../context/ThemeContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 import LogoutConfirmModal from "../../components/logout-confirm-modal";
 import {
   changePassword,
@@ -42,7 +43,8 @@ export default function SellerSettings() {
   // =====================================================
 
   const { token, logout } = useAuth();
-  const { isDark, setThemeMode } = useAppTheme();
+  const { colors, isDark, setThemeMode } = useAppTheme();
+  styles = createStyles(colors);
 
   // =====================================================
   // STORE
@@ -1506,7 +1508,16 @@ function Divider() {
 // STYLES
 // =====================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => {
+  const CARDINAL = colors.cardinal;
+  const CARDINAL_DARK = colors.cardinalDark;
+  const TEXT = colors.text;
+  const MUTED = colors.muted;
+  const BORDER = colors.border;
+  const BACKGROUND = colors.background;
+  const WHITE = colors.surface;
+
+  return createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: "#F7F7F8",
@@ -1553,7 +1564,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 27,
     fontWeight: "800",
-    color: "#171717",
+    color: colors.text,
     letterSpacing: -0.5,
   },
 
@@ -1974,5 +1985,7 @@ const styles = StyleSheet.create({
     color: "#171717",
     marginLeft: 9,
   },
-});
+  });
+};
 
+let styles = createStyles(LIGHT_COLORS);

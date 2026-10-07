@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCart } from "../../context/CartContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -23,6 +25,8 @@ const BORDER = "#E7E7E8";
 const SUCCESS = "#238636";
 
 export default function CartScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const {
     items,
     itemCount,
@@ -583,7 +587,7 @@ export default function CartScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: BG,
@@ -1206,4 +1210,6 @@ const styles = StyleSheet.create({
     opacity: 0.86,
   },
 });
+
+let styles = createStyles(LIGHT_COLORS);
 

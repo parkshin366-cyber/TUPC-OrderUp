@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../context/ThemeContext";
+import { createThemedStyleSheet } from "../utils/themeStyles";
 import { ChatMessage, Conversation, getConversationMessages, getConversations, sendChatMessage } from "../services/api";
 
 const CARDINAL = "#A6192E";
@@ -23,6 +25,8 @@ function personId(person: any) {
 }
 
 export default function MessagesScreen({ role }: Props) {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { token, user } = useAuth();
   const params = useLocalSearchParams<{ recipientId?: string; recipientName?: string }>();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -111,6 +115,8 @@ export default function MessagesScreen({ role }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safe: { flex: 1, backgroundColor: BG }, flex: { flex: 1 }, center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }, muted: { color: MUTED, fontWeight: "600" }, listHeader: { padding: 20, paddingTop: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#fff", borderBottomWidth: 1, borderColor: BORDER }, title: { color: TEXT, fontSize: 26, fontWeight: "900" }, subtitle: { marginTop: 4, color: MUTED, fontSize: 12 }, close: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#F4F4F5" }, list: { padding: 16 }, emptyList: { flexGrow: 1, justifyContent: "center", padding: 24 }, conversation: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", padding: 14, borderRadius: 16, borderWidth: 1, borderColor: BORDER, marginBottom: 10 }, avatar: { width: 45, height: 45, borderRadius: 23, backgroundColor: "#FBECEF", alignItems: "center", justifyContent: "center" }, avatarSmall: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#FBECEF", alignItems: "center", justifyContent: "center", marginLeft: 10 }, avatarText: { color: CARDINAL, fontWeight: "900", fontSize: 17 }, conversationText: { flex: 1, marginLeft: 11 }, name: { color: TEXT, fontWeight: "800", fontSize: 14 }, preview: { marginTop: 3, color: MUTED, fontSize: 12 }, empty: { alignItems: "center", padding: 28 }, emptyTitle: { marginTop: 12, color: TEXT, fontWeight: "900", fontSize: 16 }, emptyText: { marginTop: 5, color: MUTED, textAlign: "center", lineHeight: 18, fontSize: 12 }, threadHeader: { paddingHorizontal: 16, paddingVertical: 12, flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderBottomWidth: 1, borderColor: BORDER }, back: { width: 30, height: 36, justifyContent: "center" }, threadTitle: { marginLeft: 10, flex: 1 }, online: { marginTop: 1, fontSize: 10, color: CARDINAL, fontWeight: "700" }, messages: { padding: 14, paddingBottom: 18, flexGrow: 1 }, messageRow: { flexDirection: "row", marginBottom: 8 }, messageMine: { justifyContent: "flex-end" }, bubble: { maxWidth: "82%", paddingHorizontal: 13, paddingVertical: 9, borderRadius: 17 }, bubbleMine: { backgroundColor: CARDINAL, borderBottomRightRadius: 4 }, bubbleOther: { backgroundColor: "#fff", borderWidth: 1, borderColor: BORDER, borderBottomLeftRadius: 4 }, messageText: { color: TEXT, fontSize: 13, lineHeight: 18 }, messageTextMine: { color: "#fff" }, time: { marginTop: 4, color: MUTED, fontSize: 9, alignSelf: "flex-end" }, timeMine: { color: "#F9D9DF" }, composer: { padding: 10, paddingHorizontal: 14, flexDirection: "row", gap: 9, alignItems: "flex-end", backgroundColor: "#fff", borderTopWidth: 1, borderColor: BORDER }, input: { flex: 1, minHeight: 43, maxHeight: 110, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#F4F4F5", borderRadius: 18, color: TEXT, fontSize: 13 }, send: { width: 43, height: 43, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: CARDINAL }, sendDisabled: { opacity: 0.45 },
 });
+
+let styles = createStyles(LIGHT_COLORS);

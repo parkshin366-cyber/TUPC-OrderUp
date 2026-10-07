@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,9 +19,12 @@ import {
   getMyStore,
   saveMyStore,
   Store,
+  type RegisterImage,
 } from "../../services/api";
 
 import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 
 const CARDINAL = "#A6192E";
 const CARDINAL_DARK = "#7D1021";
@@ -33,6 +38,8 @@ const GREEN = "#15803D";
 const RED = "#B91C1C";
 
 export default function SellerStore() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { token } = useAuth();
 
   // =====================================================
@@ -54,6 +61,11 @@ export default function SellerStore() {
   const [pickupEnabled, setPickupEnabled] =
     useState(true);
   const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  const [profileImage, setProfileImage] = useState<RegisterImage | undefined>();
+  const [bannerImage, setBannerImage] = useState<RegisterImage | undefined>();
+  const [gcashEnabled, setGcashEnabled] = useState(false);
+  const [gcashName, setGcashName] = useState("");
+  const [gcashNumber, setGcashNumber] = useState("");
 
   // =====================================================
   // UI STATE
@@ -102,6 +114,9 @@ export default function SellerStore() {
           result.pickupEnabled ?? true
         );
         setDeliveryEnabled(result.deliveryEnabled ?? false);
+        setGcashEnabled(result.gcashEnabled ?? false);
+        setGcashName(result.gcashName ?? "");
+        setGcashNumber(result.gcashNumber ?? "");
       } else {
         // No store yet.
         // Start with blank fields.
@@ -146,6 +161,26 @@ export default function SellerStore() {
 
   const markChanged = () => {
     setHasChanges(true);
+  };
+
+  const pickStoreImage = async (kind: "profile" | "banner") => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Photo Permission", "Allow photo access to upload your store image.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: kind === "banner",
+      aspect: kind === "banner" ? [5, 2] : [1, 1],
+      quality: 0.85,
+    });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    const image = { uri: asset.uri, name: asset.fileName ?? `${kind}.jpg`, type: asset.mimeType ?? "image/jpeg" };
+    if (kind === "profile") setProfileImage(image);
+    else setBannerImage(image);
+    markChanged();
   };
 
   // =====================================================
@@ -217,6 +252,11 @@ export default function SellerStore() {
           isOpen: storeOpen,
           pickupEnabled,
           deliveryEnabled,
+          profileImage,
+          bannerImage,
+          gcashEnabled,
+          gcashName: gcashName.trim(),
+          gcashNumber: gcashNumber.trim(),
         }
       );
 
@@ -246,6 +286,11 @@ export default function SellerStore() {
         savedStore.pickupEnabled ?? true
       );
       setDeliveryEnabled(savedStore.deliveryEnabled ?? false);
+      setGcashEnabled(savedStore.gcashEnabled ?? false);
+      setGcashName(savedStore.gcashName ?? "");
+      setGcashNumber(savedStore.gcashNumber ?? "");
+      setProfileImage(undefined);
+      setBannerImage(undefined);
 
       setHasChanges(false);
 
@@ -393,18 +438,21 @@ export default function SellerStore() {
         {/* STORE PREVIEW */}
 
         <View style={styles.previewCard}>
-          <View style={styles.previewCover}>
+          <Pressable style={styles.previewCover} onPress={() => void pickStoreImage("banner")}>
+            {(bannerImage?.uri || store?.bannerImage) ? (
+              <Image source={{ uri: bannerImage?.uri || store?.bannerImage }} style={styles.coverImage} />
+            ) : null}
             <View style={styles.coverPatternOne} />
             <View style={styles.coverPatternTwo} />
 
-            <View style={styles.storeLogo}>
-              <Ionicons
-                name="storefront"
-                size={30}
-                color={WHITE}
-              />
-            </View>
-          </View>
+            <Pressable style={styles.storeLogo} onPress={() => void pickStoreImage("profile")}>
+              {(profileImage?.uri || store?.profileImage) ? (
+                <Image source={{ uri: profileImage?.uri || store?.profileImage }} style={styles.logoImage} resizeMode="contain" />
+              ) : <Ionicons name="storefront" size={30} color={WHITE} />}
+              <View style={styles.cameraBadge}><Ionicons name="camera" size={12} color="#FFFFFF" /></View>
+            </Pressable>
+            <View style={styles.bannerEdit}><Ionicons name="image-outline" size={14} color="#FFFFFF" /><Text style={styles.bannerEditText}>Change banner</Text></View>
+          </Pressable>
 
           <View style={styles.previewBody}>
             <View style={styles.previewTitleRow}>
@@ -928,22 +976,20 @@ export default function SellerStore() {
               </Text>
             </View>
 
-            <View
-              style={[
-                styles.enabledBadge,
-                styles.pendingBadge,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.enabledText,
-                  styles.pendingText,
-                ]}
-              >
-                SETUP
-              </Text>
-            </View>
+            <Switch
+              value={gcashEnabled}
+              onValueChange={(value) => { setGcashEnabled(value); markChanged(); }}
+              disabled={saving}
+              trackColor={{ false: "#D4D4D8", true: "#93C5FD" }}
+              thumbColor={gcashEnabled ? "#2563EB" : "#F4F4F5"}
+            />
           </View>
+          {gcashEnabled && (
+            <View style={styles.gcashFields}>
+              <TextInput value={gcashName} onChangeText={(value) => { setGcashName(value); markChanged(); }} placeholder="GCash account name" placeholderTextColor="#A1A1AA" style={styles.gcashInput} />
+              <TextInput value={gcashNumber} onChangeText={(value) => { setGcashNumber(value.replace(/\D/g, "").slice(0, 11)); markChanged(); }} placeholder="09XXXXXXXXX" placeholderTextColor="#A1A1AA" keyboardType="phone-pad" maxLength={11} style={styles.gcashInput} />
+            </View>
+          )}
         </View>
 
         {/* STORE VISIBILITY */}
@@ -1008,7 +1054,7 @@ export default function SellerStore() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: "#F7F7F8",
@@ -1130,6 +1176,16 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
+  coverImage: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+  },
+
   coverPatternOne: {
     position: "absolute",
     width: 180,
@@ -1162,7 +1218,13 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor:
       "rgba(255,255,255,0.8)",
+    overflow: "visible",
   },
+
+  logoImage: { width: "100%", height: "100%", borderRadius: 16, resizeMode: "contain" },
+  cameraBadge: { position: "absolute", right: -5, bottom: -5, width: 23, height: 23, borderRadius: 12, backgroundColor: "#A6192E", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFFFFF" },
+  bannerEdit: { position: "absolute", right: 10, top: 10, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(0,0,0,0.58)", paddingHorizontal: 9, paddingVertical: 6, borderRadius: 10 },
+  bannerEditText: { color: "#FFFFFF", fontSize: 9, fontWeight: "800" },
 
   previewBody: {
     padding: 15,
@@ -1500,6 +1562,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#EFF6FF",
   },
 
+  gcashFields: { padding: 13, gap: 9, backgroundColor: "#FAFAFA", borderTopWidth: 1, borderTopColor: "#E7E7E8" },
+  gcashInput: { height: 45, borderRadius: 12, borderWidth: 1, borderColor: "#E7E7E8", backgroundColor: "#FFFFFF", paddingHorizontal: 13, color: "#171717", fontSize: 13 },
+
   settingContent: {
     flex: 1,
   },
@@ -1603,3 +1668,4 @@ const styles = StyleSheet.create({
   },
 });
 
+let styles = createStyles(LIGHT_COLORS);

@@ -1,4 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -9,6 +11,8 @@ const RED = "#A6192E"; const GOLD = "#D8B56A"; const BG = "#F7F7F8"; const WHITE
 const peso = (value: number) => `₱${value.toLocaleString("en-PH")}`;
 
 export default function AdminFinanceScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { token } = useAuth();
   const [data, setData] = useState<AdminFinance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,4 +29,6 @@ export default function AdminFinanceScreen() {
   </ScrollView></SafeAreaView>;
 }
 function Empty({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) { return <View style={styles.empty}><Ionicons name={icon} size={26} color={RED} /><Text style={styles.muted}>{text}</Text></View>; }
-const styles = StyleSheet.create({ safe:{flex:1,backgroundColor:"#F7F7F8"},content:{padding:18,paddingBottom:40},center:{flex:1,alignItems:"center",justifyContent:"center"},eyebrow:{fontSize:10,fontWeight:"900",letterSpacing:1.5,color:RED},title:{fontSize:29,fontWeight:"900",color:"#171717",marginTop:3},subtitle:{fontSize:12,color:"#737373",marginTop:4},summary:{backgroundColor:RED,borderRadius:18,padding:18,marginTop:20},summaryLabel:{fontSize:10,fontWeight:"800",color:"#F7DDE1",letterSpacing:1},summaryValue:{fontSize:30,fontWeight:"900",color:"#FFFFFF",marginTop:5},summaryText:{fontSize:11,color:"#F7DDE1",marginTop:5},section:{fontSize:17,fontWeight:"900",color:"#171717",marginTop:23,marginBottom:10},card:{backgroundColor:"#FFFFFF",borderRadius:15,padding:14,marginBottom:9,flexDirection:"row",alignItems:"center",borderWidth:1,borderColor:"#E7E7E8"},flex:{flex:1},align:{alignItems:"flex-end"},name:{fontSize:13,fontWeight:"800",color:"#171717"},muted:{fontSize:10.5,color:"#737373",marginTop:4},amount:{fontSize:16,fontWeight:"900",color:"#171717",marginTop:8},status:{fontSize:9,fontWeight:"900",borderRadius:10,paddingHorizontal:8,paddingVertical:5,overflow:"hidden"},paid:{backgroundColor:"#EAF6EC",color:"#2E7D32"},due:{backgroundColor:"#FFF4DF",color:"#B26A00"},verify:{backgroundColor:RED,borderRadius:8,paddingHorizontal:9,paddingVertical:7,marginTop:9},verifyText:{color:"#FFFFFF",fontSize:10,fontWeight:"800"},stall:{width:43,height:43,borderRadius:12,backgroundColor:"#F8E9EC",alignItems:"center",justifyContent:"center",marginRight:11},stallText:{color:RED,fontSize:12,fontWeight:"900"},empty:{backgroundColor:"#FFFFFF",borderRadius:15,padding:23,alignItems:"center",gap:8,borderWidth:1,borderColor:"#E7E7E8"} });
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, { safe:{flex:1,backgroundColor:BG},content:{padding:18,paddingBottom:40},center:{flex:1,alignItems:"center",justifyContent:"center"},eyebrow:{fontSize:10,fontWeight:"900",letterSpacing:1.5,color:RED},title:{fontSize:29,fontWeight:"900",color:TEXT,marginTop:3},subtitle:{fontSize:12,color:MUTED,marginTop:4},summary:{backgroundColor:RED,borderRadius:18,padding:18,marginTop:20},summaryLabel:{fontSize:10,fontWeight:"800",color:"#F7DDE1",letterSpacing:1},summaryValue:{fontSize:30,fontWeight:"900",color:WHITE,marginTop:5},summaryText:{fontSize:11,color:"#F7DDE1",marginTop:5},section:{fontSize:17,fontWeight:"900",color:TEXT,marginTop:23,marginBottom:10},card:{backgroundColor:WHITE,borderRadius:15,padding:14,marginBottom:9,flexDirection:"row",alignItems:"center",borderWidth:1,borderColor:"#E7E7E8"},flex:{flex:1},align:{alignItems:"flex-end"},name:{fontSize:13,fontWeight:"800",color:TEXT},muted:{fontSize:10.5,color:MUTED,marginTop:4},amount:{fontSize:16,fontWeight:"900",color:TEXT,marginTop:8},status:{fontSize:9,fontWeight:"900",borderRadius:10,paddingHorizontal:8,paddingVertical:5,overflow:"hidden"},paid:{backgroundColor:"#EAF6EC",color:"#2E7D32"},due:{backgroundColor:"#FFF4DF",color:"#B26A00"},verify:{backgroundColor:RED,borderRadius:8,paddingHorizontal:9,paddingVertical:7,marginTop:9},verifyText:{color:WHITE,fontSize:10,fontWeight:"800"},stall:{width:43,height:43,borderRadius:12,backgroundColor:"#F8E9EC",alignItems:"center",justifyContent:"center",marginRight:11},stallText:{color:RED,fontSize:12,fontWeight:"900"},empty:{backgroundColor:WHITE,borderRadius:15,padding:23,alignItems:"center",gap:8,borderWidth:1,borderColor:"#E7E7E8"} });
+
+let styles = createStyles(LIGHT_COLORS);

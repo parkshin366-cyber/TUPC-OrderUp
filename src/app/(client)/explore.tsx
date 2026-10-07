@@ -13,6 +13,8 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 
 import {
   ClientStore as Store,
@@ -183,6 +185,8 @@ const getFilterTitle = (filter: FilterType) => {
 // =====================================================
 
 export default function ExploreScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const [stores, setStores] = useState<Store[]>([]);
   const [foods, setFoods] = useState<CatalogFood[]>([]);
   const params = useLocalSearchParams<{
@@ -834,7 +838,7 @@ export default function ExploreScreen() {
 // STYLES
 // =====================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   // ===================================================
   // SCREEN
   // ===================================================
@@ -1581,3 +1585,5 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 });
+
+let styles = createStyles(LIGHT_COLORS);

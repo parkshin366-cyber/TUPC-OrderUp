@@ -16,6 +16,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 import { getMyOrders, requestOrderCancellation } from "../../services/api";
 
 // =====================================================
@@ -75,6 +77,8 @@ type Order = {
   fulfillmentMethod?: "pickup" | "delivery";
   deliveryAddress?: string;
   paymentMethod?: string;
+  paymentStatus?: "pending" | "paid" | "failed" | "refunded";
+  gcashReference?: string;
   notes?: string;
   estimatedMinutes?: number;
   estimatedReadyAt?: string;
@@ -306,6 +310,8 @@ const normalizeOrders = (raw: unknown): Order[] => {
         paymentMethod:
           item.paymentMethod ??
           "Cash on Pickup",
+        paymentStatus: item.paymentStatus,
+        gcashReference: item.gcashReference,
 
         notes: item.notes ?? "",
         estimatedMinutes: item.estimatedMinutes,
@@ -392,6 +398,8 @@ const getStatusConfig = (status: OrderStatus) => {
 // =====================================================
 
 export default function OrdersScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   // ===================================================
   // AUTH
   // ===================================================
@@ -1539,6 +1547,12 @@ export default function OrdersScreen() {
                         {selectedOrder.paymentMethod ||
                           "Cash on Pickup"}
                       </Text>
+                      {selectedOrder.paymentMethod?.toLowerCase() === "gcash" && (
+                        <Text style={styles.infoLabel}>
+                          {selectedOrder.paymentStatus === "paid" ? "Payment verified" : selectedOrder.paymentStatus === "failed" ? "Payment rejected" : "Waiting for seller verification"}
+                          {selectedOrder.gcashReference ? ` · Ref ${selectedOrder.gcashReference}` : ""}
+                        </Text>
+                      )}
                     </View>
                   </View>
 
@@ -2040,7 +2054,7 @@ export default function OrdersScreen() {
 // STYLES
 // =====================================================
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: BG,
@@ -2953,3 +2967,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+
+let styles = createStyles(LIGHT_COLORS);

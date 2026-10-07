@@ -1,9 +1,41 @@
 import { Response } from "express";
+import fs from "fs/promises";
 import { Types } from "mongoose";
+import path from "path";
+import sharp from "sharp";
 
 import { AuthRequest } from "../middleware/auth";
 import Store from "../models/Store";
 import User from "../models/User";
+
+const STORE_UPLOAD_DIR = path.join(process.cwd(), "uploads", "stores");
+
+function parseBoolean(value: unknown, fallback: boolean) {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+async function saveStoreImage(req: AuthRequest, file: Express.Multer.File | undefined, kind: "profile" | "banner") {
+  if (!file) return undefined;
+  await fs.mkdir(STORE_UPLOAD_DIR, { recursive: true });
+  const filename = `${req.userId}-${kind}-${Date.now()}.webp`;
+  const width = kind === "banner" ? 1400 : 500;
+  const height = kind === "banner" ? 560 : 500;
+  await sharp(file.buffer)
+    .rotate()
+    .resize(width, height, {
+      fit: kind === "profile" ? "contain" : "cover",
+      background: kind === "profile" ? { r: 255, g: 255, b: 255, alpha: 1 } : undefined,
+      withoutEnlargement: true,
+    })
+    .webp({ quality: 86 })
+    .toFile(path.join(STORE_UPLOAD_DIR, filename));
+  const protocol = String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
+  const host = String(req.headers["x-forwarded-host"] || req.get("host") || "").split(",")[0].trim();
+  return `${protocol}://${host}/uploads/stores/${filename}`;
+}
 
 // =====================================================
 // HELPER
@@ -92,7 +124,25 @@ export async function saveMyStore(
       isOpen,
       pickupEnabled,
       deliveryEnabled,
+      gcashEnabled,
+      gcashName,
+      gcashNumber,
     } = req.body;
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const profileImage = await saveStoreImage(req, files?.profileImage?.[0], "profile");
+    const bannerImage = await saveStoreImage(req, files?.bannerImage?.[0], "banner");
+    const existingStore = await Store.findOne({ seller: req.userId }).lean();
+    const resolvedGcashEnabled = parseBoolean(gcashEnabled, existingStore?.gcashEnabled ?? false);
+    const resolvedGcashName = typeof gcashName === "string" ? gcashName.trim() : existingStore?.gcashName ?? "";
+    const resolvedGcashNumber = typeof gcashNumber === "string" ? gcashNumber.replace(/\s+/g, "") : existingStore?.gcashNumber ?? "";
+
+    if (resolvedGcashEnabled && (!resolvedGcashName || !/^09\d{9}$/.test(resolvedGcashNumber))) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter the GCash account name and a valid 11-digit mobile number before enabling GCash.",
+      });
+    }
 
     // =================================================
     // VALIDATE STORE NAME
@@ -180,20 +230,16 @@ export async function saveMyStore(
               ? closeTime.trim()
               : "6:00 PM",
 
-          isOpen:
-            typeof isOpen === "boolean"
-              ? isOpen
-              : true,
+          isOpen: parseBoolean(isOpen, true),
 
-          pickupEnabled:
-            typeof pickupEnabled === "boolean"
-              ? pickupEnabled
-              : true,
+          pickupEnabled: parseBoolean(pickupEnabled, true),
 
-          deliveryEnabled:
-            typeof deliveryEnabled === "boolean"
-              ? deliveryEnabled
-              : false,
+          deliveryEnabled: parseBoolean(deliveryEnabled, false),
+          ...(profileImage ? { profileImage } : {}),
+          ...(bannerImage ? { bannerImage } : {}),
+          gcashEnabled: resolvedGcashEnabled,
+          gcashName: resolvedGcashName,
+          gcashNumber: resolvedGcashNumber,
         },
       },
       {
@@ -288,6 +334,11 @@ export async function getPublicStores(
           isOpen: 1,
           pickupEnabled: 1,
           deliveryEnabled: 1,
+          profileImage: 1,
+          bannerImage: 1,
+          gcashEnabled: 1,
+          gcashName: 1,
+          gcashNumber: 1,
           createdAt: 1,
           updatedAt: 1,
         },
@@ -395,6 +446,11 @@ export async function getPublicStoreById(
           isOpen: 1,
           pickupEnabled: 1,
           deliveryEnabled: 1,
+          profileImage: 1,
+          bannerImage: 1,
+          gcashEnabled: 1,
+          gcashName: 1,
+          gcashNumber: 1,
           createdAt: 1,
           updatedAt: 1,
         },

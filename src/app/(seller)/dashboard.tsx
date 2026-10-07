@@ -911,7 +911,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "colors.surface",
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -928,7 +928,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.cardinal,
     borderWidth: 1.5,
-    borderColor: "colors.surface",
+    borderColor: colors.surface,
   },
 
   // ===================================================
@@ -936,7 +936,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   // ===================================================
 
   accountStatus: {
-    backgroundColor: "colors.surface",
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 14,
     flexDirection: "row",
@@ -957,7 +957,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 43,
     height: 43,
     borderRadius: 13,
-    backgroundColor: "#F7E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 11,
@@ -982,7 +982,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   approvedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E9F7EF",
+    backgroundColor: colors.successBg,
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 9,
@@ -999,7 +999,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   approvedText: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#28794D",
+    color: colors.success,
   },
 
   // ===================================================
@@ -1007,7 +1007,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   // ===================================================
 
   storeStatus: {
-    backgroundColor: "colors.surface",
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 15,
     flexDirection: "row",
@@ -1027,7 +1027,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: "#F7E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -1101,7 +1101,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
 
   statCard: {
     width: "48.5%",
-    backgroundColor: "colors.surface",
+    backgroundColor: colors.surface,
     borderRadius: 17,
     padding: 15,
     borderWidth: 1,
@@ -1157,7 +1157,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
 
   quickCard: {
     width: "48.5%",
-    backgroundColor: "colors.surface",
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
@@ -1169,7 +1169,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#F7E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
@@ -1192,7 +1192,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   // ===================================================
 
   ordersCard: {
-    backgroundColor: "colors.surface",
+    backgroundColor: colors.surface,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1217,7 +1217,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: "#F7E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -1241,7 +1241,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
 
   orderItem: {
     fontSize: 10,
-    color: "#909090",
+    color: colors.lightMuted,
     marginTop: 3,
   },
 
@@ -1264,15 +1264,15 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   },
 
   statusPreparing: {
-    backgroundColor: "#FFF3E3",
+    backgroundColor: colors.warningBg,
   },
 
   statusReady: {
-    backgroundColor: "#F1EAF6",
+    backgroundColor: colors.surfaceSecondary,
   },
 
   statusCompleted: {
-    backgroundColor: "#E9F7EF",
+    backgroundColor: colors.successBg,
   },
 
   statusText: {
@@ -1281,7 +1281,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   },
 
   statusPreparingText: {
-    color: "#A86616",
+    color: colors.warning,
   },
 
   statusReadyText: {
@@ -1289,7 +1289,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   },
 
   statusCompletedText: {
-    color: "#28794D",
+    color: colors.success,
   },
 
   divider: {
@@ -1302,7 +1302,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   // ===================================================
 
   performanceCard: {
-    backgroundColor: "colors.surface",
+    backgroundColor: colors.surface,
     borderRadius: 19,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1331,7 +1331,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   growthBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F7E9EC",
+    backgroundColor: colors.softRed,
     borderRadius: 9,
     paddingHorizontal: 9,
     paddingVertical: 6,
@@ -1379,19 +1379,19 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   },
 
   statusPending: {
-    backgroundColor: "#FFF3E3",
+    backgroundColor: colors.warningBg,
   },
 
   statusPendingText: {
-    color: "#A86616",
+    color: colors.warning,
   },
 
   statusCancelled: {
-    backgroundColor: "#FDECEC",
+    backgroundColor: colors.dangerBg,
   },
 
   statusCancelledText: {
-    color: "#B42318",
+    color: colors.danger,
   },
 
   growthIcon: {
@@ -1412,7 +1412,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   },
 
   emptyCard: {
-    backgroundColor: "colors.surface",
+    backgroundColor: colors.surface,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,

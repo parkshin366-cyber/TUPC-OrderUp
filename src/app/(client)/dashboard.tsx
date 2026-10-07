@@ -1991,7 +1991,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "colors.input",
+    backgroundColor: colors.input,
     alignItems: "center",
     justifyContent:
       "center",
@@ -2002,7 +2002,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     height: 40,
     borderRadius: 12,
     backgroundColor:
-      "colors.softRed",
+      colors.softRed,
     alignItems: "center",
     justifyContent:
       "center",
@@ -2068,7 +2068,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     height: 20,
     paddingHorizontal: 5,
     borderRadius: 10,
-    backgroundColor: "colors.softRed",
+    backgroundColor: colors.softRed,
     color: colors.cardinal,
     textAlign: "center",
     textAlignVertical: "center",
@@ -2080,7 +2080,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 43,
     height: 43,
     borderRadius: 13,
-    backgroundColor: "colors.softRed",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -2117,7 +2117,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 43,
     height: 43,
     borderRadius: 13,
-    backgroundColor: "colors.softRed",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2134,7 +2134,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     borderRadius: 11,
     paddingHorizontal: 6,
     backgroundColor:
-      "colors.softRed",
+      colors.softRed,
     color: colors.cardinal,
     textAlign: "center",
     textAlignVertical: "center",
@@ -2153,7 +2153,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   },
 
   searchResultPressed: {
-    backgroundColor: "colors.surfaceSecondary",
+    backgroundColor: colors.surfaceSecondary,
   },
 
   searchResultIcon: {
@@ -2161,7 +2161,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     height: 43,
     borderRadius: 13,
     backgroundColor:
-      "colors.softRed",
+      colors.softRed,
     alignItems: "center",
     justifyContent:
       "center",
@@ -2242,7 +2242,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     height: 42,
     borderRadius: 13,
     backgroundColor:
-      "colors.input",
+      colors.input,
     alignItems: "center",
     justifyContent:
       "center",
@@ -2477,7 +2477,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     justifyContent:
       "center",
     backgroundColor:
-      "colors.softRed",
+      colors.softRed,
   },
 
   favoriteHeart: {
@@ -2544,7 +2544,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     height: 48,
     borderRadius: 15,
     backgroundColor:
-      "colors.softRed",
+      colors.softRed,
     alignItems: "center",
     justifyContent:
       "center",
@@ -2614,7 +2614,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     height: 56,
     borderRadius: 16,
     backgroundColor:
-      "colors.softRed",
+      colors.softRed,
     alignItems: "center",
     justifyContent:
       "center",
@@ -2697,7 +2697,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     height: 29,
     borderRadius: 15,
     backgroundColor:
-      "colors.softRed",
+      colors.softRed,
     alignItems: "center",
     justifyContent:
       "center",

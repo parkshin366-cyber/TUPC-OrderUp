@@ -85,11 +85,21 @@ const uploadProductImage = multer({
   fileFilter: imageFileFilter,
 });
 
+const uploadStoreImages = multer({
+  storage,
+  limits: {
+    files: 3,
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: imageFileFilter,
+});
+
 // =====================================================
 // EXPORTS
 // =====================================================
 
 export {
   uploadIdImages,
-  uploadProductImage
+  uploadProductImage,
+  uploadStoreImages,
 };

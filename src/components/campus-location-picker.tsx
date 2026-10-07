@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../context/ThemeContext";
+import { createThemedStyleSheet } from "../utils/themeStyles";
 
 export type CampusPin = { latitude: number; longitude: number };
 
@@ -22,6 +24,8 @@ function insideCampus(pin: CampusPin) {
 }
 
 export default function CampusLocationPicker({ visible, initialPin, phoneLocation, onClose, onConfirm }: Props) {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const [selected, setSelected] = useState<CampusPin | null>(initialPin ?? null);
   const [mapKey, setMapKey] = useState(0);
   useEffect(() => {
@@ -92,7 +96,7 @@ export default function CampusLocationPicker({ visible, initialPin, phoneLocatio
   </Modal>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safe: { flex: 1, backgroundColor: "#FFFFFF" },
   header: { minHeight: 72, paddingHorizontal: 15, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#E7E7E8" },
   close: { width: 42, height: 42, borderRadius: 13, backgroundColor: "#F3F3F4", alignItems: "center", justifyContent: "center" },
@@ -107,3 +111,4 @@ const styles = StyleSheet.create({
   pinCopy: { flex: 1, marginLeft: 9 }, pinTitle: { fontSize: 11, fontWeight: "900", color: "#171717" }, pinCoordinates: { marginTop: 3, fontSize: 9.5, color: "#737373" },
   confirm: { height: 48, marginTop: 12, borderRadius: 14, backgroundColor: CARDINAL, alignItems: "center", justifyContent: "center" }, disabled: { opacity: .45 }, confirmText: { fontSize: 12, fontWeight: "900", color: "#FFFFFF" },
 });
+let styles = createStyles(LIGHT_COLORS);

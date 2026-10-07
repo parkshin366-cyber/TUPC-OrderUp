@@ -18,6 +18,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../../context/AuthContext";
+import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyleSheet } from "../../utils/themeStyles";
 import {
   getMyProducts,
   getSellerOrders,
@@ -66,6 +68,8 @@ const getTrend = (percent: number | null): Trend => {
 };
 
 export default function SellerSalesScreen() {
+  const { colors } = useAppTheme();
+  styles = createStyles(colors);
   const { token, user } = useAuth();
 
   const [period, setPeriod] = useState<Period>("Today");
@@ -689,7 +693,7 @@ function PaymentRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
   safeArea: {
     flex: 1,
     backgroundColor: "#F7F7F8",
@@ -1308,3 +1312,4 @@ const styles = StyleSheet.create({
   exportDisabled: { opacity: .65 },
 });
 
+let styles = createStyles(LIGHT_COLORS);

@@ -581,7 +581,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 39,
     height: 39,
     borderRadius: 13,
-    backgroundColor: "#EAF5EC",
+    backgroundColor: colors.successBg,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 11,
@@ -606,7 +606,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   liveBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EAF5EC",
+    backgroundColor: colors.successBg,
     borderRadius: 8,
     paddingHorizontal: 7,
     paddingVertical: 5,
@@ -676,7 +676,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 11,
-    backgroundColor: "#F8E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -721,7 +721,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 35,
     height: 35,
     borderRadius: 11,
-    backgroundColor: "#F8E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -780,7 +780,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 37,
     height: 37,
     borderRadius: 11,
-    backgroundColor: "#F8E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -844,7 +844,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 37,
     height: 37,
     borderRadius: 11,
-    backgroundColor: "#F8E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -870,7 +870,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
 
   activityTime: {
     fontSize: 8,
-    color: "#999999",
+    color: colors.lightMuted,
     fontWeight: "600",
   },
 
@@ -903,7 +903,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#F8E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -959,7 +959,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 43,
     height: 43,
     borderRadius: 13,
-    backgroundColor: "#F8E9EC",
+    backgroundColor: colors.softRed,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -984,7 +984,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   },
 
   securePill: {
-    backgroundColor: "#EAF5EC",
+    backgroundColor: colors.successBg,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 7,
@@ -1064,7 +1064,7 @@ const createStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   version: {
     fontSize: 9,
     fontWeight: "700",
-    color: "#A0A0A0",
+    color: colors.lightMuted,
   },
 
   lastRow: {

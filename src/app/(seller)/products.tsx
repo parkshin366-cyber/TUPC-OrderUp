@@ -29,6 +29,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 
   import { useAuth } from "../../context/AuthContext";
+  import { LIGHT_COLORS, type AppColors, useAppTheme } from "../../context/ThemeContext";
+  import { createThemedStyleSheet } from "../../utils/themeStyles";
 
   const CARDINAL = "#A6192E";
   const TEXT = "#171717";
@@ -122,6 +124,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
   };
 
   export default function SellerProducts() {
+    const { colors } = useAppTheme();
+    styles = createStyles(colors);
     const { token } = useAuth();
 
     const [products, setProducts] = useState<Product[]>([]);
@@ -2158,7 +2162,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
   // STYLES
   // =====================================================
 
-  const styles = StyleSheet.create({
+  const createStyles = (colors: AppColors) => createThemedStyleSheet(colors, {
     safeArea: {
       flex: 1,
       backgroundColor: "#F7F7F8",
@@ -3075,3 +3079,5 @@ import { SafeAreaView } from "react-native-safe-area-context";
       fontWeight: "700",
     },
   });
+
+  let styles = createStyles(LIGHT_COLORS);
