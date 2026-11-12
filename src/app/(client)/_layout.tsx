@@ -86,7 +86,7 @@ export default function ClientLayout() {
                 <Ionicons
                   name={focused ? "home" : "home-outline"}
                   size={21}
-                  color={color}
+                  color={focused ? colors.cardinal : colors.muted}
                 />
               </View>
             );
@@ -118,7 +118,7 @@ export default function ClientLayout() {
                 <Ionicons
                   name={focused ? "storefront" : "storefront-outline"}
                   size={22}
-                  color={color}
+                  color={focused ? colors.cardinal : colors.muted}
                 />
               </View>
             );
@@ -144,7 +144,7 @@ export default function ClientLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          href: null,
+          tabBarButton: () => null, tabBarItemStyle: { display: "none" },
         }}
       />
 
@@ -168,7 +168,7 @@ export default function ClientLayout() {
                 <Ionicons
                   name={focused ? "receipt" : "receipt-outline"}
                   size={21}
-                  color={color}
+                  color={focused ? colors.cardinal : colors.muted}
                 />
               </View>
             );
@@ -196,7 +196,7 @@ export default function ClientLayout() {
                 <Ionicons
                   name={focused ? "person" : "person-outline"}
                   size={21}
-                  color={color}
+                  color={focused ? colors.cardinal : colors.muted}
                 />
               </View>
             );
@@ -211,7 +211,7 @@ export default function ClientLayout() {
       <Tabs.Screen
         name="cart"
         options={{
-          href: null,
+          tabBarButton: () => null, tabBarItemStyle: { display: "none" },
         }}
       />
 
@@ -222,7 +222,7 @@ export default function ClientLayout() {
       <Tabs.Screen
         name="checkout"
         options={{
-          href: null,
+          tabBarButton: () => null, tabBarItemStyle: { display: "none" },
         }}
       />
 
@@ -233,7 +233,7 @@ export default function ClientLayout() {
       <Tabs.Screen
         name="order-success"
         options={{
-          href: null,
+          tabBarButton: () => null, tabBarItemStyle: { display: "none" },
         }}
       />
 
@@ -244,12 +244,12 @@ export default function ClientLayout() {
       <Tabs.Screen
         name="(client-details)"
         options={{
-          href: null,
+          tabBarButton: () => null, tabBarItemStyle: { display: "none" },
         }}
       />
 
-      <Tabs.Screen name="messages" options={{ href: null }} />
-      <Tabs.Screen name="reviews" options={{ href: null }} />
+      <Tabs.Screen name="messages" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
+      <Tabs.Screen name="reviews" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
     </Tabs>
     <ClientEtaBubble />
     </View>

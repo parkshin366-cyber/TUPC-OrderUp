@@ -1,3 +1,4 @@
+export const unstable_settings = { initialRouteName: "dashboard" };
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
@@ -9,7 +10,6 @@ export default function AdminLayout() {
   return (
     <Tabs
       key={themeMode}
-      initialRouteName="dashboard"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.cardinal,
@@ -30,14 +30,14 @@ export default function AdminLayout() {
         tabBarLabelStyle: { fontSize: 10, fontWeight: "800" },
       }}
     >
-      <Tabs.Screen name="dashboard" options={{ title: "Overview", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "grid" : "grid-outline"} size={22} color={color} /> }} />
-      <Tabs.Screen name="users" options={{ title: "Users", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "people" : "people-outline"} size={22} color={color} /> }} />
-      <Tabs.Screen name="finance" options={{ title: "Finance", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "wallet" : "wallet-outline"} size={22} color={color} /> }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} /> }} />
-      <Tabs.Screen name="vouchers" options={{ href: null }} />
-      <Tabs.Screen name="settings" options={{ href: null }} />
-      <Tabs.Screen name="security" options={{ href: null }} />
-      <Tabs.Screen name="database" options={{ href: null }} />
+      <Tabs.Screen name="dashboard" options={{ title: "Overview", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "grid" : "grid-outline"} size={22} color={focused ? colors.cardinal : colors.muted} /> }} />
+      <Tabs.Screen name="users" options={{ title: "Users", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "people" : "people-outline"} size={22} color={focused ? colors.cardinal : colors.muted} /> }} />
+      <Tabs.Screen name="finance" options={{ title: "Finance", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "wallet" : "wallet-outline"} size={22} color={focused ? colors.cardinal : colors.muted} /> }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "person" : "person-outline"} size={22} color={focused ? colors.cardinal : colors.muted} /> }} />
+      <Tabs.Screen name="vouchers" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
+      <Tabs.Screen name="settings" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
+      <Tabs.Screen name="security" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
+      <Tabs.Screen name="database" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
     </Tabs>
   );
 }

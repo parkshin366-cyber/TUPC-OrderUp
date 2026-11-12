@@ -566,7 +566,7 @@ export default function SellerSalesScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={exportVisible} transparent animationType="slide" onRequestClose={() => !exporting && setExportVisible(false)}>
+      <Modal visible={exportVisible} transparent animationType="slide" onRequestClose={() => { if (!exporting) setExportVisible(false); }}>
         <View style={styles.exportOverlay}>
           <Pressable style={StyleSheet.absoluteFill} disabled={exporting} onPress={() => setExportVisible(false)} />
           <View style={styles.exportSheet}>

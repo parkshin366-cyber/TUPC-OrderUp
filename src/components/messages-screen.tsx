@@ -21,6 +21,7 @@ function personName(person: any) {
 }
 
 function personId(person: any) {
+  if (typeof person === "string") return person;
   return String(person?._id ?? person?.id ?? "");
 }
 
@@ -69,13 +70,17 @@ export default function MessagesScreen({ role }: Props) {
     }
   }, [token]);
 
-  useFocusEffect(useCallback(() => { void loadConversations(); }, [loadConversations]));
+  useFocusEffect(useCallback(() => {
+    void loadConversations();
+    const interval = setInterval(() => { void loadConversations(); }, 3500);
+    return () => clearInterval(interval);
+  }, [loadConversations]));
   useEffect(() => { if (active?._id) void loadMessages(active._id); }, [active?._id, loadMessages]);
   useEffect(() => {
     if (!active?._id) return;
-    const interval = setInterval(() => { void loadMessages(active._id); void loadConversations(); }, 3500);
+    const interval = setInterval(() => { void loadMessages(active._id); }, 3500);
     return () => clearInterval(interval);
-  }, [active?._id, loadConversations, loadMessages]);
+  }, [active?._id, loadMessages]);
 
   const openConversation = (conversation: Conversation) => setActive(conversation);
   const send = async () => {

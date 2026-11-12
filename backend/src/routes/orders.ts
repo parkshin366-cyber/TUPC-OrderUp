@@ -1,3 +1,4 @@
+import { uploadProductImage } from "../middleware/upload";
 import { Router } from "express";
 
 import {
@@ -7,6 +8,7 @@ import {
 
 import {
     createOrder,
+    getOrderReceipt,
     getMyOrders,
     getOrderById,
     getSellerOrders,
@@ -16,8 +18,8 @@ import {
     reviewCancellationRequest,
     cancelOrderBySeller,
     reviewGcashPayment,
+    getPaymentProof,
 } from "../controllers/orderController";
-import { createGcashCheckout, verifyGcashCheckout } from "../controllers/paymentController";
 
 const router = Router();
 
@@ -32,6 +34,7 @@ const router = Router();
 router.post(
   "/",
   authenticate,
+  uploadProductImage.single("paymentProof"),
   createOrder
 );
 
@@ -43,9 +46,12 @@ router.get(
   getMyOrders
 );
 
+router.get("/:orderId/receipt", authenticate, getOrderReceipt);
+
 router.post("/:orderId/cancel", authenticate, requestOrderCancellation);
-router.post("/:orderId/payment/checkout", authenticate, createGcashCheckout);
-router.post("/:orderId/payment/verify", authenticate, verifyGcashCheckout);
+router.post("/:orderId/payment/checkout", authenticate, (_req, res) => { res.status(410).json({ message: "Use the seller GCash account and upload your payment screenshot." }); });
+router.get("/:orderId/payment/proof", authenticate, getPaymentProof);
+router.post("/:orderId/payment/verify", authenticate, (_req, res) => { res.status(410).json({ message: "Payment must be verified by the seller." }); });
 
 /**
  * =====================================================

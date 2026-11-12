@@ -1,3 +1,4 @@
+export const unstable_settings = { initialRouteName: "dashboard" };
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useAppTheme } from "../../context/ThemeContext";
@@ -8,7 +9,6 @@ export default function SellerLayout() {
   return (
     <Tabs
       key={themeMode}
-      initialRouteName="dashboard"
       screenOptions={{
         headerShown: false,
 
@@ -53,7 +53,7 @@ export default function SellerLayout() {
                   : "grid-outline"
               }
               size={22}
-              color={color}
+              color={focused ? colors.cardinal : colors.muted}
             />
           ),
         }}
@@ -79,7 +79,7 @@ export default function SellerLayout() {
                   : "receipt-outline"
               }
               size={22}
-              color={color}
+              color={focused ? colors.cardinal : colors.muted}
             />
           ),
         }}
@@ -105,7 +105,7 @@ export default function SellerLayout() {
                   : "fast-food-outline"
               }
               size={22}
-              color={color}
+              color={focused ? colors.cardinal : colors.muted}
             />
           ),
         }}
@@ -131,7 +131,7 @@ export default function SellerLayout() {
                   : "bar-chart-outline"
               }
               size={22}
-              color={color}
+              color={focused ? colors.cardinal : colors.muted}
             />
           ),
         }}
@@ -157,15 +157,15 @@ export default function SellerLayout() {
                   : "settings-outline"
               }
               size={22}
-              color={color}
+              color={focused ? colors.cardinal : colors.muted}
             />
           ),
         }}
       />
 
-      <Tabs.Screen name="vouchers" options={{ href: null }} />
-      <Tabs.Screen name="messages" options={{ href: null }} />
-      <Tabs.Screen name="reviews" options={{ href: null }} />
+      <Tabs.Screen name="vouchers" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
+      <Tabs.Screen name="messages" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
+      <Tabs.Screen name="reviews" options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
 
       {/* =====================================================
           HIDDEN ROUTES
@@ -174,14 +174,14 @@ export default function SellerLayout() {
       <Tabs.Screen
         name="inventory"
         options={{
-          href: null,
+          tabBarButton: () => null, tabBarItemStyle: { display: "none" },
         }}
       />
 
       <Tabs.Screen
         name="store"
         options={{
-          href: null,
+          tabBarButton: () => null, tabBarItemStyle: { display: "none" },
         }}
       />
     </Tabs>

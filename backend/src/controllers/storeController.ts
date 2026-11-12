@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { AuthRequest } from "../middleware/auth";
 import Store from "../models/Store";
 import User from "../models/User";
+import { closeStoreIfPastHours, closeStoresPastHours } from "../services/storeSchedule";
 
 const STORE_UPLOAD_DIR = path.join(process.cwd(), "uploads", "stores");
 
@@ -17,21 +18,20 @@ function parseBoolean(value: unknown, fallback: boolean) {
   return fallback;
 }
 
-async function saveStoreImage(req: AuthRequest, file: Express.Multer.File | undefined, kind: "profile" | "banner") {
+async function saveStoreImage(req: AuthRequest, file: Express.Multer.File | undefined, kind: "profile" | "banner" | "qr") {
   if (!file) return undefined;
   await fs.mkdir(STORE_UPLOAD_DIR, { recursive: true });
-  const filename = `${req.userId}-${kind}-${Date.now()}.webp`;
-  const width = kind === "banner" ? 1400 : 500;
-  const height = kind === "banner" ? 560 : 500;
-  await sharp(file.buffer)
+  const filename = `${req.userId}-${kind}-${Date.now()}.${kind === "qr" ? "png" : "webp"}`;
+  const width = kind === "banner" ? 1400 : kind === "qr" ? 1200 : 500;
+  const height = kind === "banner" ? 560 : kind === "qr" ? 1600 : 500;
+  const image = sharp(file.buffer)
     .rotate()
     .resize(width, height, {
-      fit: kind === "profile" ? "contain" : "cover",
+      fit: kind !== "banner" ? "contain" : "cover",
       background: kind === "profile" ? { r: 255, g: 255, b: 255, alpha: 1 } : undefined,
       withoutEnlargement: true,
-    })
-    .webp({ quality: 86 })
-    .toFile(path.join(STORE_UPLOAD_DIR, filename));
+    });
+  await (kind === "qr" ? image.png() : image.webp({ quality: 86 })).toFile(path.join(STORE_UPLOAD_DIR, filename));
   const protocol = String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
   const host = String(req.headers["x-forwarded-host"] || req.get("host") || "").split(",")[0].trim();
   return `${protocol}://${host}/uploads/stores/${filename}`;
@@ -77,6 +77,8 @@ export async function getMyStore(
         message: "Store has not been created yet",
       });
     }
+
+    await closeStoreIfPastHours(store);
 
     return res.status(200).json({
       success: true,
@@ -132,6 +134,7 @@ export async function saveMyStore(
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
     const profileImage = await saveStoreImage(req, files?.profileImage?.[0], "profile");
     const bannerImage = await saveStoreImage(req, files?.bannerImage?.[0], "banner");
+    const gcashQrImage = await saveStoreImage(req, files?.gcashQrImage?.[0], "qr");
     const existingStore = await Store.findOne({ seller: req.userId }).lean();
     const resolvedGcashEnabled = parseBoolean(gcashEnabled, existingStore?.gcashEnabled ?? false);
     const resolvedGcashName = typeof gcashName === "string" ? gcashName.trim() : existingStore?.gcashName ?? "";
@@ -237,6 +240,7 @@ export async function saveMyStore(
           deliveryEnabled: parseBoolean(deliveryEnabled, false),
           ...(profileImage ? { profileImage } : {}),
           ...(bannerImage ? { bannerImage } : {}),
+          ...(gcashQrImage ? { gcashQrImage } : {}),
           gcashEnabled: resolvedGcashEnabled,
           gcashName: resolvedGcashName,
           gcashNumber: resolvedGcashNumber,
@@ -260,6 +264,8 @@ export async function saveMyStore(
         message: "Unable to save store",
       });
     }
+
+    await closeStoreIfPastHours(store);
 
     // =================================================
     // SUCCESS
@@ -301,6 +307,7 @@ export async function getPublicStores(
   res: Response
 ) {
   try {
+    await closeStoresPastHours();
     const stores = await Store.aggregate([
       {
         $lookup: {
@@ -337,6 +344,7 @@ export async function getPublicStores(
           profileImage: 1,
           bannerImage: 1,
           gcashEnabled: 1,
+          gcashQrImage: 1,
           gcashName: 1,
           gcashNumber: 1,
           createdAt: 1,
@@ -377,6 +385,7 @@ export async function getPublicStoreById(
   res: Response
 ) {
   try {
+    await closeStoresPastHours();
     // =================================================
     // GET STORE ID SAFELY
     // =================================================
@@ -449,6 +458,7 @@ export async function getPublicStoreById(
           profileImage: 1,
           bannerImage: 1,
           gcashEnabled: 1,
+          gcashQrImage: 1,
           gcashName: 1,
           gcashNumber: 1,
           createdAt: 1,

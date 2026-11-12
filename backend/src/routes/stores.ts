@@ -33,6 +33,7 @@ router.put(
   uploadStoreImages.fields([
     { name: "profileImage", maxCount: 1 },
     { name: "bannerImage", maxCount: 1 },
+    { name: "gcashQrImage", maxCount: 1 },
   ]),
   saveMyStore
 );

@@ -39,6 +39,18 @@ export type ClientCatalog = {
   foods: CatalogFood[];
 };
 
+const FOOD_CATEGORIES = new Set([
+  "Meals",
+  "Snacks",
+  "Drinks",
+  "Desserts",
+]);
+
+function isProductInStock(product: Product): boolean {
+  // Food uses the seller's Available / Sold Out toggle, not stock quantity.
+  return FOOD_CATEGORIES.has(product.category) || product.stock > 0;
+}
+
 function storeIcon(categories: string[]): keyof typeof Ionicons.glyphMap {
   if (categories.includes("Drinks")) return "cafe";
   if (categories.includes("School Supplies")) return "school";
@@ -54,10 +66,15 @@ function mapImage(product: Product): string | undefined {
 export async function loadClientCatalog(): Promise<ClientCatalog> {
   const apiStores = await getPublicStores();
   const productResults = await Promise.all(
-    apiStores.map(async (store) => ({
-      store,
-      products: await getStoreProducts(store._id),
-    })),
+    apiStores.map(async (store) => {
+      try {
+        return { store, products: await getStoreProducts(store._id) };
+      } catch (error) {
+        // One seller's failed product request should not hide every other store.
+        console.error(`LOAD PRODUCTS ERROR FOR STORE ${store._id}:`, error);
+        return { store, products: [] as Product[] };
+      }
+    }),
   );
 
   const stores: ClientStore[] = productResults.map(({ store, products }) => {
@@ -79,7 +96,7 @@ export async function loadClientCatalog(): Promise<ClientCatalog> {
   });
 
   const foods: CatalogFood[] = productResults.flatMap(({ store, products }) =>
-    products.filter((product) => product.available && product.stock > 0 && store.isOpen).map((product) => ({
+    products.filter((product) => product.available && isProductInStock(product) && store.isOpen).map((product) => ({
       id: product._id,
       name: product.name,
       store: store.name,

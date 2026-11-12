@@ -46,6 +46,9 @@ const WHITE = "#FFFFFF";
 const SUCCESS = "#18864B";
 const SUCCESS_BG = "#EAF7EF";
 
+const FOOD_CATEGORIES = new Set(["Meals", "Snacks", "Drinks", "Desserts"]);
+const usesStockTracking = (item: Product) => !FOOD_CATEGORIES.has(item.category);
+
 // ============================================================
 // FAVORITES STORAGE
 // ============================================================
@@ -473,10 +476,9 @@ export default function ProductDetails() {
       return 1;
     }
 
-    return Math.min(
-      product.stock,
-      20
-    );
+    return usesStockTracking(product)
+      ? Math.min(product.stock, 20)
+      : 20;
   }, [product]);
 
   // ==========================================================
@@ -524,7 +526,7 @@ export default function ProductDetails() {
 
   const outOfStock =
     !product ||
-    product.stock <= 0;
+    (usesStockTracking(product) && product.stock <= 0);
 
   const productUnavailable =
     !product ||
@@ -538,10 +540,10 @@ export default function ProductDetails() {
     !!product &&
     !!store &&
     product.available &&
-    product.stock > 0 &&
+    (!usesStockTracking(product) || product.stock > 0) &&
     store.isOpen &&
     quantity > 0 &&
-    quantity <= product.stock;
+    (!usesStockTracking(product) || quantity <= product.stock);
 
   // ==========================================================
   // ADD TO CART
@@ -561,7 +563,7 @@ export default function ProductDetails() {
       return;
     }
 
-    if (product.stock <= 0) {
+    if (usesStockTracking(product) && product.stock <= 0) {
       Alert.alert(
         "Out of Stock",
         "This product is currently out of stock."
@@ -579,7 +581,7 @@ export default function ProductDetails() {
       return;
     }
 
-    if (quantity > product.stock) {
+    if (usesStockTracking(product) && quantity > product.stock) {
       Alert.alert(
         "Not Enough Stock",
         `Only ${product.stock} item${
@@ -618,7 +620,9 @@ export default function ProductDetails() {
         store: store.name,
 
         image: "",
-        maxQuantity: product.stock,
+        maxQuantity: usesStockTracking(product)
+          ? product.stock
+          : Number.MAX_SAFE_INTEGER,
       };
 
     const result = addToCart(cartProduct, quantity);
@@ -996,7 +1000,7 @@ export default function ProductDetails() {
                 style={[
                   styles.availabilityBox,
                   product.available &&
-                  product.stock > 0
+                  (!usesStockTracking(product) || product.stock > 0)
                     ? styles.availableBox
                     : styles.unavailableBox,
                 ]}
@@ -1004,14 +1008,14 @@ export default function ProductDetails() {
                 <Ionicons
                   name={
                     product.available &&
-                    product.stock > 0
+                    (!usesStockTracking(product) || product.stock > 0)
                       ? "checkmark-circle"
                       : "close-circle"
                   }
                   size={15}
                   color={
                     product.available &&
-                    product.stock > 0
+                    (!usesStockTracking(product) || product.stock > 0)
                       ? SUCCESS
                       : MUTED
                   }
@@ -1021,13 +1025,12 @@ export default function ProductDetails() {
                   style={[
                     styles.availabilityText,
                     product.available &&
-                    product.stock > 0
+                    (!usesStockTracking(product) || product.stock > 0)
                       ? styles.availableText
                       : styles.unavailableText,
                   ]}
                 >
-                  {product.stock <=
-                  0
+                  {usesStockTracking(product) && product.stock <= 0
                     ? "Out of stock"
                     : !product.available
                       ? "Unavailable"
@@ -1046,8 +1049,9 @@ export default function ProductDetails() {
                   styles.stockText
                 }
               >
-                {product.stock}{" "}
-                in stock
+                {usesStockTracking(product)
+                  ? `${product.stock} in stock`
+                  : "Stock not tracked"}
               </Text>
             </View>
 

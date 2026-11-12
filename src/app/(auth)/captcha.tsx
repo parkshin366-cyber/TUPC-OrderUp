@@ -12,7 +12,7 @@ import { WebView, WebViewMessageEvent } from "react-native-webview";
 import { API_URL, NGROK_HEADERS } from "../../constants/api";
 
 export default function CaptchaScreen() {
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<WebView<{}>>(null);
 
   const params = useLocalSearchParams<{
     next?: string;
@@ -156,7 +156,7 @@ export default function CaptchaScreen() {
               </View>
             )}
 
-            <WebView
+            <WebView<{}>
               ref={webViewRef}
               source={{
                 uri: `${API_URL}/captcha`,

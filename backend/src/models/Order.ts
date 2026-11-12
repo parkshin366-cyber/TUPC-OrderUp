@@ -62,6 +62,10 @@ export interface IOrder extends Document {
   paymentMethod: PaymentMethod;
   paymentStatus: "pending" | "paid" | "failed" | "refunded";
   gcashReference?: string;
+  gcashManualReference?: string;
+  gcashProof?: Buffer;
+  gcashRecipientName?: string;
+  gcashRecipientNumber?: string;
   paymongoCheckoutSessionId?: string;
   paymongoPaymentId?: string;
 
@@ -265,6 +269,10 @@ const OrderSchema =
         maxlength: 30,
       },
 
+      gcashManualReference: { type: String, trim: true },
+      gcashProof: { type: Buffer, select: false },
+      gcashRecipientName: { type: String },
+      gcashRecipientNumber: { type: String },
       paymongoCheckoutSessionId: { type: String, trim: true, select: false },
       paymongoPaymentId: { type: String, trim: true, select: false },
 
@@ -310,6 +318,8 @@ const OrderSchema =
 // =====================================================
 // INDEXES
 // =====================================================
+
+OrderSchema.index({ gcashManualReference: 1 }, { unique: true, partialFilterExpression: { gcashManualReference: { $type: "string" } } });
 
 OrderSchema.index({
   seller: 1,

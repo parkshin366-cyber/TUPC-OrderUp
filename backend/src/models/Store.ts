@@ -31,6 +31,7 @@ export interface IStore extends Document {
   profileImage?: string;
   bannerImage?: string;
   gcashEnabled: boolean;
+  gcashQrImage?: string;
   gcashName?: string;
   gcashNumber?: string;
 
@@ -105,6 +106,7 @@ const StoreSchema = new Schema<IStore>(
     profileImage: { type: String, trim: true },
     bannerImage: { type: String, trim: true },
     gcashEnabled: { type: Boolean, default: false },
+    gcashQrImage: { type: String, default: "" },
     gcashName: { type: String, trim: true, maxlength: 100 },
     gcashNumber: { type: String, trim: true, maxlength: 20 },
   },

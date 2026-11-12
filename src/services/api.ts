@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { File } from "expo-file-system";
 import { NGROK_HEADERS } from "../constants/api";
 
@@ -474,6 +475,11 @@ async function appendImage(
     getMimeType(image.uri);
 
   try {
+    if (Platform.OS === "web") {
+      const response = await globalThis.fetch(image.uri);
+      formData.append(fieldName, await response.blob(), fileName);
+      return;
+    }
     const file = new File(image.uri);
 
     if (!file.exists) {
@@ -1115,6 +1121,7 @@ export type Store = {
   profileImage?: string;
   bannerImage?: string;
   gcashEnabled?: boolean;
+  gcashQrImage?: string;
   gcashName?: string;
   gcashNumber?: string;
   createdAt?: string;
@@ -1356,6 +1363,7 @@ export type CreateOrderPayload = {
   deliveryLongitude?: number;
   paymentMethod: PaymentMethod;
   gcashReference?: string;
+  gcashPaidAmount?: number;
   voucherCode?: string;
 };
 
@@ -1493,6 +1501,7 @@ export async function saveMyStore(
     deliveryEnabled?: boolean;
     profileImage?: RegisterImage;
     bannerImage?: RegisterImage;
+    gcashQrImage?: RegisterImage;
     gcashEnabled?: boolean;
     gcashName?: string;
     gcashNumber?: string;
@@ -1536,7 +1545,7 @@ export async function saveMyStore(
           ...(store.gcashNumber !== undefined ? { gcashNumber: store.gcashNumber } : {}),
         };
 
-    const hasImages = Boolean(store.profileImage?.uri || store.bannerImage?.uri);
+    const hasImages = Boolean(store.profileImage?.uri || store.bannerImage?.uri || store.gcashQrImage?.uri);
     let response: Response;
 
     if (hasImages) {
@@ -1544,6 +1553,7 @@ export async function saveMyStore(
       Object.entries(payload).forEach(([key, value]) => formData.append(key, String(value)));
       if (store.profileImage) await appendImage(formData, "profileImage", store.profileImage);
       if (store.bannerImage) await appendImage(formData, "bannerImage", store.bannerImage);
+      if (store.gcashQrImage) await appendImage(formData, "gcashQrImage", store.gcashQrImage);
       response = await fetch(`${API_URL}/api/stores/me`, {
         method: "PUT",
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -2441,7 +2451,8 @@ export async function getPublicProduct(
 
 export async function createOrder(
   token: string,
-  payload: CreateOrderPayload
+  payload: CreateOrderPayload,
+  paymentProof?: RegisterImage
 ): Promise<Order> {
   if (!token) {
     throw new Error(
@@ -2484,13 +2495,22 @@ export async function createOrder(
   }
 
   try {
+    let body: string | FormData = JSON.stringify(payload);
+    let headers: Record<string, string> = getAuthHeaders(token);
+    if (payload.paymentMethod === "gcash") {
+      if (!paymentProof) throw new Error("Upload your GCash payment screenshot.");
+      const form = new FormData();
+      form.append("payload", JSON.stringify(payload));
+      await appendImage(form, "paymentProof", paymentProof);
+      body = form;
+      headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
+    }
     const response = await fetch(
       `${API_URL}/api/orders`,
       {
         method: "POST",
-        headers:
-          getAuthHeaders(token),
-        body: JSON.stringify(payload),
+        headers,
+        body,
       }
     );
 
@@ -2932,3 +2952,19 @@ export function updateAdminVoucher(token: string, voucherId: string, payload: Pa
 export function getSellerVouchers(token: string): Promise<{ storeId: string; vouchers: Voucher[]; activations: VoucherActivation[]; products: Product[] }> { return voucherRequest(token, "/api/vouchers/seller"); }
 export function saveSellerVoucherActivation(token: string, voucherId: string, enabled: boolean, productIds: string[]): Promise<VoucherActivation> { return voucherRequest<{ activation: VoucherActivation }>(token, `/api/vouchers/seller/${encodeURIComponent(voucherId)}`, { method: "PUT", body: JSON.stringify({ enabled, productIds }) }).then((data) => data.activation); }
 export function getCustomerStoreVouchers(token: string, storeId: string, productIds: string[]): Promise<Voucher[]> { const query = productIds.length ? `?productIds=${encodeURIComponent(productIds.join(","))}` : ""; return voucherRequest<{ vouchers: Voucher[] }>(token, `/api/vouchers/store/${encodeURIComponent(storeId)}${query}`).then((data) => data.vouchers ?? []); }
+
+export type OrderReceipt = {
+  orderId: string; customerName: string; storeName: string;
+  items: { name: string; quantity: number; price: number }[];
+  subtotal: number; discount: number; total: number;
+  status: string;
+  fulfillmentMethod: string; createdAt: string;
+  pickupLocation: string; deliveryAddress?: string;
+};
+export function getOrderReceipt(token: string, orderId: string): Promise<OrderReceipt> {
+  return authenticatedRequest(token, `/api/orders/${encodeURIComponent(orderId)}/receipt`);
+}
+
+export function getGcashProof(token: string, orderId: string): Promise<{ image: string; recipientName?: string; recipientNumber?: string }> {
+  return authenticatedRequest(token, `/api/orders/${encodeURIComponent(orderId)}/payment/proof`);
+}

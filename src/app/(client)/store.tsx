@@ -478,7 +478,6 @@ export default function StoreScreen() {
       >
         <StatusBar
           barStyle="dark-content"
-          backgroundColor={BACKGROUND}
         />
 
         <View style={styles.loadingContainer}>
@@ -523,7 +522,6 @@ export default function StoreScreen() {
     >
       <StatusBar
         barStyle="dark-content"
-        backgroundColor={BACKGROUND}
       />
 
       <FlatList

@@ -50,6 +50,16 @@ const WHITE = "#FFFFFF";
 const SUCCESS = "#18864B";
 const SUCCESS_BG = "#EAF7EF";
 
+const FOOD_CATEGORIES = new Set([
+  "Meals",
+  "Snacks",
+  "Drinks",
+  "Desserts",
+]);
+
+const usesStockTracking = (product: Product) =>
+  !FOOD_CATEGORIES.has(product.category);
+
 // =====================================================
 // HELPERS
 // =====================================================
@@ -308,8 +318,8 @@ export default function StoreDetails() {
       return;
     }
 
-    // No stock.
-    if (product.stock <= 0) {
+    // Food uses Available / Sold Out; only non-food checks inventory stock.
+    if (usesStockTracking(product) && product.stock <= 0) {
       return;
     }
 
@@ -330,6 +340,7 @@ export default function StoreDetails() {
       // =============================================
 
       if (
+        usesStockTracking(product) &&
         existingItem &&
         existingItem.quantity >=
           product.stock
@@ -344,7 +355,9 @@ export default function StoreDetails() {
         name: product.name,
         price: product.price,
         image: "",
-        maxQuantity: product.stock,
+        maxQuantity: usesStockTracking(product)
+          ? product.stock
+          : Number.MAX_SAFE_INTEGER,
       };
 
       const result = addCartItem(cartProduct, 1);
@@ -1208,9 +1221,11 @@ export default function StoreDetails() {
                       addingProductId ===
                       product._id;
 
+                    const tracksStock =
+                      usesStockTracking(product);
+
                     const outOfStock =
-                      product.stock <=
-                      0;
+                      tracksStock && product.stock <= 0;
 
                     const unavailable =
                       !product.available;
@@ -1309,8 +1324,9 @@ export default function StoreDetails() {
                                   styles.stockBadgeText
                                 }
                               >
-                                {product.stock}{" "}
-                                left
+                                {tracksStock
+                                  ? `${product.stock} left`
+                                  : "Available"}
                               </Text>
                             </View>
                           )}

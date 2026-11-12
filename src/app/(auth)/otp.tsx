@@ -1,3 +1,4 @@
+import type { ComponentRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -74,7 +75,7 @@ export default function OtpScreen() {
   const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(60);
 
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   // ===================================================
   // MASK EMAIL

@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import * as WebBrowser from "expo-web-browser";
-import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import GcashPaymentForm from "../../components/gcash-payment-form";
+import type { RegisterImage } from "../../services/api";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,8 +25,6 @@ import CampusLocationPicker, { type CampusPin } from "../../components/campus-lo
 
 import {
   createOrder,
-  createGcashCheckout,
-  verifyGcashCheckout,
   getCustomerStoreVouchers,
   getPublicStore,
   type PaymentMethod,
@@ -165,6 +164,16 @@ export default function CheckoutScreen() {
   const [deliveryEnabled, setDeliveryEnabled] = useState(false);
   const [checkoutStore, setCheckoutStore] = useState<Store | null>(null);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<"pickup" | "delivery">("pickup");
+  const [gcashReference, setGcashReference] = useState("");
+  const [paymentProof, setPaymentProof] = useState<RegisterImage | undefined>();
+  const [proofConfirmed, setProofConfirmed] = useState(false);
+
+  // A fresh visit to checkout must start a fresh payment submission.
+  useFocusEffect(useCallback(() => {
+    setGcashReference("");
+    setPaymentProof(undefined);
+    setProofConfirmed(false);
+  }, []));
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryLatitude, setDeliveryLatitude] = useState<number | null>(null);
   const [deliveryLongitude, setDeliveryLongitude] = useState<number | null>(null);
@@ -357,23 +366,11 @@ export default function CheckoutScreen() {
     }
   };
 
-  const handleConfirmCampusPin = async (pin: CampusPin) => {
+  const handleConfirmCampusPin = (pin: CampusPin, description: string) => {
     setDeliveryLatitude(pin.latitude);
     setDeliveryLongitude(pin.longitude);
+    setDeliveryAddress(description.trim());
     setMapVisible(false);
-    try {
-      const places = await Location.reverseGeocodeAsync(pin);
-      const place = places[0];
-      if (place) {
-        const readable = [place.name, place.street, place.district, place.city]
-          .filter(Boolean)
-          .filter((part, index, all) => all.indexOf(part) === index)
-          .join(", ");
-        if (readable) setDeliveryAddress(readable);
-      }
-    } catch {
-      // The client can still enter a campus landmark manually.
-    }
   };
 
   // ===================================================
@@ -381,6 +378,10 @@ export default function CheckoutScreen() {
   // ===================================================
 
   const handlePlaceOrder = () => {
+    if (paymentMethod === "gcash" && (!/^\d{13}$/.test(gcashReference) || !paymentProof || !proofConfirmed)) {
+      Alert.alert("Payment details required", "Enter the 13-digit reference number, upload a readable screenshot, and confirm that the amount and recipient are correct.");
+      return;
+    }
     if (isPlacingOrder) {
       return;
     }
@@ -600,6 +601,8 @@ export default function CheckoutScreen() {
         deliveryLatitude: fulfillmentMethod === "delivery" ? deliveryLatitude ?? undefined : undefined,
         deliveryLongitude: fulfillmentMethod === "delivery" ? deliveryLongitude ?? undefined : undefined,
         paymentMethod,
+        gcashReference: paymentMethod === "gcash" ? gcashReference : undefined,
+        gcashPaidAmount: paymentMethod === "gcash" ? total : undefined,
         voucherCode: appliedVoucher?.code,
       };
 
@@ -636,26 +639,10 @@ export default function CheckoutScreen() {
       const result =
         await createOrder(
           token,
-          payload
+          payload,
+          paymentMethod === "gcash" ? paymentProof : undefined
         );
 
-      if (paymentMethod === "gcash") {
-        const checkoutUrl = await createGcashCheckout(token, result._id);
-        const paymentResult = await WebBrowser.openAuthSessionAsync(checkoutUrl, "tupcorderup://payment-result");
-        if (paymentResult.type !== "success") throw new Error("GCash checkout was not completed.");
-        let paymentVerified = false;
-        let verificationError: unknown;
-        for (let attempt = 0; attempt < 5 && !paymentVerified; attempt += 1) {
-          try {
-            await verifyGcashCheckout(token, result._id);
-            paymentVerified = true;
-          } catch (error) {
-            verificationError = error;
-            if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 1500));
-          }
-        }
-        if (!paymentVerified) throw verificationError instanceof Error ? verificationError : new Error("GCash payment could not be verified.");
-      }
 
       // -----------------------------------------------
       // 8. SUCCESS
@@ -689,6 +676,9 @@ export default function CheckoutScreen() {
       const completedTotal = result.total;
       clearCart();
       setAppliedVoucher(null);
+      setGcashReference("");
+      setPaymentProof(undefined);
+      setProofConfirmed(false);
 
       // -----------------------------------------------
       // 10. SUCCESS SCREEN
@@ -1194,7 +1184,7 @@ export default function CheckoutScreen() {
               <TextInput
                 value={deliveryAddress}
                 onChangeText={setDeliveryAddress}
-                placeholder="Example: CLA Building, Room 203"
+                placeholder="Building name, floor, room number / landmark"
                 placeholderTextColor="#9A9A9E"
                 multiline
                 maxLength={300}
@@ -1369,7 +1359,7 @@ export default function CheckoutScreen() {
                   styles.paymentDescription
                 }
               >
-                {checkoutStore?.gcashEnabled ? "Pay securely through the official PayMongo GCash checkout." : "This seller has not enabled GCash."}
+                {checkoutStore?.gcashEnabled ? "Send to the seller, then upload your payment screenshot." : "This seller has not enabled GCash."}
               </Text>
             </View>
 
@@ -1393,17 +1383,7 @@ export default function CheckoutScreen() {
           </Pressable>
 
           {paymentMethod === "gcash" && checkoutStore?.gcashEnabled && (
-            <View style={styles.gcashPaymentBox}>
-              <View style={styles.gcashMerchantRow}>
-                <Ionicons name="shield-checkmark-outline" size={20} color="#2563EB" />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.gcashMerchantLabel}>SECURE PAYMENT</Text>
-                  <Text style={styles.gcashMerchantName}>PayMongo Checkout</Text>
-                  <Text style={styles.gcashMerchantNumber}>You will be redirected to GCash after placing the order.</Text>
-                </View>
-              </View>
-              <Text style={styles.gcashHelp}>The app confirms payment directly with PayMongo. No manual reference number is needed.</Text>
-            </View>
+            <GcashPaymentForm store={checkoutStore} total={total} reference={gcashReference} onReference={(value) => { if (value !== gcashReference) { setPaymentProof(undefined); setProofConfirmed(false); } setGcashReference(value); }} proof={paymentProof} onProof={(image) => { setPaymentProof(image); setProofConfirmed(false); }} confirmed={proofConfirmed} onConfirmed={setProofConfirmed} disabled={isPlacingOrder} />
           )}
 
           {/* ORDER ITEMS */}
@@ -1768,9 +1748,10 @@ export default function CheckoutScreen() {
         <CampusLocationPicker
           visible={mapVisible}
           initialPin={deliveryLatitude !== null && deliveryLongitude !== null ? { latitude: deliveryLatitude, longitude: deliveryLongitude } : null}
+          initialDescription={deliveryAddress}
           phoneLocation={phoneLocation}
           onClose={() => setMapVisible(false)}
-          onConfirm={(pin) => void handleConfirmCampusPin(pin)}
+          onConfirm={handleConfirmCampusPin}
         />
 
         <Modal

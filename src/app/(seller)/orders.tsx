@@ -1,3 +1,4 @@
+import GcashPaymentReview from "../../components/gcash-payment-review";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -594,20 +595,7 @@ export default function SellerOrders() {
           </Text>
         </View>
 
-        {order.paymentMethod === "gcash" && (
-          <View style={styles.gcashPaymentCard}>
-            <View style={styles.gcashPaymentHeader}>
-              <Text style={styles.gcashPaymentTitle}>GCash payment</Text>
-              <Text style={[styles.gcashPaymentStatus, order.paymentStatus === "paid" && styles.gcashPaymentPaid]}>
-                {order.paymentStatus === "paid" ? "Verified" : order.paymentStatus === "failed" ? "Rejected" : "For verification"}
-              </Text>
-            </View>
-            <Text style={styles.gcashReference}>Reference: {order.gcashReference || "Not provided"}</Text>
-            {order.paymentStatus === "pending" && order.status === "Pending" && (
-              <Text style={styles.gcashReference}>PayMongo will update this automatically after the customer completes checkout.</Text>
-            )}
-          </View>
-        )}
+        {order.paymentMethod === "gcash" && <GcashPaymentReview order={order} token={token || ""} onReviewed={() => void loadOrders(false)} />}
 
         {/* FULFILLMENT LOCATION */}
         {!!order.pickupLocation && (

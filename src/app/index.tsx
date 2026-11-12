@@ -1,3 +1,4 @@
+import type { ComponentRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -94,8 +95,8 @@ export default function LoginScreen() {
   // INPUT REFS
   // ===================================================
 
-  const usernameInputRef = useRef<TextInput>(null);
-  const passwordInputRef = useRef<TextInput>(null);
+  const usernameInputRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const passwordInputRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   // ===================================================
   // LOAD REMEMBERED CREDENTIALS

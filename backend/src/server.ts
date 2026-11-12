@@ -30,6 +30,7 @@ import reviewRoutes from "./routes/reviews";
 // =====================================================
 
 import { connectDB } from "./config/db";
+import { startStoreAutoCloseScheduler } from "./services/storeSchedule";
 
 // =====================================================
 // APP
@@ -332,6 +333,7 @@ app.use(
 async function startServer() {
   try {
     await connectDB();
+    startStoreAutoCloseScheduler();
 
     app.listen(
       PORT,

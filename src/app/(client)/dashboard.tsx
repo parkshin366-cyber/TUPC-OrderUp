@@ -1,3 +1,4 @@
+import type { ComponentRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
@@ -203,7 +204,7 @@ export default function ClientDashboard() {
     useState(false);
 
   const carouselRef =
-    useRef<ScrollView>(null);
+    useRef<ComponentRef<typeof ScrollView>>(null);
 
   // ==========================================================
   // POPULAR STORES

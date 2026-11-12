@@ -1,3 +1,4 @@
+import OrderReceiptCard from "../../components/order-receipt";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -1228,6 +1229,7 @@ export default function OrdersScreen() {
                 </View>
               </View>
 
+              <OrderReceiptCard orderId={selectedOrder.id} />
               <View style={styles.orderActions}>
                 {!!selectedOrder.sellerId && (
                   <Pressable
